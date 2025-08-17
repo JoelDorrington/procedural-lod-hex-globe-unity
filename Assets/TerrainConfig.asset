@@ -13,14 +13,14 @@ MonoBehaviour:
   m_Name: TerrainConfig
   m_EditorClassIdentifier: 
   baseRadius: 30
-  baseResolution: 32
+  baseResolution: 124
   maxLod: 5
   heightProvider:
     rid: 691749285861523503
-  heightScale: 2
-  generateOcean: 0
+  heightScale: 1
+  generateOcean: 1
   seaLevel: 0
-  autoSyncSeaLevel: 0
+  autoSyncSeaLevel: 1
   shallowWaterBand: 2
   oceanResolution: 64
   oceanMaterial: {fileID: 0}
@@ -28,17 +28,17 @@ MonoBehaviour:
   snowFullOffset: 18
   snowSlopeBoost: 0.5
   snowColor: {r: 0.9, g: 0.9, b: 0.95, a: 1}
-  cullBelowSea: 0
+  cullBelowSea: 1
   removeFullySubmergedTris: 1
   seaClampEpsilon: 0.01
   realisticHeights: 1
-  maxElevationPercent: 0.02
-  modalElevationPercent: 0.005
-  lowDepth: 0
+  maxElevationPercent: 0.01
+  modalElevationPercent: 0.001
+  lowDepth: 1
   mediumDepth: 2
-  highDepth: 4
-  ultraDepth: 5
-  extremeMinDepth: 6
+  highDepth: 3
+  ultraDepth: 4
+  extremeMinDepth: 5
   baseScreenError: 5
   lowResolution: 0
   mediumResolution: 0
@@ -61,6 +61,17 @@ MonoBehaviour:
   detailRebuildCooldown: 1
   enableCrossFade: 0
   lodFadeDuration: 0.4
+  debugElevationMultiplier: 1
+  debugDisableUnderwaterCulling: 0
+  recalcNormals: 1
+  shorelineDetail: 1
+  shorelineDetailMinDepth: 4
+  shorelineBand: 3
+  shorelineDetailAmplitude: 0.6
+  shorelineDetailFrequency: 6
+  shorelinePreserveSign: 1
+  useFovScaling: 1
+  referenceFov: 60
   references:
     version: 2
     RefIds:
@@ -70,6 +81,6 @@ MonoBehaviour:
         baseFrequency: 0.3
         octaves: 4
         lacunarity: 10
-        gain: 1.5
-        amplitude: 10
-        seed: 374195
+        gain: 0.5
+        amplitude: 2
+        seed: 701048

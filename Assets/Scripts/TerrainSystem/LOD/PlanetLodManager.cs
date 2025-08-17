@@ -7,156 +7,92 @@ using HexGlobeProject.TerrainSystem.LOD; // TileFade
 namespace HexGlobeProject.TerrainSystem.LOD
 {
     /// <summary>
-    /// Orchestrates four-tier LOD system (initial implementation stage):
-    /// - Bakes Low / Medium / High levels (quadtree depths from config) via coroutine.
-    /// - Creates a MeshRenderer per baked tile for visualization (currently shows highest baked depth).
-    /// - Computes simple per-tile min/max and a placeholder error metric (height range) for future SSE selection.
-    /// - Extreme streaming NOT implemented yet (stub for future work).
+    /// Simplified single-depth planet terrain manager.
+    /// This refactored version ONLY bakes and displays the medium depth (config.mediumDepth) tiles.
+    /// All dynamic multi-LOD / selection / SSE logic has been removed for clarity and stability.
     /// </summary>
     public class PlanetLodManager : MonoBehaviour
     {
         [SerializeField] private TerrainConfig config;
         [SerializeField] private TerrainHeightProviderBase heightProvider;
         [SerializeField] private Camera targetCamera;
-        [SerializeField] private Material terrainMaterial;
+    [SerializeField] private Material terrainMaterial;
 
-        [Header("Display / Debug")]
-        [Tooltip("Automatically show highest baked level after bake")] [SerializeField] private bool autoShowHighest = true;
-    [Tooltip("Automatically start a bake when the component Starts")] [SerializeField] private bool autoBakeOnStart = true;
-    [Tooltip("If auto baking, bake all configured depths (else Low only)")] [SerializeField] private bool autoBakeAllDepths = true;
-        [Tooltip("Draw tile wireframes with Gizmos")] [SerializeField] private bool gizmoWireTiles = true;
-        [Tooltip("Show bounds spheres (min/max radius)")] [SerializeField] private bool gizmoHeightRanges = false;
-    [Tooltip("Continuously pick tiles via screen-space error (SSE) each frame")] [SerializeField] private bool enableDynamicSelection = true;
-    [Tooltip("Factor applied to baseScreenError to broaden or narrow refinement")] [SerializeField] private float sseMultiplier = 1f;
-    [Tooltip("Log LOD selection changes & depths (debug)")] [SerializeField] private bool debugLogTransitions = false;
-    [Tooltip("Tint tiles by depth for debugging (temporary visualization)")] [SerializeField] private bool debugTintByDepth = false;
-    [Header("Selection Modes")] 
-    [Tooltip("Keep full low-depth coverage always, refining only a single stable patch under camera.")] [SerializeField] private bool singlePatchRefinement = true;
-    [Tooltip("Camera distance at which highest baked depth is reached (world units from center). Closer than this => deepest.")] [SerializeField] private float deepestDetailDistance = 50f;
-    [Tooltip("Camera distance where refinement begins (beyond this only low depth). Must be > deepestDetailDistance.")] [SerializeField] private float startRefineDistance = 120f;
-    [Tooltip("Degrees camera must rotate before re-centering refined patch (prevents jitter).")] [Range(1f,45f)] [SerializeField] private float patchRecenteringAngle = 10f;
-    [Tooltip("Fractional hysteresis for distance-based depth changes (0.1 = 10% slack).")] [Range(0f,0.5f)] [SerializeField] private float depthDistanceHysteresis = 0.15f;
-    [Header("Visibility Culling")] 
-    [Tooltip("Hide tiles on the back half of the planet relative to camera to reduce draw calls.")] [SerializeField] private bool cullBackHemisphere = true;
-    [Tooltip("Dot threshold for culling: dot(cameraDir, tileCenterDir) < threshold => culled. 0 = exact hemisphere, negative expands.")] [Range(-0.5f,0.3f)] [SerializeField] private float backCullDotThreshold = 0f;
+    [Header("Bake / Debug")]
+    [Tooltip("Automatically bake on Start")] [SerializeField] private bool autoBakeOnStart = true;
+    [Tooltip("Draw tile wireframes with Gizmos")] [SerializeField] private bool gizmoWireTiles = true;
+    [Tooltip("Show height range spheres (min/max)")] [SerializeField] private bool gizmoHeightRanges = false;
+    [Tooltip("Log bake progress & height ranges")] [SerializeField] private bool debugLogBake = false;
+    [Tooltip("Tint tiles (only one depth) for debugging")] [SerializeField] private bool debugTint = false;
+
+    // Dynamic high-res patch removed per user request; keeping placeholder comment for clarity.
+
+    [Header("Proximity Split LOD")]
+    [Tooltip("Enable smooth splitting of medium tiles into higher-depth tiles near camera.")] [SerializeField] private bool enableProximitySplit = true;
+    [Tooltip("Target higher depth for split (defaults to config.highDepth if <0)."), SerializeField] private int splitTargetDepthOverride = -1;
+    [Tooltip("Enter split when angle to tile center < tileAngularSpan * this factor.")] [Range(0.1f,1.5f)] [SerializeField] private float splitEnterFactor = 0.6f;
+    [Tooltip("Exit split when angle exceeds tileAngularSpan * this factor (should be > enter factor)."), Range(0.1f,2f)] [SerializeField] private float splitExitFactor = 1.1f;
+    [Tooltip("Seconds for cross-fade between parent and children.")] [SerializeField] private float splitFadeDuration = 0.35f;
+    [Tooltip("Max parent splits (new child sets) started per frame to cap cost.")] [SerializeField] private int splitMaxPerFrame = 2;
+    [Tooltip("Destroy child tiles when far to reclaim memory.")] [SerializeField] private bool destroyChildrenOnMerge = true;
+    [Tooltip("Debug: draw active split child tile wireframes.")] [SerializeField] private bool debugSplitChildrenGizmo = false;
+    [Tooltip("Disable splitting when camera distance (zoom) exceeds this. -1 = never disable by distance.")] [SerializeField] private float splitDisableBeyondDistance = 40f;
+    [Tooltip("Multiplier applied to the resolved resolution for split child tiles (>=1 for higher detail)."), SerializeField] private float splitChildResolutionMultiplier = 1f;
+
+    // Split LOD state
+    private readonly Dictionary<TileId, List<TileId>> _parentToChildren = new();
+    private readonly HashSet<TileId> _activeSplitParents = new();
+    private readonly Dictionary<TileId, Coroutine> _parentSplitCoroutines = new();
+    private readonly Dictionary<TileId, TileData> _childTiles = new(); // keyed by child id
+    private readonly Dictionary<TileId, GameObject> _childTileObjects = new();
 
         [Header("Runtime State (read-only)")] public bool bakeInProgress;        
         public float bakeProgress; // 0..1 across current phase
         public int bakedTileCount;
-        public int highestBakedDepth = -1;
-    private float _lastSelectionTime;
-    private readonly List<TileData> _selectionBuffer = new();
+    public int bakedDepth = -1; // single depth baked
+    private readonly Dictionary<TileId, TileData> _tiles = new();
     private readonly Dictionary<TileId, GameObject> _tileObjects = new();
-
-        // Internal storage: per baked depth dictionary of tiles
-        private readonly Dictionary<int, Dictionary<TileId, TileData>> _bakedLevels = new();
-        // Active instantiated GameObjects for currently displayed depth
-        private readonly List<GameObject> _activeTileObjects = new();
+    // (Removed dynamic patch state)
 
         // Temporary list to avoid GC during generation
         private readonly List<Vector3> _verts = new();
         private readonly List<int> _tris = new();
         private readonly List<Vector3> _normals = new();
-    // Stable refinement state
-    private TileId? _focusLowTile; // currently refined low tile id
-    private int _currentRefinedDepth; // depth we are refining to (target depth actually displayed)
-    private float _lastFocusDot; // dot between camera dir and focus tile center at last recenter
+    // (Removed refinement state)
 
         // Public entry point
-        [ContextMenu("Bake Planet (Low Only)")] public void BakePlanetLowOnlyContextMenu()
+        [ContextMenu("Bake Medium Depth")] public void BakeMediumDepthContextMenu()
         {
             if (bakeInProgress) return;
-            StartCoroutine(BakePlanetLowOnly());
+            StartCoroutine(BakeMediumDepth());
         }
 
-        [ContextMenu("Bake Planet (All Baked Levels)")] public void BakePlanetAllContextMenu()
-        {
-            if (bakeInProgress) return;
-            StartCoroutine(BakeAllBakedLevels());
-        }
-
-        public IEnumerator BakePlanetLowOnly()
-        {
-            EnsureHeightProvider();
-            bakeInProgress = true;
-            bakeProgress = 0;
-            bakedTileCount = 0;
-            _bakedLevels.Clear();
-            highestBakedDepth = -1;
-            ClearActiveTiles();
-
-            int lowDepth = Mathf.Max(0, config.lowDepth);
-            PrepareOctaveMaskForDepth(lowDepth);
-            yield return StartCoroutine(BakeDepth(lowDepth));
-
-            if (autoShowHighest)
-                ShowDepth(lowDepth);
-
-            bakeInProgress = false;
-            bakeProgress = 1f;
-        }
-
-        public IEnumerator BakeAllBakedLevels()
+        public IEnumerator BakeMediumDepth()
         {
             EnsureHeightProvider();
             bakeInProgress = true;
             bakeProgress = 0f;
             bakedTileCount = 0;
-            _bakedLevels.Clear();
-            highestBakedDepth = -1;
+            _tiles.Clear();
             ClearActiveTiles();
-
-            int low = Mathf.Max(0, config.lowDepth);
-            int med = Mathf.Max(low, config.mediumDepth);
-            int high = Mathf.Max(med, config.highDepth);
-            int ultra = Mathf.Max(high, config.ultraDepth);
-            bool useUltra = config.ultraDepth > config.highDepth; // only if strictly deeper
-
-            PrepareOctaveMaskForDepth(low);
-            // Compute total tile count for progress normalization
-            int TotalTiles(int depth) => 6 * (1 << depth) * (1 << depth);
-            float total = TotalTiles(low) + (med != low ? TotalTiles(med) : 0) + (high != med ? TotalTiles(high) : 0) + (useUltra ? TotalTiles(ultra) : 0);
-            float processedSoFar = 0f;
-
-            yield return StartCoroutine(BakeDepth(low, progress => bakeProgress = (processedSoFar + progress * TotalTiles(low)) / total));
-            processedSoFar += TotalTiles(low);
-            if (med != low)
-            {
-                PrepareOctaveMaskForDepth(med);
-                yield return StartCoroutine(BakeDepth(med, progress => bakeProgress = (processedSoFar + progress * TotalTiles(med)) / total));
-                processedSoFar += TotalTiles(med);
-            }
-            if (high != med)
-            {
-                PrepareOctaveMaskForDepth(high);
-                yield return StartCoroutine(BakeDepth(high, progress => bakeProgress = (processedSoFar + progress * TotalTiles(high)) / total));
-                processedSoFar += TotalTiles(high);
-            }
-            if (useUltra)
-            {
-                PrepareOctaveMaskForDepth(ultra);
-                yield return StartCoroutine(BakeDepth(ultra, progress => bakeProgress = (processedSoFar + progress * TotalTiles(ultra)) / total));
-                processedSoFar += TotalTiles(ultra);
-            }
-
-            if (autoShowHighest)
-                ShowDepth(useUltra ? ultra : high);
-
+            int depth = Mathf.Max(0, config.mediumDepth);
+            PrepareOctaveMaskForDepth(depth);
+            yield return StartCoroutine(BakeDepthSingle(depth));
+            bakedDepth = depth;
+            SpawnAllTiles();
             bakeInProgress = false;
             bakeProgress = 1f;
-
-            if (enableDynamicSelection)
-                UpdateSelectionImmediate();
+            if (debugLogBake)
+                Debug.Log($"[PlanetLod] Baked medium depth {depth} tiles={_tiles.Count}");
         }
 
-        private IEnumerator BakeDepth(int depth, System.Action<float> phaseProgress = null)
+        private IEnumerator BakeDepthSingle(int depth)
         {
             // Depth means quadtree depth per face. depth=0 means single tile (the whole face).
             int tilesPerEdge = 1 << depth; // 2^depth
             int totalTilesThisDepth = 6 * tilesPerEdge * tilesPerEdge; // 6 cube faces
-
-            var levelDict = new Dictionary<TileId, TileData>(totalTilesThisDepth);
-            _bakedLevels[depth] = levelDict;
+            var levelDict = _tiles; // reuse single dictionary
+            levelDict.Clear();
 
             int resolution = ResolveResolutionForDepth(depth, tilesPerEdge);
 
@@ -179,18 +115,14 @@ namespace HexGlobeProject.TerrainSystem.LOD
                         if (data.maxHeight > globalMax) globalMax = data.maxHeight;
                         bakedTileCount++;
                         processed++;
-                        float local = processed / (float)totalTilesThisDepth;
-                        if (phaseProgress != null) phaseProgress(local); else bakeProgress = local;
+                        bakeProgress = processed / (float)totalTilesThisDepth;
                         if ((processed & 7) == 0) // yield every 8 tiles
                             yield return null;
                     }
                 }
             }
-            if (depth > highestBakedDepth) highestBakedDepth = depth;
-            if (debugLogTransitions)
-            {
-                Debug.Log($"[PlanetLod] Baked depth {depth} res={resolution} tiles={totalTilesThisDepth} rawRange=({rawMin:F3},{rawMax:F3}) remapRange=({globalMin:F3},{globalMax:F3}) span={(globalMax - globalMin):F3}");
-            }
+            if (debugLogBake)
+                Debug.Log($"[PlanetLod] Depth {depth} res={resolution} tiles={totalTilesThisDepth} rawRange=({rawMin:F3},{rawMax:F3}) remapRange=({globalMin:F3},{globalMax:F3}) span={(globalMax - globalMin):F3}");
         }
 
         private void BuildTileMesh(TileData data)
@@ -330,7 +262,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
                         _tris[t + 1] = _tris[t + 2];
                         _tris[t + 2] = tmp; // swap to flip winding
                     }
-                    if (debugLogTransitions)
+                    if (debugLogBake)
                         Debug.Log($"[PlanetLod] Flipped winding for tile depth {data.id.depth} face {data.id.face} to face outward.");
                 }
             }
@@ -409,11 +341,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
     // (Removed CubeFaceUvToDir; replaced by CubeSphere.FaceLocalToUnit)
 
-        private void ShowDepth(int depth)
+        private void SpawnAllTiles()
         {
-            if (!_bakedLevels.TryGetValue(depth, out var level)) return;
             ClearActiveTiles();
-            foreach (var kv in level)
+            foreach (var kv in _tiles)
             {
                 var td = kv.Value;
                 if (td.mesh == null) continue;
@@ -437,21 +368,30 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
         private void Update()
         {
-            // Auto-bake safety: if user forgot and no tiles baked yet, trigger once (delayed until Start sets targetCamera)
-            if (autoBakeOnStart && !bakeInProgress && highestBakedDepth < 0)
+            if (autoBakeOnStart && !bakeInProgress && bakedDepth < 0)
             {
-                autoBakeOnStart = false; // consume
-                if (autoBakeAllDepths) StartCoroutine(BakeAllBakedLevels()); else StartCoroutine(BakePlanetLowOnly());
+                autoBakeOnStart = false;
+                StartCoroutine(BakeMediumDepth());
             }
-            else if (highestBakedDepth < 0)
+            else if (bakedDepth < 0)
             {
-                // Keep trying to bind provider if null before bake is triggered manually
                 EnsureHeightProvider(false);
             }
-            if (!enableDynamicSelection || bakeInProgress) return;
-            if (highestBakedDepth < 0) return; // nothing baked yet
-            if (targetCamera == null) targetCamera = Camera.main;
-            UpdateSelectionImmediate();
+            // (Dynamic patch removed)
+            if (enableProximitySplit && bakedDepth >= 0 && targetCamera != null)
+            {
+                float camDist = Vector3.Distance(targetCamera.transform.position, transform.position);
+                if (splitDisableBeyondDistance > 0f && camDist > splitDisableBeyondDistance)
+                {
+                    // Merge any active splits if distance now beyond threshold
+                    if (_activeSplitParents.Count > 0)
+                        MergeAllActiveSplits();
+                }
+                else
+                {
+                    UpdateProximitySplits();
+                }
+            }
         }
 
         private bool _warnedMissingProvider;
@@ -460,7 +400,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             if (heightProvider == null && config != null && config.heightProvider != null)
             {
                 heightProvider = config.heightProvider;
-                if (logOnBind && debugLogTransitions)
+                if (logOnBind && debugLogBake)
                     Debug.Log("[PlanetLod] Bound heightProvider from TerrainConfig: " + config.heightProvider.GetType().Name);
             }
             if (heightProvider == null && !_warnedMissingProvider)
@@ -470,203 +410,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             }
         }
 
-        private void UpdateSelectionImmediate()
-        {
-            if (targetCamera == null) return;
-            if (singlePatchRefinement)
-            {
-                DoSinglePatchSelection();
-            }
-            else
-            {
-                DoSseSelection();
-            }
-        }
-
-        private void DoSinglePatchSelection()
-        {
-            int low = Mathf.Max(0, config.lowDepth);
-            if (!_bakedLevels.TryGetValue(low, out var lowLevel)) return;
-            _selectionBuffer.Clear();
-            foreach (var kv in lowLevel) _selectionBuffer.Add(kv.Value); // baseline
-            float camDist = targetCamera.transform.position.magnitude;
-            if (highestBakedDepth <= low) { ApplySelection(); return; }
-            if (camDist > startRefineDistance) { _currentRefinedDepth = low; ApplySelection(); return; }
-            // Desired depth (raw)
-            float tRaw = Mathf.InverseLerp(startRefineDistance, deepestDetailDistance, camDist);
-            int desiredDepth = Mathf.Clamp(Mathf.RoundToInt(Mathf.Lerp(low, highestBakedDepth, 1f - tRaw)), low, highestBakedDepth);
-            if (_currentRefinedDepth < low) _currentRefinedDepth = low;
-            float upThresh = deepestDetailDistance * (1f + depthDistanceHysteresis);
-            float downThresh = startRefineDistance * (1f - depthDistanceHysteresis);
-            if (desiredDepth > _currentRefinedDepth && camDist <= upThresh) _currentRefinedDepth = desiredDepth;
-            else if (desiredDepth < _currentRefinedDepth && camDist >= downThresh) _currentRefinedDepth = desiredDepth;
-            Vector3 camDir = targetCamera.transform.position.normalized;
-            TileData focusLow;
-            if (_focusLowTile.HasValue && lowLevel.TryGetValue(_focusLowTile.Value, out var saved))
-            {
-                focusLow = saved;
-                float dot = Vector3.Dot(camDir, focusLow.center.normalized);
-                float angleDeg = Mathf.Acos(Mathf.Clamp(dot, -1f, 1f)) * Mathf.Rad2Deg;
-                if (angleDeg > patchRecenteringAngle)
-                {
-                    focusLow = FindClosestTile(lowLevel, camDir);
-                    _focusLowTile = focusLow.id;
-                }
-            }
-            else
-            {
-                focusLow = FindClosestTile(lowLevel, camDir);
-                if (focusLow != null) _focusLowTile = focusLow.id;
-            }
-            if (focusLow == null || _currentRefinedDepth <= low) { ApplySelection(); return; }
-            TileData current = focusLow;
-            for (int d = low + 1; d <= _currentRefinedDepth; d++)
-            {
-                if (!_bakedLevels.TryGetValue(d, out var nextDict)) break;
-                var c0 = current.id.Child(0); var c1 = current.id.Child(1); var c2 = current.id.Child(2); var c3 = current.id.Child(3);
-                if (!nextDict.TryGetValue(c0, out var td0) || !nextDict.TryGetValue(c1, out var td1) ||
-                    !nextDict.TryGetValue(c2, out var td2) || !nextDict.TryGetValue(c3, out var td3)) break;
-                current = ClosestOf(camDir, td0, td1, td2, td3);
-                if (d == _currentRefinedDepth)
-                {
-                    _selectionBuffer.RemoveAll(td => td.id.Equals(current.id.Parent()));
-                    _selectionBuffer.Add(td0); _selectionBuffer.Add(td1); _selectionBuffer.Add(td2); _selectionBuffer.Add(td3);
-                }
-            }
-            ApplySelection();
-        }
-
-        private TileData FindClosestTile(Dictionary<TileId, TileData> tiles, Vector3 dir)
-        {
-            TileData best = null; float bestDot = -2f;
-            foreach (var kv in tiles)
-            {
-                var td = kv.Value; if (td.center == Vector3.zero) continue;
-                float dot = Vector3.Dot(dir, td.center.normalized);
-                if (dot > bestDot) { bestDot = dot; best = td; }
-            }
-            return best;
-        }
-        private TileData ClosestOf(Vector3 dir, params TileData[] list)
-        {
-            TileData best = null; float bestDot = -2f;
-            foreach (var td in list)
-            {
-                if (td.center == Vector3.zero) continue;
-                float dot = Vector3.Dot(dir, td.center.normalized);
-                if (dot > bestDot) { bestDot = dot; best = td; }
-            }
-            return best;
-        }
-
-        private void DoSseSelection()
-        {
-            _selectionBuffer.Clear();
-            int low = Mathf.Max(0, config.lowDepth);
-            if (!_bakedLevels.TryGetValue(low, out var roots)) return;
-            var frontier = new List<TileData>();
-            foreach (var kv in roots) frontier.Add(kv.Value);
-            float threshold = config.baseScreenError * Mathf.Max(0.0001f, sseMultiplier);
-            var next = new List<TileData>();
-            bool refined; int safety = 0;
-            do
-            {
-                refined = false;
-                _selectionBuffer.Clear();
-                foreach (var tile in frontier)
-                {
-                    if (tile.id.depth < highestBakedDepth && ShouldRefine(tile, threshold, out var childrenList))
-                    {
-                        next.AddRange(childrenList);
-                        refined = true;
-                    }
-                    else _selectionBuffer.Add(tile);
-                }
-                if (refined)
-                {
-                    frontier.Clear(); frontier.AddRange(next); next.Clear();
-                }
-            } while (refined && ++safety < 32);
-            if (!refined && frontier.Count > 0 && _selectionBuffer.Count == 0) _selectionBuffer.AddRange(frontier);
-            ApplySelection();
-        }
-
-        private bool ShouldRefine(TileData tile, float threshold, out List<TileData> children)
-        {
-            children = null;
-            int nextDepth = tile.id.depth + 1;
-            if (!_bakedLevels.TryGetValue(nextDepth, out var nextLevelDict)) return false;
-            // Gather children
-            var c0 = tile.id.Child(0); var c1 = tile.id.Child(1); var c2 = tile.id.Child(2); var c3 = tile.id.Child(3);
-            if (!nextLevelDict.TryGetValue(c0, out var td0) || !nextLevelDict.TryGetValue(c1, out var td1) ||
-                !nextLevelDict.TryGetValue(c2, out var td2) || !nextLevelDict.TryGetValue(c3, out var td3))
-                return false; // missing child tiles
-            float sse = EstimateScreenSpaceError(tile);
-            if (sse > threshold)
-            {
-                children = _tmpChildren;
-                children.Clear();
-                children.Add(td0); children.Add(td1); children.Add(td2); children.Add(td3);
-                return true;
-            }
-            return false;
-        }
-
-        private readonly List<TileData> _tmpChildren = new();
-
-        private float EstimateScreenSpaceError(TileData tile)
-        {
-            // Simple heuristic: project tile geometric error (height range) at tile center distance.
-            Vector3 worldCenter = tile.center; // planet centered at origin
-            float distance = Vector3.Distance(targetCamera.transform.position, worldCenter);
-            float errorWorld = Mathf.Max(0.0001f, tile.error);
-            // Convert world error to approximate pixels: (error / distance) * focalLengthPixels
-            float fovRad = targetCamera.fieldOfView * Mathf.Deg2Rad;
-            float screenHeight = Screen.height;
-            float focalLength = (0.5f * screenHeight) / Mathf.Tan(0.5f * fovRad);
-            float pixelError = (errorWorld / distance) * focalLength;
-            return pixelError;
-        }
-
-        private void ApplySelection()
-        {
-            _activeFlags.Clear();
-            int maxDepthSeen = -1;
-            Vector3 camDir = targetCamera ? targetCamera.transform.position.normalized : Vector3.forward;
-            foreach (var td in _selectionBuffer)
-            {
-                if (cullBackHemisphere)
-                {
-                    Vector3 tdir = td.center.normalized;
-                    float dot = Vector3.Dot(camDir, tdir);
-                    if (dot < backCullDotThreshold) continue;
-                }
-                SpawnOrUpdateTileGO(td);
-                _activeFlags.Add(td.id);
-                if (td.id.depth > maxDepthSeen) maxDepthSeen = td.id.depth;
-            }
-            // Despawn unselected
-            _toRemove.Clear();
-            foreach (var kv in _tileObjects)
-                if (!_activeFlags.Contains(kv.Key)) _toRemove.Add(kv.Key);
-            if (config.enableCrossFade && Application.isPlaying)
-                StartCoroutine(FadeAndDestroy(_toRemove));
-            else
-            {
-                foreach (var id in _toRemove)
-                {
-                    var go = _tileObjects[id];
-                    if (go != null) { if (Application.isPlaying) Destroy(go); else DestroyImmediate(go); }
-                    _tileObjects.Remove(id);
-                }
-            }
-            TerrainShaderGlobals.Apply(config, terrainMaterial);
-            if (debugLogTransitions && Application.isPlaying && maxDepthSeen >= 0)
-                Debug.Log($"[PlanetLod] Active tiles: {_selectionBuffer.Count} (max depth {maxDepthSeen})");
-        }
-
-        private readonly HashSet<TileId> _activeFlags = new();
-        private readonly List<TileId> _toRemove = new();
+    // (Removed selection & refinement data structures)
 
         private void SpawnOrUpdateTileGO(TileData td)
         {
@@ -674,12 +418,12 @@ namespace HexGlobeProject.TerrainSystem.LOD
             {
                 var mf = existing.GetComponent<MeshFilter>();
                 if (mf.sharedMesh != td.mesh) mf.sharedMesh = td.mesh;
-                if (debugTintByDepth)
+        if (debugTint)
                 {
                     var r = existing.GetComponent<MeshRenderer>();
                     if (r != null)
                     {
-                        Color c = Color.Lerp(Color.white, Color.red, td.id.depth / Mathf.Max(1f, highestBakedDepth));
+            Color c = Color.Lerp(Color.white, Color.red, 0.5f);
                         r.sharedMaterial.SetColor("_ColorHigh", c);
                     }
                 }
@@ -691,69 +435,280 @@ namespace HexGlobeProject.TerrainSystem.LOD
             filter.sharedMesh = td.mesh;
             var renderer = go.AddComponent<MeshRenderer>();
             renderer.sharedMaterial = terrainMaterial;
-            if (debugTintByDepth)
+        if (debugTint)
             {
-                Color c = Color.Lerp(Color.white, Color.red, td.id.depth / Mathf.Max(1f, highestBakedDepth));
+        Color c = Color.Lerp(Color.white, Color.red, 0.5f);
                 renderer.sharedMaterial = new Material(terrainMaterial);
                 renderer.sharedMaterial.SetColor("_ColorHigh", c);
-            }
-            if (config.enableCrossFade && Application.isPlaying)
-            {
-                var fade = go.AddComponent<global::HexGlobeProject.TerrainSystem.LOD.TileFade>();
-                fade.Begin(true, config.lodFadeDuration);
             }
             _tileObjects[td.id] = go;
         }
 
-        private IEnumerator FadeAndDestroy(List<TileId> ids)
-        {
-            float dur = Mathf.Max(0.05f, config.lodFadeDuration);
-            var toDestroy = new List<GameObject>();
-            foreach (var id in ids)
-            {
-                if (_tileObjects.TryGetValue(id, out var go) && go != null)
-                {
-                    var fade = go.GetComponent<global::HexGlobeProject.TerrainSystem.LOD.TileFade>();
-                    if (fade == null) fade = go.AddComponent<global::HexGlobeProject.TerrainSystem.LOD.TileFade>();
-                    fade.Begin(false, dur);
-                    toDestroy.Add(go);
-                }
-                _tileObjects.Remove(id);
-            }
-            yield return new WaitForSeconds(dur);
-            foreach (var go in toDestroy)
-            {
-                if (go != null) Destroy(go);
-            }
-        }
+    // (Removed fade & cross-fade logic)
 
         // Optional gizmos for debugging baked tiles
         private void OnDrawGizmosSelected()
         {
             if (!gizmoWireTiles && !gizmoHeightRanges) return;
-            foreach (var kvLevel in _bakedLevels)
+            foreach (var kv in _tiles)
             {
-                foreach (var kv in kvLevel.Value)
+                var data = kv.Value;
+                if (data.mesh == null) continue;
+                if (gizmoWireTiles)
                 {
-                    var data = kv.Value;
-                    if (data.mesh == null) continue;
-                    if (gizmoWireTiles)
+                    Gizmos.color = Color.cyan;
+                    Gizmos.DrawWireMesh(data.mesh);
+                }
+                if (gizmoHeightRanges)
+                {
+                    float rMin = config.baseRadius + data.minHeight;
+                    float rMax = config.baseRadius + data.maxHeight;
+                    Vector3 center = Vector3.zero;
+                    Gizmos.color = new Color(1,1,0,0.1f);
+                    Gizmos.DrawWireSphere(center, rMin);
+                    Gizmos.color = new Color(1,0,0,0.1f);
+                    Gizmos.DrawWireSphere(center, rMax);
+                }
+            }
+        }
+
+        private void OnDrawGizmos()
+        {
+            if (debugSplitChildrenGizmo)
+            {
+                Gizmos.color = Color.magenta;
+                foreach (var kv in _parentToChildren)
+                {
+                    foreach (var cid in kv.Value)
                     {
-                        Gizmos.color = Color.Lerp(Color.green, Color.red, data.id.depth / 8f);
-                        Gizmos.DrawWireMesh(data.mesh);
-                    }
-                    if (gizmoHeightRanges)
-                    {
-                        float rMin = config.baseRadius + data.minHeight;
-                        float rMax = config.baseRadius + data.maxHeight;
-                        Vector3 center = Vector3.zero; // planet center
-                        Gizmos.color = new Color(1, 1, 0, 0.1f);
-                        Gizmos.DrawWireSphere(center, rMin);
-                        Gizmos.color = new Color(1, 0, 0, 0.1f);
-                        Gizmos.DrawWireSphere(center, rMax);
+                        if (_childTileObjects.TryGetValue(cid, out var go) && go != null)
+                        {
+                            var mf = go.GetComponent<MeshFilter>();
+                            if (mf != null && mf.sharedMesh != null)
+                                Gizmos.DrawWireMesh(mf.sharedMesh, go.transform.position, go.transform.rotation, go.transform.lossyScale);
+                        }
                     }
                 }
             }
+        }
+
+
+        // ===== Proximity Split Implementation =====
+        private void UpdateProximitySplits()
+        {
+            int targetDepth = splitTargetDepthOverride >= 0 ? splitTargetDepthOverride : config.highDepth;
+            if (targetDepth < 0 || targetDepth <= bakedDepth) return; // need deeper depth available
+            // distance gating handled in Update
+            float tileSpanDeg = 90f / (1 << bakedDepth); // each medium tile angular span (approx per face)
+            Vector3 camDir = (targetCamera.transform.position - transform.position).normalized;
+
+            int splitsStarted = 0;
+            // Evaluate each medium tile for enter/exit
+            var toUnspliList = new List<TileId>();
+            foreach (var kv in _tiles)
+            {
+                var parent = kv.Value;
+                if (parent.id.depth != bakedDepth) continue;
+                // Direction to tile center (normalize center)
+                Vector3 dir = parent.center.sqrMagnitude > 0.0001f ? parent.center.normalized : Vector3.zero;
+                if (dir == Vector3.zero) continue;
+                float ang = Vector3.Angle(camDir, dir);
+                bool isSplit = _activeSplitParents.Contains(parent.id);
+                if (!isSplit)
+                {
+                    if (ang < tileSpanDeg * splitEnterFactor && splitsStarted < splitMaxPerFrame)
+                    {
+                        StartParentSplit(parent.id, targetDepth);
+                        splitsStarted++;
+                    }
+                }
+                else
+                {
+                    if (ang > tileSpanDeg * splitExitFactor)
+                    {
+                        toUnspliList.Add(parent.id);
+                    }
+                }
+            }
+            foreach (var pid in toUnspliList)
+            {
+                StartParentMerge(pid);
+            }
+        }
+
+        private void StartParentSplit(TileId parentId, int targetDepth)
+        {
+            if (_parentSplitCoroutines.ContainsKey(parentId)) return; // already transitioning
+            var co = StartCoroutine(CoSplitParent(parentId, targetDepth));
+            _parentSplitCoroutines[parentId] = co;
+        }
+        private void StartParentMerge(TileId parentId)
+        {
+            if (_parentSplitCoroutines.ContainsKey(parentId)) return;
+            var co = StartCoroutine(CoMergeParent(parentId));
+            _parentSplitCoroutines[parentId] = co;
+        }
+
+        private IEnumerator CoSplitParent(TileId parentId, int targetDepth)
+        {
+            if (!_tiles.TryGetValue(parentId, out var parentData)) { _parentSplitCoroutines.Remove(parentId); yield break; }
+            // Build children (parent depth +1 each level until targetDepth)
+            int currentDepth = parentId.depth;
+            var frontier = new List<TileId> { parentId };
+            while (currentDepth < targetDepth)
+            {
+                var next = new List<TileId>();
+                foreach (var pid in frontier)
+                {
+                    int d = pid.depth + 1;
+                    for (int cy = 0; cy < 2; cy++)
+                    {
+                        for (int cx = 0; cx < 2; cx++)
+                        {
+                            var cid = new TileId(pid.face, (byte)d, (ushort)(pid.x * 2 + cx), (ushort)(pid.y * 2 + cy));
+                            if (!_childTiles.ContainsKey(cid))
+                            {
+                                var td = new TileData { id = cid, resolution = GetSplitChildResolution(d), isBaked = true };
+                                BuildTileMesh(td); // uses current octave cap (same as parent)
+                                _childTiles[cid] = td;
+                                SpawnOrUpdateChildGO(td, invisible:true);
+                            }
+                            next.Add(cid);
+                        }
+                    }
+                }
+                frontier = next;
+                currentDepth++;
+                // yield to avoid spike
+                yield return null;
+            }
+            _parentToChildren[parentId] = frontier; // leaves contain target depth tiles
+
+            // Fade in children, fade out parent
+            foreach (var cid in frontier)
+            {
+                if (_childTileObjects.TryGetValue(cid, out var go) && go != null)
+                {
+                    var mr = go.GetComponent<MeshRenderer>(); mr.enabled = true;
+                    var fade = go.GetComponent<TileFade>(); if (fade == null) fade = go.AddComponent<TileFade>();
+                    fade.Begin(true, splitFadeDuration);
+                }
+            }
+            if (_tileObjects.TryGetValue(parentId, out var parentGO) && parentGO != null)
+            {
+                var fade = parentGO.GetComponent<TileFade>(); if (fade == null) fade = parentGO.AddComponent<TileFade>();
+                fade.Begin(false, splitFadeDuration);
+            }
+            _activeSplitParents.Add(parentId);
+            yield return new WaitForSeconds(splitFadeDuration);
+            // Disable parent renderer once children visible
+            if (_tileObjects.TryGetValue(parentId, out var parentGO2) && parentGO2 != null)
+            {
+                var mr = parentGO2.GetComponent<MeshRenderer>(); if (mr != null) mr.enabled = false;
+            }
+            _parentSplitCoroutines.Remove(parentId);
+        }
+
+        private IEnumerator CoMergeParent(TileId parentId)
+        {
+            if (!_parentToChildren.TryGetValue(parentId, out var children)) { _parentSplitCoroutines.Remove(parentId); yield break; }
+            // Enable parent renderer and fade in
+            if (_tileObjects.TryGetValue(parentId, out var parentGO) && parentGO != null)
+            {
+                var mr = parentGO.GetComponent<MeshRenderer>(); if (mr != null) mr.enabled = true;
+                var fade = parentGO.GetComponent<TileFade>(); if (fade == null) fade = parentGO.AddComponent<TileFade>();
+                fade.Begin(true, splitFadeDuration);
+            }
+            // Fade out children
+            foreach (var cid in children)
+            {
+                if (_childTileObjects.TryGetValue(cid, out var go) && go != null)
+                {
+                    var fade = go.GetComponent<TileFade>(); if (fade == null) fade = go.AddComponent<TileFade>();
+                    fade.Begin(false, splitFadeDuration);
+                }
+            }
+            yield return new WaitForSeconds(splitFadeDuration);
+            // After fade, disable or destroy children
+            foreach (var cid in children)
+            {
+                if (_childTileObjects.TryGetValue(cid, out var go) && go != null)
+                {
+                    var mr = go.GetComponent<MeshRenderer>(); if (mr != null) mr.enabled = false;
+                    if (destroyChildrenOnMerge)
+                    {
+                        if (Application.isPlaying) Destroy(go); else DestroyImmediate(go);
+                        _childTileObjects.Remove(cid); _childTiles.Remove(cid);
+                    }
+                }
+            }
+            _parentToChildren.Remove(parentId);
+            _activeSplitParents.Remove(parentId);
+            _parentSplitCoroutines.Remove(parentId);
+        }
+
+        private void MergeAllActiveSplits()
+        {
+            var list = new List<TileId>(_activeSplitParents);
+            foreach (var pid in list)
+            {
+                StartParentMerge(pid);
+            }
+        }
+
+        private void SpawnOrUpdateChildGO(TileData td, bool invisible=false)
+        {
+            if (_childTileObjects.TryGetValue(td.id, out var existing) && existing != null)
+            {
+                var mf = existing.GetComponent<MeshFilter>(); if (mf.sharedMesh != td.mesh) mf.sharedMesh = td.mesh;
+                return;
+            }
+            var go = new GameObject($"SplitChild_{td.id.face}_d{td.id.depth}_{td.id.x}_{td.id.y}");
+            go.transform.SetParent(transform, false);
+            var filter = go.AddComponent<MeshFilter>(); filter.sharedMesh = td.mesh;
+            var renderer = go.AddComponent<MeshRenderer>(); renderer.sharedMaterial = terrainMaterial; renderer.enabled = !invisible;
+            _childTileObjects[td.id] = go;
+        }
+
+        private int GetSplitChildResolution(int depth)
+        {
+            int tilesPerEdge = 1 << depth;
+            int baseRes = ResolveResolutionForDepth(depth, tilesPerEdge);
+            if (splitChildResolutionMultiplier <= 0.01f) return baseRes;
+            int scaled = Mathf.Max(2, Mathf.RoundToInt(baseRes * splitChildResolutionMultiplier));
+            return scaled;
+        }
+
+        private float SampleHeightPipeline(Vector3 dir)
+        {
+            float raw = heightProvider != null ? heightProvider.Sample(dir) : 0f;
+            raw *= config.heightScale;
+            float hSample = config.realisticHeights ? HeightRemapper.MinimalRemap(raw, config) : raw;
+            hSample *= Mathf.Max(0.0001f, config.debugElevationMultiplier);
+            if (config.shorelineDetail)
+            {
+                float seaR = config.baseRadius + config.seaLevel;
+                float finalR = config.baseRadius + hSample;
+                if (Mathf.Abs(finalR - seaR) <= config.shorelineBand)
+                {
+                    Vector3 sp = dir * config.shorelineDetailFrequency + new Vector3(12.345f,45.67f,89.01f);
+                    float n = Mathf.PerlinNoise(sp.x, sp.y) * 2f - 1f;
+                    float bandT = 1f - Mathf.Clamp01(Mathf.Abs(finalR - seaR) / Mathf.Max(0.0001f, config.shorelineBand));
+                    float add = n * config.shorelineDetailAmplitude * bandT;
+                    if (config.shorelinePreserveSign)
+                    {
+                        float before = finalR - seaR; float after = before + add;
+                        if (Mathf.Sign(before) != 0 && Mathf.Sign(after) != Mathf.Sign(before)) add *= 0.3f;
+                    }
+                    hSample += add;
+                }
+            }
+            if (config.cullBelowSea && !config.removeFullySubmergedTris && !config.debugDisableUnderwaterCulling)
+            {
+                float seaR = config.baseRadius + config.seaLevel; float finalR = config.baseRadius + hSample;
+                if (finalR < seaR) hSample = (seaR + config.seaClampEpsilon) - config.baseRadius;
+            }
+            return hSample;
         }
     }
 }

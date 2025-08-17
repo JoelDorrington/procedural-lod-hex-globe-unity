@@ -100,5 +100,9 @@ namespace HexGlobeProject.TerrainSystem
     [Tooltip("Maximum vertical displacement added by shoreline detail at the sea level (fades outward within band).")] public float shorelineDetailAmplitude = 0.6f;
     [Tooltip("Frequency multiplier for shoreline detail noise (higher = finer jaggedness).")] public float shorelineDetailFrequency = 6f;
     [Tooltip("Preserve original above/below sea classification to keep large-scale silhouette stable.")] public bool shorelinePreserveSign = true;
+
+    [Header("Detail Scaling")] 
+    [Tooltip("Scale refinement target depth by camera FOV (zoom). Narrow FOV increases perceived detail distance.")] public bool useFovScaling = true;
+    [Tooltip("Reference FOV (degrees) considered 'neutral' for refinement scaling.")] public float referenceFov = 60f;
     }
 }

@@ -191,16 +191,23 @@ MonoBehaviour:
   config: {fileID: 11400000, guid: 39abb1e81f4f4774a84dbe903a64257d, type: 2}
   targetCamera: {fileID: 2097968224}
   terrainMaterial: {fileID: 2100000, guid: 0df5d813211e9c6428c2aec838d9605d, type: 2}
-  autoShowHighest: 1
+  autoBakeOnStart: 1
   gizmoWireTiles: 1
   gizmoHeightRanges: 0
-  enableDynamicSelection: 1
-  sseMultiplier: 1
-  debugLogTransitions: 1
+  debugLogBake: 0
+  debugTint: 0
+  enableProximitySplit: 1
+  splitTargetDepthOverride: -1
+  splitEnterFactor: 0.2
+  splitExitFactor: 0.5
+  splitFadeDuration: 0.15
+  splitMaxPerFrame: 1
+  destroyChildrenOnMerge: 1
+  debugSplitChildrenGizmo: 0
   bakeInProgress: 0
   bakeProgress: 0
   bakedTileCount: 0
-  highestBakedDepth: -1
+  bakedDepth: -1
 --- !u!1 &881747947
 GameObject:
   m_ObjectHideFlags: 0
