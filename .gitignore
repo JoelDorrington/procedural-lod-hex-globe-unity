@@ -1,0 +1,66 @@
+## Minimal Unity .gitignore
+# Core Unity generated/cache folders
+Library/
+Temp/
+Obj/
+Logs/
+UserSettings/
+
+# Build artifacts
+Build/
+Builds/
+[Bb]uildProfile*/
+
+# Burst / DOTS / cache
+MemoryCaptures/
+Recordings/
+
+# Local IDE/editor
+.vs/
+.vscode/**.history/
+
+# Unity Package Manager: keep both manifest and lock for deterministic versions
+# (Do NOT ignore Packages/ folder; it only contains manifest + lock by default.)
+
+# Crash / error dumps
+*.stacktrace
+*.pidb
+*.mdb
+*.svd
+
+# IDE cruft
+*.userprefs
+*.csproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.unityproj
+*.booproj
+*.pidb.meta
+*.pdb
+*.opendb
+*.VC.db
+
+# OS / tooling
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Logs
+*.log
+
+# Generated shader / script caches
+ScriptAssemblies/
+ShaderCache/
+
+# Keep assets & meta files
+!Assets/**
+
+# Keep essential project configuration (manifest + lock)
+!Packages/manifest.json
+!Packages/packages-lock.json
+!ProjectSettings/**
+
+# Local experimental files pattern
+_Local*/
