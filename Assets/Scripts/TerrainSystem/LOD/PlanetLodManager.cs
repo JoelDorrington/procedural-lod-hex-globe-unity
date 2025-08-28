@@ -11,6 +11,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
     /// </summary>
     public class PlanetLodManager : MonoBehaviour
     {
+        public Dictionary<TileId, TileData> ChildTiles => _childTiles;
+        public Dictionary<TileId, GameObject> ChildTileObjects => _childTileObjects;
+        public Material TerrainMaterial => terrainMaterial;
         [SerializeField] private TerrainConfig config;
         [SerializeField] private TerrainHeightProviderBase heightProvider;
         [SerializeField] private Camera targetCamera;
@@ -24,10 +27,15 @@ namespace HexGlobeProject.TerrainSystem.LOD
         [SerializeField] private int splitTargetDepthOverride = -1;
         [SerializeField] private float splitFadeDuration = 0.35f;
         [SerializeField] private float splitChildResolutionMultiplier = 1f;
+        [Header("Proximity Split Thresholds")]
+        [SerializeField] public float splitAngleThreshold = 60f;
+        [SerializeField] public float mergeAngleThreshold = 90f;
 
         private OctaveMaskHeightProvider _octaveWrapper;
         private bool _edgePromotionRebuild = false;
-        public int bakedDepth = -1;
+        private int bakedDepth = -1;
+        private PlanetLodSplitter _splitter = new PlanetLodSplitter();
+        private PlanetTileSpawner _tileSpawner = new PlanetTileSpawner();
 
         private readonly Dictionary<TileId, TileData> _tiles = new();
         private readonly Dictionary<TileId, GameObject> _tileObjects = new();
@@ -44,6 +52,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
         public IEnumerator BakeBaseDepth()
         {
+            Debug.Log("BakeBaseDepth started");
             EnsureHeightProvider();
             _tiles.Clear();
             ClearActiveTiles();
@@ -51,7 +60,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
             PrepareOctaveMaskForDepth(depth);
             yield return StartCoroutine(BakeDepthSingle(depth));
             bakedDepth = depth;
-            SpawnAllTiles();
+            Debug.Log($"BakeBaseDepth finished, depth={depth}, tiles={_tiles.Count}");
+            SpawnAllTiles(); // Only spawn after baking is done
         }
 
         private IEnumerator BakeDepthSingle(int depth)
@@ -74,8 +84,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
             yield break;
         }
 
-        private void BuildTileMesh(TileData data)
+    public void BuildTileMesh(TileData data)
         {
+            Debug.Log($"BuildTileMesh for {data.id}");
             float rmin = float.MaxValue; float rmax = float.MinValue;
             var meshBuilder = new PlanetTileMeshBuilder(
                 config,
@@ -89,6 +100,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 _edgePromotionRebuild
             );
             meshBuilder.BuildTileMesh(data, ref rmin, ref rmax);
+            Debug.Log($"Tile {data.id} mesh assigned: {data.mesh != null}");
         }
 
         private void PrepareOctaveMaskForDepth(int depth)
@@ -112,7 +124,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             }
         }
 
-        private int ResolveResolutionForDepth(int depth, int tilesPerEdge)
+    public int ResolveResolutionForDepth(int depth, int tilesPerEdge)
         {
             int baseRes = config.baseResolution;
             return Mathf.Max(2, baseRes / tilesPerEdge);
@@ -120,25 +132,19 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
         private void SpawnAllTiles()
         {
-            ClearActiveTiles();
+            _tileSpawner.ClearActiveTiles(_tileObjects);
             foreach (var kv in _tiles)
             {
                 var td = kv.Value;
                 if (td.mesh == null) continue;
-                SpawnOrUpdateTileGO(td);
+                _tileSpawner.SpawnOrUpdateTileGO(td, _tileObjects, terrainMaterial, transform);
             }
             TerrainShaderGlobals.Apply(config, terrainMaterial);
         }
 
         private void ClearActiveTiles()
         {
-            foreach (var kv in _tileObjects)
-            {
-                var go = kv.Value;
-                if (go == null) continue;
-                if (Application.isPlaying) Destroy(go); else DestroyImmediate(go);
-            }
-            _tileObjects.Clear();
+            _tileSpawner.ClearActiveTiles(_tileObjects);
         }
 
         private void EnsureHeightProvider()
@@ -147,34 +153,33 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 heightProvider = config.heightProvider;
         }
 
-        private void SpawnOrUpdateTileGO(TileData td)
+        private void Awake()
         {
-            if (_tileObjects.TryGetValue(td.id, out var existing) && existing != null)
+            if (autoBakeOnStart)
             {
-                var mf = existing.GetComponent<MeshFilter>();
-                if (mf.sharedMesh != td.mesh) mf.sharedMesh = td.mesh;
-                return;
+                StartCoroutine(BakeBaseDepth());
             }
-            var go = new GameObject($"Tile_{td.id.face}_d{td.id.depth}_{td.id.x}_{td.id.y}");
-            go.transform.SetParent(transform, false);
-            var filter = go.AddComponent<MeshFilter>();
-            filter.sharedMesh = td.mesh;
-            var renderer = go.AddComponent<MeshRenderer>();
-            renderer.sharedMaterial = terrainMaterial;
-            _tileObjects[td.id] = go;
+        }
+
+        private void Start()
+        {
+            _splitter = new PlanetLodSplitter(this);
+            _tileSpawner = new PlanetTileSpawner();
+            // Do not spawn tiles here; wait for baking to complete
         }
 
         private void Update()
         {
-            // Update loop to trigger baking and manage tile visibility/LOD transitions
-            if (autoBakeOnStart && bakedDepth < 0)
-            {
-                autoBakeOnStart = false;
-                StartCoroutine(BakeBaseDepth());
-            }
             // Proximity split logic
-            var splitter = new PlanetLodSplitter();
-            splitter.UpdateProximitySplits(this);
+            // _splitter.UpdateProximitySplits();
         }
+
+        public TerrainConfig Config => config;
+        public TerrainHeightProviderBase HeightProvider => heightProvider;
+        public Camera TargetCamera => targetCamera;
+        public bool EnableProximitySplit => enableProximitySplit;
+        public int SplitTargetDepthOverride => splitTargetDepthOverride;
+        public int BakedDepth => bakedDepth;
+        public Dictionary<TileId, TileData> Tiles => _tiles;
     }
 }
