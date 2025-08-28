@@ -39,7 +39,21 @@ namespace HexGlobeProject.TerrainSystem.LOD
         // Child tile spawning/updating routines
         public void SpawnOrUpdateChildTileGO(TileData td, Dictionary<TileId, GameObject> childTileObjects, Material terrainMaterial, Transform parent, bool invisible = false)
         {
-            // ...existing child tile spawn logic goes here...
+            if (childTileObjects.TryGetValue(td.id, out var existing) && existing != null)
+            {
+                var mf = existing.GetComponent<MeshFilter>();
+                if (mf.sharedMesh != td.mesh) mf.sharedMesh = td.mesh;
+                existing.SetActive(!invisible);
+                return;
+            }
+            var go = new GameObject($"ChildTile_{td.id.face}_d{td.id.depth}_{td.id.x}_{td.id.y}");
+            go.transform.SetParent(parent, false);
+            var filter = go.AddComponent<MeshFilter>();
+            filter.sharedMesh = td.mesh;
+            var renderer = go.AddComponent<MeshRenderer>();
+            renderer.sharedMaterial = terrainMaterial;
+            go.SetActive(!invisible);
+            childTileObjects[td.id] = go;
         }
     }
 }

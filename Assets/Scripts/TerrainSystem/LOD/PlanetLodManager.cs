@@ -21,27 +21,26 @@ namespace HexGlobeProject.TerrainSystem.LOD
         [SerializeField] private bool autoBakeOnStart = true;
         [SerializeField] private bool enableEdgeConstraint = true;
         [SerializeField] private bool hierarchicalAlignedSampling = true;
-        [SerializeField] private bool promoteConstrainedEdgesPostFade = true;
         [SerializeField] private float childHeightEnhancement = 1.0f;
         [SerializeField] private bool enableProximitySplit = true;
         [SerializeField] private int splitTargetDepthOverride = -1;
         [SerializeField] private float splitFadeDuration = 0.35f;
         [SerializeField] private float splitChildResolutionMultiplier = 1f;
         [Header("Proximity Split Thresholds")]
-        [SerializeField] public float splitAngleThreshold = 60f;
-        [SerializeField] public float mergeAngleThreshold = 90f;
+    // ...existing code...
+        [SerializeField] public float splitDistanceThreshold = 500f;
+        [SerializeField] public float mergeDistanceThreshold = 800f;
 
         private OctaveMaskHeightProvider _octaveWrapper;
         private bool _edgePromotionRebuild = false;
         private int bakedDepth = -1;
-        private PlanetLodSplitter _splitter = new PlanetLodSplitter();
+        private PlanetLodSplitter _splitter = null;
         private PlanetTileSpawner _tileSpawner = new PlanetTileSpawner();
 
         private readonly Dictionary<TileId, TileData> _tiles = new();
         private readonly Dictionary<TileId, GameObject> _tileObjects = new();
         private readonly Dictionary<TileId, TileData> _childTiles = new();
         private readonly Dictionary<TileId, GameObject> _childTileObjects = new();
-        private int _bakedTileResolution = -1;
 
         [ContextMenu("Bake Base Depth")]
         public void BakeBaseDepthContextMenu()
@@ -170,8 +169,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
         private void Update()
         {
-            // Proximity split logic
-            // _splitter.UpdateProximitySplits();
+            if (_splitter != null)
+            {
+                _splitter.UpdateProximitySplits();
+            }
         }
 
         public TerrainConfig Config => config;
@@ -181,5 +182,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
         public int SplitTargetDepthOverride => splitTargetDepthOverride;
         public int BakedDepth => bakedDepth;
         public Dictionary<TileId, TileData> Tiles => _tiles;
+        public Dictionary<TileId, GameObject> TileObjects => _tileObjects;
     }
 }

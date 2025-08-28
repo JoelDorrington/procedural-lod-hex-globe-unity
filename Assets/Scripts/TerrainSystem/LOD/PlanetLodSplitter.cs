@@ -6,92 +6,72 @@ namespace HexGlobeProject.TerrainSystem.LOD
 {
     public class PlanetLodSplitter
     {
-        // Cached manager properties
-        private float splitThreshold;
-        private float mergeThreshold;
-        private int bakedDepth;
-        private int splitTargetDepthOverride;
-        private int configSplitTargetDepth;
-        private Camera targetCamera;
-        private Transform planetTransform;
-        private Dictionary<TileId, TileData> tiles;
-        private Dictionary<TileId, TileData> childTiles;
-        private Dictionary<TileId, GameObject> childTileObjects;
-        private Material terrainMaterial;
-        private TerrainConfig config;
+        private PlanetLodManager manager;
 
-        public PlanetLodSplitter()
+        public PlanetLodSplitter(PlanetLodManager manager) { this.manager = manager; }
+
+        private float SplitDistanceThreshold => manager.splitDistanceThreshold;
+        private float MergeDistanceThreshold => manager.mergeDistanceThreshold;
+        private int BakedDepth => manager.BakedDepth;
+        private int SplitTargetDepthOverride => manager.SplitTargetDepthOverride;
+        private int ConfigSplitTargetDepth => manager.Config.splitTargetDepth;
+        private Camera TargetCamera => manager.TargetCamera;
+        private Transform PlanetTransform => manager.transform;
+        private Dictionary<TileId, TileData> Tiles => manager.Tiles;
+        private Dictionary<TileId, TileData> ChildTiles => manager.ChildTiles;
+        private Dictionary<TileId, GameObject> ChildTileObjects => manager.ChildTileObjects;
+        private Dictionary<TileId, GameObject> TileObjects => manager.TileObjects;
+        private Material TerrainMaterial => manager.TerrainMaterial;
+        private TerrainConfig Config => manager.Config;
+
+        private bool ShouldSplit(bool isSplit, float distance, int splitsStarted)
         {
-            // Default constructor
-        }
-        public PlanetLodSplitter(PlanetLodManager manager)
-        {
-            splitThreshold = manager.splitAngleThreshold;
-            mergeThreshold = manager.mergeAngleThreshold;
-            bakedDepth = manager.BakedDepth;
-            splitTargetDepthOverride = manager.SplitTargetDepthOverride;
-            configSplitTargetDepth = manager.Config.splitTargetDepth;
-            targetCamera = manager.TargetCamera;
-            planetTransform = manager.transform;
-            tiles = manager.Tiles;
-            childTiles = manager.ChildTiles;
-            childTileObjects = manager.ChildTileObjects;
-            terrainMaterial = manager.TerrainMaterial;
-            config = manager.Config;
+            return !isSplit && distance < SplitDistanceThreshold && splitsStarted < 2;
         }
 
-        public void SetParameters(PlanetLodManager manager)
+        private bool ShouldMerge(bool isSplit, float distance)
         {
-            splitThreshold = manager.splitAngleThreshold;
-            mergeThreshold = manager.mergeAngleThreshold;
-            bakedDepth = manager.BakedDepth;
-            splitTargetDepthOverride = manager.SplitTargetDepthOverride;
-            configSplitTargetDepth = manager.Config.splitTargetDepth;
-            targetCamera = manager.TargetCamera;
-            planetTransform = manager.transform;
-            tiles = manager.Tiles;
-            childTiles = manager.ChildTiles;
-            childTileObjects = manager.ChildTileObjects;
-            terrainMaterial = manager.TerrainMaterial;
-            config = manager.Config;
-        }
-
-        private bool ShouldSplit(bool isSplit, float ang, int splitsStarted)
-        {
-            return !isSplit && ang < splitThreshold && splitsStarted < 2;
-        }
-
-        private bool ShouldMerge(bool isSplit, float ang)
-        {
-            return isSplit && ang > mergeThreshold;
+            return isSplit && distance > MergeDistanceThreshold;
         }
 
         public void UpdateProximitySplits()
         {
-            if (targetCamera == null || bakedDepth < 0)
+            if (TargetCamera == null || BakedDepth < 0)
                 return;
-            int targetDepth = splitTargetDepthOverride >= 0 ? splitTargetDepthOverride : configSplitTargetDepth;
-            if (targetDepth < 0 || targetDepth <= bakedDepth) return;
-            Vector3 camPos = targetCamera.transform.position;
-            Vector3 planetPos = planetTransform.position;
-            Vector3 camDir = (camPos - planetPos).normalized;
+            int targetDepth = SplitTargetDepthOverride >= 0 ? SplitTargetDepthOverride : ConfigSplitTargetDepth;
+            if (targetDepth < 0 || targetDepth <= BakedDepth) return;
+            Vector3 camPos = TargetCamera.transform.position;
             int splitsStarted = 0;
-            foreach (var kv in tiles)
+            Debug.Log($"[LOD] Frame: Camera pos: {camPos}, splitDistanceThreshold: {SplitDistanceThreshold}, mergeDistanceThreshold: {MergeDistanceThreshold}");
+            float minDistance = float.MaxValue;
+            TileData closestTile = null;
+            bool closestIsSplit = false;
+            foreach (var kv in Tiles)
             {
                 var parent = kv.Value;
-                if (parent.id.depth != bakedDepth) continue;
-                Vector3 dir = parent.center.sqrMagnitude > 0.0001f ? parent.center.normalized : Vector3.zero;
-                if (dir == Vector3.zero) continue;
-                float ang = Vector3.Angle(camDir, dir);
-                bool isSplit = childTiles.ContainsKey(parent.id);
-                if (ShouldSplit(isSplit, ang, splitsStarted))
+                if (parent.id.depth != BakedDepth) continue;
+                float distance = Vector3.Distance(camPos, parent.center);
+                bool isSplit = ChildTiles.ContainsKey(parent.id);
+                if (distance < minDistance)
                 {
-                    SplitParent(parent);
+                    minDistance = distance;
+                    closestTile = parent;
+                    closestIsSplit = isSplit;
+                }
+            }
+            if (closestTile != null)
+            {
+                Debug.Log($"[LOD] Closest tile {closestTile.id}: distance to camera {minDistance:F2}, splitDistanceThreshold: {SplitDistanceThreshold}, mergeDistanceThreshold: {MergeDistanceThreshold}, isSplit: {closestIsSplit}");
+                if (ShouldSplit(closestIsSplit, minDistance, splitsStarted))
+                {
+                    Debug.Log($"[LOD] Splitting tile {closestTile.id} (distance {minDistance:F2})");
+                    SplitParent(closestTile);
                     splitsStarted++;
                 }
-                else if (ShouldMerge(isSplit, ang))
+                else if (ShouldMerge(closestIsSplit, minDistance))
                 {
-                    MergeParent(parent);
+                    Debug.Log($"[LOD] Merging tile {closestTile.id} (distance {minDistance:F2})");
+                    MergeParent(closestTile);
                 }
             }
         }
@@ -102,37 +82,52 @@ namespace HexGlobeProject.TerrainSystem.LOD
             var td = new TileData
             {
                 id = cid,
-                resolution = config.baseResolution / (1 << (parent.id.depth + 1)),
+                resolution = Config.baseResolution / (1 << (parent.id.depth + 1)),
                 isBaked = true
             };
-            // You may need to call a mesh builder here if not static
-            childTiles[cid] = td;
+            ChildTiles[cid] = td;
             var spawner = new PlanetTileSpawner();
-            spawner.SpawnOrUpdateChildTileGO(td, childTileObjects, terrainMaterial, planetTransform, invisible: false);
+            spawner.SpawnOrUpdateChildTileGO(td, ChildTileObjects, TerrainMaterial, PlanetTransform, invisible: false);
         }
 
         private void SplitParent(TileData parent)
         {
+            // Hide parent tile GameObject (use base tile dictionary)
+            if (TileObjects.TryGetValue(parent.id, out var parentGO) && parentGO != null)
+            {
+                parentGO.SetActive(false);
+            }
             for (int cy = 0; cy < 2; cy++)
                 for (int cx = 0; cx < 2; cx++)
                 {
                     var cid = new TileId(parent.id.face, (byte)(parent.id.depth + 1), (ushort)(parent.id.x * 2 + cx), (ushort)(parent.id.y * 2 + cy));
-                    if (!childTiles.ContainsKey(cid))
+                    if (!ChildTiles.ContainsKey(cid))
                         SpawnChildTile(parent, cx, cy);
+                    // Always ensure child tile is visible
+                    if (ChildTileObjects.TryGetValue(cid, out var childGO) && childGO != null)
+                    {
+                        childGO.SetActive(true);
+                    }
                 }
         }
 
         private void MergeParent(TileData parent)
         {
+            // Show parent tile GameObject (use base tile dictionary)
+            if (TileObjects.TryGetValue(parent.id, out var parentGO) && parentGO != null)
+            {
+                parentGO.SetActive(true);
+            }
             for (int cy = 0; cy < 2; cy++)
                 for (int cx = 0; cx < 2; cx++)
                 {
                     var cid = new TileId(parent.id.face, (byte)(parent.id.depth + 1), (ushort)(parent.id.x * 2 + cx), (ushort)(parent.id.y * 2 + cy));
-                    if (childTileObjects.TryGetValue(cid, out var go) && go != null)
+                    if (ChildTileObjects.TryGetValue(cid, out var go) && go != null)
                     {
+                        go.SetActive(false); // Hide child tile before destroying
                         if (Application.isPlaying) Object.Destroy(go); else Object.DestroyImmediate(go);
-                        childTileObjects.Remove(cid);
-                        childTiles.Remove(cid);
+                        ChildTileObjects.Remove(cid);
+                        ChildTiles.Remove(cid);
                     }
                 }
         }
