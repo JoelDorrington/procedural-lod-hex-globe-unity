@@ -76,24 +76,23 @@ namespace HexGlobeProject.TerrainSystem.LOD
             }
         }
 
-        private void SpawnChildTile(TileData parent, int cx, int cy)
-        {
-            var cid = new TileId(parent.id.face, (byte)(parent.id.depth + 1), (ushort)(parent.id.x * 2 + cx), (ushort)(parent.id.y * 2 + cy));
-            var td = new TileData
-            {
-                id = cid,
-                resolution = Config.baseResolution / (1 << (parent.id.depth + 1)),
-                isBaked = true
-            };
-            ChildTiles[cid] = td;
-            var spawner = new PlanetTileSpawner();
-            spawner.SpawnOrUpdateChildTileGO(td, ChildTileObjects, TerrainMaterial, PlanetTransform, invisible: false);
-        }
-
         private void SplitParent(TileData parent)
         {
-            // Hide parent tile GameObject (use base tile dictionary)
-            if (TileObjects.TryGetValue(parent.id, out var parentGO) && parentGO != null)
+            // Ensure parent mesh is assigned
+            if (parent.mesh == null)
+            {
+                var meshBuilder = new PlanetTileMeshBuilder(Config, Config.heightProvider, manager.OctaveWrapper, manager.HierarchicalAlignedSampling, manager.EnableEdgeConstraint, manager.BakedDepth, manager.SplitChildResolutionMultiplier, manager.ChildHeightEnhancement, manager.EdgePromotionRebuild);
+                float dummyMin = 0, dummyMax = 0;
+                meshBuilder.BuildTileMesh(parent, ref dummyMin, ref dummyMax);
+            }
+            if (!TileObjects.TryGetValue(parent.id, out var parentGO) || parentGO == null)
+            {
+                // Respawn parent tile GameObject if missing
+                var spawner = new PlanetTileSpawner();
+                spawner.SpawnOrUpdateTileGO(parent, TileObjects, TerrainMaterial, PlanetTransform);
+                TileObjects.TryGetValue(parent.id, out parentGO);
+            }
+            if (parentGO != null)
             {
                 parentGO.SetActive(false);
             }
@@ -111,10 +110,35 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 }
         }
 
+        private void SpawnChildTile(TileData parent, int cx, int cy)
+        {
+            var cid = new TileId(parent.id.face, (byte)(parent.id.depth + 1), (ushort)(parent.id.x * 2 + cx), (ushort)(parent.id.y * 2 + cy));
+            var td = new TileData
+            {
+                id = cid,
+                resolution = Config.baseResolution / (1 << (parent.id.depth + 1)),
+                isBaked = true
+            };
+            // Generate mesh for child tile
+            var meshBuilder = new PlanetTileMeshBuilder(Config, Config.heightProvider, manager.OctaveWrapper, manager.HierarchicalAlignedSampling, manager.EnableEdgeConstraint, manager.BakedDepth, manager.SplitChildResolutionMultiplier, manager.ChildHeightEnhancement, manager.EdgePromotionRebuild);
+            float dummyMin = 0, dummyMax = 0;
+            meshBuilder.BuildTileMesh(td, ref dummyMin, ref dummyMax);
+            ChildTiles[cid] = td;
+            var spawner = new PlanetTileSpawner();
+            spawner.SpawnOrUpdateChildTileGO(td, ChildTileObjects, TerrainMaterial, PlanetTransform, invisible: false);
+        }
+
         private void MergeParent(TileData parent)
         {
             // Show parent tile GameObject (use base tile dictionary)
-            if (TileObjects.TryGetValue(parent.id, out var parentGO) && parentGO != null)
+            if (!TileObjects.TryGetValue(parent.id, out var parentGO) || parentGO == null)
+            {
+                // Respawn parent tile GameObject if missing
+                var spawner = new PlanetTileSpawner();
+                spawner.SpawnOrUpdateTileGO(parent, TileObjects, TerrainMaterial, PlanetTransform);
+                TileObjects.TryGetValue(parent.id, out parentGO);
+            }
+            if (parentGO != null)
             {
                 parentGO.SetActive(true);
             }

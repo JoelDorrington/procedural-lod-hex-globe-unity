@@ -199,8 +199,8 @@ MonoBehaviour:
   splitTargetDepthOverride: -1
   splitFadeDuration: 0.15
   splitChildResolutionMultiplier: 1.5
-  splitDistanceThreshold: 50
-  mergeDistanceThreshold: 60
+  splitDistanceThreshold: 38
+  mergeDistanceThreshold: 42
 --- !u!1 &881747947
 GameObject:
   m_ObjectHideFlags: 0

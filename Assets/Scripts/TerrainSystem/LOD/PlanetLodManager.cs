@@ -11,6 +11,13 @@ namespace HexGlobeProject.TerrainSystem.LOD
     /// </summary>
     public class PlanetLodManager : MonoBehaviour
     {
+        public OctaveMaskHeightProvider OctaveWrapper => _octaveWrapper;
+        public bool EdgePromotionRebuild => _edgePromotionRebuild;
+        public bool HierarchicalAlignedSampling => hierarchicalAlignedSampling;
+        public bool EnableEdgeConstraint => enableEdgeConstraint;
+        public float SplitChildResolutionMultiplier => splitChildResolutionMultiplier;
+        public float ChildHeightEnhancement => childHeightEnhancement;
+
         public Dictionary<TileId, TileData> ChildTiles => _childTiles;
         public Dictionary<TileId, GameObject> ChildTileObjects => _childTileObjects;
         public Material TerrainMaterial => terrainMaterial;
@@ -27,7 +34,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
         [SerializeField] private float splitFadeDuration = 0.35f;
         [SerializeField] private float splitChildResolutionMultiplier = 1f;
         [Header("Proximity Split Thresholds")]
-    // ...existing code...
         [SerializeField] public float splitDistanceThreshold = 500f;
         [SerializeField] public float mergeDistanceThreshold = 800f;
 
@@ -83,7 +89,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             yield break;
         }
 
-    public void BuildTileMesh(TileData data)
+        public void BuildTileMesh(TileData data)
         {
             Debug.Log($"BuildTileMesh for {data.id}");
             float rmin = float.MaxValue; float rmax = float.MinValue;
@@ -123,7 +129,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             }
         }
 
-    public int ResolveResolutionForDepth(int depth, int tilesPerEdge)
+        public int ResolveResolutionForDepth(int depth, int tilesPerEdge)
         {
             int baseRes = config.baseResolution;
             return Mathf.Max(2, baseRes / tilesPerEdge);
