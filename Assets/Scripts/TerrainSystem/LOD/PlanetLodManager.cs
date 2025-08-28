@@ -8,8 +8,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
 {
     /// <summary>
     /// Simplified single-depth planet terrain manager.
-    /// This refactored version ONLY bakes and displays the medium depth (config.mediumDepth) tiles.
-    /// All dynamic multi-LOD / selection / SSE logic has been removed for clarity and stability.
+    /// Bakes and displays a single base depth (config.bakeDepth) tiles, with optional proximity split
+    /// to a deeper target (config.splitTargetDepth).
     /// </summary>
     public class PlanetLodManager : MonoBehaviour
     {
@@ -27,9 +27,28 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
     // Dynamic high-res patch removed per user request; keeping placeholder comment for clarity.
 
+    [Header("Edge Continuity (Seam Step A)")]
+    [Tooltip("Constrain child tile outer ring to parent-level sampling.")]
+    [SerializeField] private bool enableEdgeConstraint = true;
+    [Tooltip("Reserved for future blend band width (rings inward from edge).")]
+    [SerializeField] private int childEdgeBlendRings = 3;
+    [Tooltip("Enable Step B: interior blend band that gradually introduces higher-octave/full detail moving inward from constrained edge.")]
+    [SerializeField] private bool enableInteriorBlendBand = true;
+    [Tooltip("If true, child tiles exactly preserve parent-sampled vertices (alignment) and only insert new in-between samples for added detail.")]
+    [SerializeField] private bool hierarchicalAlignedSampling = true;
+    [Tooltip("After parent fades out, rebuild first-split child tiles to promote constrained edge vertices to full detail (restores shoreline/mountain detail).")]
+    [SerializeField] private bool promoteConstrainedEdgesPostFade = true;
+    public enum RefinementRatio { Double = 0, OnePointFive = 1 }
+    [Tooltip("Hierarchical refinement growth factor. Double = (N-1)*2+1, OnePointFive = (N-1)*1.5+1 when divisible (falls back to Double if (N-1) is odd).")]
+    [SerializeField] private RefinementRatio refinementRatio = RefinementRatio.Double;
+
+
+    // Performance caps removed.
+
+
     [Header("Proximity Split LOD")]
-    [Tooltip("Enable smooth splitting of medium tiles into higher-depth tiles near camera.")] [SerializeField] private bool enableProximitySplit = true;
-    [Tooltip("Target higher depth for split (defaults to config.highDepth if <0)."), SerializeField] private int splitTargetDepthOverride = -1;
+    [Tooltip("Enable smooth splitting of baked tiles into higher-depth tiles near camera.")] [SerializeField] private bool enableProximitySplit = true;
+    [Tooltip("Override split target depth (defaults to config.splitTargetDepth if <0)."), SerializeField] private int splitTargetDepthOverride = -1;
     [Tooltip("Enter split when angle to tile center < tileAngularSpan * this factor.")] [Range(0.1f,1.5f)] [SerializeField] private float splitEnterFactor = 0.6f;
     [Tooltip("Exit split when angle exceeds tileAngularSpan * this factor (should be > enter factor)."), Range(0.1f,2f)] [SerializeField] private float splitExitFactor = 1.1f;
     [Tooltip("Seconds for cross-fade between parent and children.")] [SerializeField] private float splitFadeDuration = 0.35f;
@@ -38,6 +57,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
     [Tooltip("Debug: draw active split child tile wireframes.")] [SerializeField] private bool debugSplitChildrenGizmo = false;
     [Tooltip("Disable splitting when camera distance (zoom) exceeds this. -1 = never disable by distance.")] [SerializeField] private float splitDisableBeyondDistance = 40f;
     [Tooltip("Multiplier applied to the resolved resolution for split child tiles (>=1 for higher detail)."), SerializeField] private float splitChildResolutionMultiplier = 1f;
+    [Tooltip("Fraction of fade duration to delay parent fade once children begin (0=simultaneous)."), SerializeField] private float splitParentFadeDelayFrac = 0.35f;
+    [Tooltip("Fade curve for child tiles.")] [SerializeField] private TileFade.FadeCurve splitChildFadeCurve = TileFade.FadeCurve.EaseOut;
+    [Tooltip("Fade curve for parent tiles.")] [SerializeField] private TileFade.FadeCurve splitParentFadeCurve = TileFade.FadeCurve.EaseIn;
 
     // Split LOD state
     private readonly Dictionary<TileId, List<TileId>> _parentToChildren = new();
@@ -45,11 +67,17 @@ namespace HexGlobeProject.TerrainSystem.LOD
     private readonly Dictionary<TileId, Coroutine> _parentSplitCoroutines = new();
     private readonly Dictionary<TileId, TileData> _childTiles = new(); // keyed by child id
     private readonly Dictionary<TileId, GameObject> _childTileObjects = new();
+    private int _bakedTileResolution = -1; // cached baked tile resolution for consistent child detail
+    // Internal flag used during edge promotion rebuild pass to disable perimeter parent constraint.
+    private bool _edgePromotionRebuild = false;
 
         [Header("Runtime State (read-only)")] public bool bakeInProgress;        
         public float bakeProgress; // 0..1 across current phase
         public int bakedTileCount;
     public int bakedDepth = -1; // single depth baked
+    [SerializeField, Tooltip("Approx active vertex count of enabled tile meshes.")] private int activeVertexCount;
+    [SerializeField, Tooltip("Approx active triangle count of enabled tile meshes.")] private int activeTriangleCount;
+    // Split debug instrumentation removed with performance caps.
     private readonly Dictionary<TileId, TileData> _tiles = new();
     private readonly Dictionary<TileId, GameObject> _tileObjects = new();
     // (Removed dynamic patch state)
@@ -61,13 +89,14 @@ namespace HexGlobeProject.TerrainSystem.LOD
     // (Removed refinement state)
 
         // Public entry point
-        [ContextMenu("Bake Medium Depth")] public void BakeMediumDepthContextMenu()
+        [ContextMenu("Bake Base Depth")]
+        public void BakeBaseDepthContextMenu()
         {
             if (bakeInProgress) return;
-            StartCoroutine(BakeMediumDepth());
+            StartCoroutine(BakeBaseDepth());
         }
 
-        public IEnumerator BakeMediumDepth()
+        public IEnumerator BakeBaseDepth()
         {
             EnsureHeightProvider();
             bakeInProgress = true;
@@ -75,7 +104,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             bakedTileCount = 0;
             _tiles.Clear();
             ClearActiveTiles();
-            int depth = Mathf.Max(0, config.mediumDepth);
+            int depth = Mathf.Max(0, config.bakeDepth);
             PrepareOctaveMaskForDepth(depth);
             yield return StartCoroutine(BakeDepthSingle(depth));
             bakedDepth = depth;
@@ -83,8 +112,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
             bakeInProgress = false;
             bakeProgress = 1f;
             if (debugLogBake)
-                Debug.Log($"[PlanetLod] Baked medium depth {depth} tiles={_tiles.Count}");
+                Debug.Log($"[PlanetLod] Baked base depth {depth} tiles={_tiles.Count}");
         }
+
+    // Removed full-depth pre-bake helper
 
         private IEnumerator BakeDepthSingle(int depth)
         {
@@ -125,179 +156,51 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 Debug.Log($"[PlanetLod] Depth {depth} res={resolution} tiles={totalTilesThisDepth} rawRange=({rawMin:F3},{rawMax:F3}) remapRange=({globalMin:F3},{globalMax:F3}) span={(globalMax - globalMin):F3}");
         }
 
-        private void BuildTileMesh(TileData data)
-        {
-            float rmin = float.MaxValue; float rmax = float.MinValue;
-            BuildTileMesh(data, ref rmin, ref rmax);
-        }
+    private PlanetTileMeshBuilder meshBuilder;
+    private OctaveMaskHeightProvider _octaveWrapper;
+    [SerializeField] private float childHeightEnhancement = 1.0f;
 
-        private void BuildTileMesh(TileData data, ref float rawMin, ref float rawMax)
-        {
-            _verts.Clear();
-            _tris.Clear();
-            _normals.Clear();
+    private void Awake()
+    {
+        meshBuilder = new PlanetTileMeshBuilder(
+            config,
+            heightProvider,
+            _octaveWrapper,
+            hierarchicalAlignedSampling,
+            enableEdgeConstraint,
+            bakedDepth,
+            splitChildResolutionMultiplier,
+            childHeightEnhancement,
+            _edgePromotionRebuild
+        );
+    }
 
-            int res = data.resolution;
-            float inv = 1f / (res - 1);
-            float radius = config.baseRadius;
-            float minH = float.MaxValue;
-            float maxH = float.MinValue;
-            Vector3 centerAccum = Vector3.zero;
-            int vertCounter = 0;
+    // Instead of a persistent meshBuilder, create a new one for each mesh build to ensure up-to-date config and runtime values
+    private void BuildTileMesh(TileData data, ref float rawMin, ref float rawMax)
+    {
+        var meshBuilder = new PlanetTileMeshBuilder(
+            config,
+            heightProvider,
+            _octaveWrapper,
+            hierarchicalAlignedSampling,
+            enableEdgeConstraint,
+            bakedDepth,
+            splitChildResolutionMultiplier,
+            childHeightEnhancement,
+            _edgePromotionRebuild
+        );
+        meshBuilder.BuildTileMesh(data, ref rawMin, ref rawMax);
+    }
 
-            // Build a patch of the cube face then project to sphere and apply height
-            bool doCull = config.cullBelowSea && !config.debugDisableUnderwaterCulling;
-            bool removeTris = doCull && config.removeFullySubmergedTris;
-            float seaR = config.baseRadius + config.seaLevel;
-            float eps = config.seaClampEpsilon;
-            var submergedFlags = removeTris ? new List<bool>(res * res) : null;
-            for (int j = 0; j < res; j++)
-            {
-                for (int i = 0; i < res; i++)
-                {
-                    // Local UV within tile
-                    float u = (i * inv + data.id.x) / (1 << data.id.depth); // 0..1 across full face
-                    float v = (j * inv + data.id.y) / (1 << data.id.depth);
+    private void BuildTileMesh(TileData data)
+    {
+        float rmin = float.MaxValue; float rmax = float.MinValue;
+        BuildTileMesh(data, ref rmin, ref rmax);
+    }
 
-                    // Map cube face to direction via shared helper
-                    Vector3 dir = CubeSphere.FaceLocalToUnit(data.id.face, u * 2f - 1f, v * 2f - 1f);
-
-                    // Raw noise sample (provider units)
-                    float raw = heightProvider != null ? heightProvider.Sample(dir) : 0f;
-                    // Apply explicit height scale from config (previously ignored)
-                    raw *= config.heightScale;
-                    if (raw < rawMin) rawMin = raw;
-                    if (raw > rawMax) rawMax = raw;
-                    float hSample;
-                    // Only perform physically-bounded remap when realisticHeights (or other realism toggles) are enabled.
-                    if (config.realisticHeights)
-                        hSample = HeightRemapper.MinimalRemap(raw, config);
-                    else
-                        hSample = raw; // allow large exaggerated relief when realism disabled
-
-                    hSample *= Mathf.Max(0.0001f, config.debugElevationMultiplier);
-                    float finalR = radius + hSample;
-                    // Shoreline high-frequency refinement: only deeper depths & within band
-                    if (config.shorelineDetail && data.id.depth >= config.shorelineDetailMinDepth && Mathf.Abs(finalR - (config.baseRadius + config.seaLevel)) <= config.shorelineBand)
-                    {
-                        // Sample a simple extra Perlin based on position (direction) scaled by frequency multiplier
-                        Vector3 sp = dir * config.shorelineDetailFrequency + new Vector3(12.345f, 45.67f, 89.01f);
-                        float n = Mathf.PerlinNoise(sp.x, sp.y) * 2f - 1f;
-                        // Taper by proximity to sea surface (0 at band edge -> 1 at sea level)
-                        float seaRLocal = config.baseRadius + config.seaLevel;
-                        float bandT = 1f - Mathf.Clamp01(Mathf.Abs(finalR - seaRLocal) / Mathf.Max(0.0001f, config.shorelineBand));
-                        float add = n * config.shorelineDetailAmplitude * bandT;
-                        if (config.shorelinePreserveSign)
-                        {
-                            float before = finalR - seaRLocal; // original signed offset from sea
-                            float after = before + add;
-                            // If sign flips (would alter silhouette), damp adjustment to keep sign
-                            if (Mathf.Sign(before) != 0 && Mathf.Sign(after) != Mathf.Sign(before))
-                            {
-                                add *= 0.3f; // heavy damp to avoid crossing
-                            }
-                        }
-                        finalR += add;
-                        hSample = finalR - radius; // update stored sample
-                    }
-                    bool submerged = doCull && finalR < seaR;
-                    if (submerged && !removeTris)
-                    {
-                        // Clamp up slightly so we keep a continuous surface when not removing tris.
-                        finalR = seaR + eps;
-                    }
-                    minH = Mathf.Min(minH, hSample);
-                    maxH = Mathf.Max(maxH, hSample);
-                    _verts.Add(dir * finalR);
-                    _normals.Add(dir); // approximate
-                    centerAccum += dir * finalR;
-                    vertCounter++;
-                    if (removeTris) submergedFlags.Add(submerged);
-                }
-            }
-
-            // Triangles
-            for (int j = 0; j < res - 1; j++)
-            {
-                for (int i = 0; i < res - 1; i++)
-                {
-                    int idx = j * res + i;
-                    int i0 = idx;
-                    int i1 = idx + 1;
-                    int i2 = idx + res;
-                    int i3 = idx + res + 1;
-                    if (removeTris)
-                    {
-                        bool sub0 = submergedFlags[i0];
-                        bool sub1 = submergedFlags[i1];
-                        bool sub2 = submergedFlags[i2];
-                        bool sub3 = submergedFlags[i3];
-                        bool tri1Skip = sub0 && sub2 && sub1; // i0,i2,i1
-                        bool tri2Skip = sub1 && sub2 && sub3; // i1,i2,i3
-                        if (!tri1Skip) { _tris.Add(i0); _tris.Add(i2); _tris.Add(i1); }
-                        if (!tri2Skip) { _tris.Add(i1); _tris.Add(i2); _tris.Add(i3); }
-                    }
-                    else
-                    {
-                        // two tris (i0,i2,i1) and (i1,i2,i3) for consistent winding (depends on face orientation)
-                        _tris.Add(i0); _tris.Add(i2); _tris.Add(i1);
-                        _tris.Add(i1); _tris.Add(i2); _tris.Add(i3);
-                    }
-                }
-            }
-
-            // Orientation correction: if triangle winding ended up inward (normal pointing toward center), flip all.
-            if (_tris.Count >= 3)
-            {
-                Vector3 va = _verts[_tris[0]];
-                Vector3 vb = _verts[_tris[1]];
-                Vector3 vc = _verts[_tris[2]];
-                Vector3 triN = Vector3.Cross(vb - va, vc - va); // current winding normal
-                // Outward should roughly align with vertex position (planet centered at origin)
-                if (Vector3.Dot(triN, va) < 0f)
-                {
-                    for (int t = 0; t < _tris.Count; t += 3)
-                    {
-                        int tmp = _tris[t + 1];
-                        _tris[t + 1] = _tris[t + 2];
-                        _tris[t + 2] = tmp; // swap to flip winding
-                    }
-                    if (debugLogBake)
-                        Debug.Log($"[PlanetLod] Flipped winding for tile depth {data.id.depth} face {data.id.face} to face outward.");
-                }
-            }
-
-            var mesh = new Mesh();
-            mesh.indexFormat = (res * res > 65000) ? UnityEngine.Rendering.IndexFormat.UInt32 : UnityEngine.Rendering.IndexFormat.UInt16;
-            mesh.SetVertices(_verts);
-            mesh.SetTriangles(_tris, 0, true);
-            mesh.SetNormals(_normals);
-            if (config.recalcNormals)
-            {
-                // Recalculate for geometric shading so elevation visible from view direction
-                mesh.RecalculateNormals();
-            }
-            mesh.RecalculateBounds();
-
-            data.mesh = mesh;
-            data.minHeight = minH;
-            data.maxHeight = maxH;
-            data.error = maxH - minH; // simple height range as placeholder geometric error
-            if (vertCounter > 0)
-            {
-                data.center = centerAccum / vertCounter;
-                data.boundsRadius = 0.5f * ( (radius + maxH) - (radius + minH) ) + (radius + (minH+maxH)*0.5f); // crude, will refine
-            }
-        }
-
-        private OctaveMaskHeightProvider _octaveWrapper; // reused wrapper instance
         private void PrepareOctaveMaskForDepth(int depth)
         {
-            int maxOct = -1;
-            if (depth == config.lowDepth) maxOct = config.lowMaxOctave;
-            else if (depth == config.mediumDepth) maxOct = config.mediumMaxOctave;
-            else if (depth == config.highDepth) maxOct = config.highMaxOctave;
-            else if (depth == config.ultraDepth) maxOct = config.ultraMaxOctave;
+            int maxOct = (depth == config.bakeDepth) ? config.maxOctaveBake : config.maxOctaveSplit;
             if (maxOct == -1)
             {
                 // restore original heightProvider if wrapper was used previously
@@ -323,20 +226,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
         private int ResolveResolutionForDepth(int depth, int tilesPerEdge)
         {
-            // Prefer explicit per-level settings else derive from baseResolution scaled by tile size.
-            int explicitRes = 0;
-            if (depth == config.lowDepth && config.lowResolution > 0) explicitRes = config.lowResolution;
-            else if (depth == config.mediumDepth && config.mediumResolution > 0) explicitRes = config.mediumResolution;
-            else if (depth == config.highDepth && config.highResolution > 0) explicitRes = config.highResolution;
-            else if (depth == config.ultraDepth && config.ultraResolution > 0) explicitRes = config.ultraResolution;
-            if (explicitRes > 0) return Mathf.Max(2, explicitRes);
-            // Fallback heuristic: maintain roughly constant vertex density per face.
-            // A depth 'd' splits face into (2^d)^2 tiles; we want each tile to have baseResolution / (2^d) vertices along edge.
-            int derived = Mathf.Max(2, config.baseResolution / tilesPerEdge);
-            // Slight boost for higher detail levels so close-up looks richer.
-            if (depth == config.highDepth) derived = Mathf.Max(derived, config.baseResolution / tilesPerEdge + 2);
-            if (depth == config.ultraDepth) derived = Mathf.Max(derived, config.baseResolution / tilesPerEdge + 4);
-            return derived;
+            // Depth 'd' splits face into (2^d)^2 tiles; derive resolution to keep roughly constant density.
+            int baseRes = config.baseResolution;
+            return Mathf.Max(2, baseRes / tilesPerEdge);
         }
 
     // (Removed CubeFaceUvToDir; replaced by CubeSphere.FaceLocalToUnit)
@@ -351,6 +243,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 SpawnOrUpdateTileGO(td);
             }
             TerrainShaderGlobals.Apply(config, terrainMaterial);
+            RecomputeActiveCounts();
         }
 
         private void ClearActiveTiles()
@@ -371,7 +264,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             if (autoBakeOnStart && !bakeInProgress && bakedDepth < 0)
             {
                 autoBakeOnStart = false;
-                StartCoroutine(BakeMediumDepth());
+                StartCoroutine(BakeBaseDepth());
             }
             else if (bakedDepth < 0)
             {
@@ -496,7 +389,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
         // ===== Proximity Split Implementation =====
         private void UpdateProximitySplits()
         {
-            int targetDepth = splitTargetDepthOverride >= 0 ? splitTargetDepthOverride : config.highDepth;
+            int targetDepth = splitTargetDepthOverride >= 0 ? splitTargetDepthOverride : config.splitTargetDepth;
             if (targetDepth < 0 || targetDepth <= bakedDepth) return; // need deeper depth available
             // distance gating handled in Update
             float tileSpanDeg = 90f / (1 << bakedDepth); // each medium tile angular span (approx per face)
@@ -518,8 +411,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 {
                     if (ang < tileSpanDeg * splitEnterFactor && splitsStarted < splitMaxPerFrame)
                     {
-                        StartParentSplit(parent.id, targetDepth);
-                        splitsStarted++;
+                        if (CanAffordSplit(parent))
+                        {
+                            StartParentSplit(parent.id, targetDepth);
+                            splitsStarted++;
+                        }
                     }
                 }
                 else
@@ -552,11 +448,14 @@ namespace HexGlobeProject.TerrainSystem.LOD
         private IEnumerator CoSplitParent(TileId parentId, int targetDepth)
         {
             if (!_tiles.TryGetValue(parentId, out var parentData)) { _parentSplitCoroutines.Remove(parentId); yield break; }
+            if (_bakedTileResolution <= 0) _bakedTileResolution = parentData.resolution; // record once
             // Build children (parent depth +1 each level until targetDepth)
             int currentDepth = parentId.depth;
             var frontier = new List<TileId> { parentId };
             while (currentDepth < targetDepth)
             {
+                // Option A: Update octave cap/wrapper for the depth we're about to generate (children at currentDepth+1)
+                PrepareOctaveMaskForDepth(currentDepth + 1);
                 var next = new List<TileId>();
                 foreach (var pid in frontier)
                 {
@@ -591,13 +490,14 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 {
                     var mr = go.GetComponent<MeshRenderer>(); mr.enabled = true;
                     var fade = go.GetComponent<TileFade>(); if (fade == null) fade = go.AddComponent<TileFade>();
-                    fade.Begin(true, splitFadeDuration);
+                    fade.Begin(true, splitFadeDuration, 0f, splitChildFadeCurve);
                 }
             }
             if (_tileObjects.TryGetValue(parentId, out var parentGO) && parentGO != null)
             {
                 var fade = parentGO.GetComponent<TileFade>(); if (fade == null) fade = parentGO.AddComponent<TileFade>();
-                fade.Begin(false, splitFadeDuration);
+                float delay = Mathf.Clamp01(splitParentFadeDelayFrac) * splitFadeDuration;
+                fade.Begin(false, splitFadeDuration, delay, splitParentFadeCurve);
             }
             _activeSplitParents.Add(parentId);
             yield return new WaitForSeconds(splitFadeDuration);
@@ -607,6 +507,21 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 var mr = parentGO2.GetComponent<MeshRenderer>(); if (mr != null) mr.enabled = false;
             }
             _parentSplitCoroutines.Remove(parentId);
+            // Optional: promote constrained perimeter edge vertices to full detail after parent fully hidden.
+            if (promoteConstrainedEdgesPostFade && hierarchicalAlignedSampling)
+            {
+                _edgePromotionRebuild = true;
+                foreach (var cid in frontier)
+                {
+                    if (_childTiles.TryGetValue(cid, out var td))
+                    {
+                        float dMin = 0f, dMax = 0f;
+                        BuildTileMesh(td, ref dMin, ref dMax);
+                        SpawnOrUpdateChildGO(td);
+                    }
+                }
+                _edgePromotionRebuild = false;
+            }
         }
 
         private IEnumerator CoMergeParent(TileId parentId)
@@ -617,7 +532,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             {
                 var mr = parentGO.GetComponent<MeshRenderer>(); if (mr != null) mr.enabled = true;
                 var fade = parentGO.GetComponent<TileFade>(); if (fade == null) fade = parentGO.AddComponent<TileFade>();
-                fade.Begin(true, splitFadeDuration);
+                fade.Begin(true, splitFadeDuration, 0f, splitParentFadeCurve);
             }
             // Fade out children
             foreach (var cid in children)
@@ -625,7 +540,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 if (_childTileObjects.TryGetValue(cid, out var go) && go != null)
                 {
                     var fade = go.GetComponent<TileFade>(); if (fade == null) fade = go.AddComponent<TileFade>();
-                    fade.Begin(false, splitFadeDuration);
+                    float delay = Mathf.Clamp01(splitParentFadeDelayFrac) * 0.25f * splitFadeDuration; // slight stagger for child fade out
+                    fade.Begin(false, splitFadeDuration, delay, splitChildFadeCurve);
                 }
             }
             yield return new WaitForSeconds(splitFadeDuration);
@@ -672,18 +588,55 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
         private int GetSplitChildResolution(int depth)
         {
-            int tilesPerEdge = 1 << depth;
-            int baseRes = ResolveResolutionForDepth(depth, tilesPerEdge);
-            if (splitChildResolutionMultiplier <= 0.01f) return baseRes;
-            int scaled = Mathf.Max(2, Mathf.RoundToInt(baseRes * splitChildResolutionMultiplier));
-            return scaled;
+            if (!hierarchicalAlignedSampling)
+            {
+                int resBase = _bakedTileResolution > 0 ? _bakedTileResolution : config.baseResolution;
+                if (splitChildResolutionMultiplier > 1.001f)
+                    resBase = Mathf.RoundToInt(resBase * splitChildResolutionMultiplier);
+                return Mathf.Max(4, resBase);
+            }
+            // Hierarchical rule with selectable refinement ratio.
+            // We need the immediate parent resolution; if depth == bakedDepth+1 we use baked tile resolution
+            int parentDepth = depth - 1;
+            int parentRes = (parentDepth == bakedDepth) ?
+                (_bakedTileResolution > 0 ? _bakedTileResolution : Mathf.Max(2, config.baseResolution / (1 << bakedDepth))) :
+                // Reconstruct parent res by inverting formula: parentRes = ((childRes-1)/2)+1; since we don't have child yet, recursively compute upward.
+                ReconstructParentRes(depth - 1);
+            int baseChildRes = GetBaseChildResForParent(parentRes);
+            int res = baseChildRes;
+            if (splitChildResolutionMultiplier > 1.001f)
+                res = Mathf.RoundToInt(res * splitChildResolutionMultiplier);
+            // Keep odd to preserve perfect parent alignment pattern after multiplier
+            if ((res & 1) == 0) res += 1; // keep odd for alignment
+            return Mathf.Max(4, res);
+        }
+
+        private int ReconstructParentRes(int depth)
+        {
+            if (depth <= bakedDepth)
+                return (depth == bakedDepth) ? (_bakedTileResolution > 0 ? _bakedTileResolution : Mathf.Max(2, config.baseResolution / (1 << bakedDepth))) : Mathf.Max(2, config.baseResolution / (1 << depth));
+            // compute recursively from baked depth upward
+            int res = ReconstructParentRes(depth - 1);
+            return GetBaseChildResForParent(res);
+        }
+
+        private int GetBaseChildResForParent(int parentRes)
+        {
+            int intervals = parentRes - 1;
+            if (refinementRatio == RefinementRatio.OnePointFive && (intervals % 2) == 0)
+            {
+                int newIntervals = (intervals * 3) / 2; // 1.5x
+                return newIntervals + 1;
+            }
+            // Fallback to doubling for odd interval count or explicit Double mode
+            return intervals * 2 + 1;
         }
 
         private float SampleHeightPipeline(Vector3 dir)
         {
             float raw = heightProvider != null ? heightProvider.Sample(dir) : 0f;
             raw *= config.heightScale;
-            float hSample = config.realisticHeights ? HeightRemapper.MinimalRemap(raw, config) : raw;
+            float hSample = raw; // realistic height remap removed
             hSample *= Mathf.Max(0.0001f, config.debugElevationMultiplier);
             if (config.shorelineDetail)
             {
@@ -710,5 +663,72 @@ namespace HexGlobeProject.TerrainSystem.LOD
             }
             return hSample;
         }
+
+        private float SampleRawWithOctaveCap(Vector3 dir, int maxOctave)
+        {
+            if (heightProvider is IOctaveSampler sampler && maxOctave >= 0)
+                return sampler.SampleOctaveMasked(dir, maxOctave);
+            return heightProvider != null ? heightProvider.Sample(dir) : 0f;
+        }
+
+        // --- Performance helpers ---
+        private bool CanAffordSplit(TileData parentData)
+        {
+            return parentData != null && parentData.mesh != null; // always allow now
+        }
+
+        [ContextMenu("Force First Parent Split (Debug)")]
+        private void ForceFirstParentSplitDebug()
+        {
+            if (bakedDepth < 0) return;
+            foreach (var kv in _tiles)
+            {
+                var td = kv.Value;
+                if (td.id.depth == bakedDepth)
+                {
+                    StartParentSplit(td.id, splitTargetDepthOverride >= 0 ? splitTargetDepthOverride : config.splitTargetDepth);
+                    break;
+                }
+            }
+        }
+
+        [ContextMenu("Rebuild Active Child Tiles (Promote Detail)")]
+        private void RebuildActiveChildrenContextMenu()
+        {
+            // Rebuild meshes for all current child tiles to promote previously constrained interior vertices to full detail under new rules.
+            var list = new List<TileId>(_childTiles.Keys);
+            foreach (var cid in list)
+            {
+                if (_childTiles.TryGetValue(cid, out var td))
+                {
+                    float dummyMin = 0f, dummyMax = 0f;
+                    BuildTileMesh(td, ref dummyMin, ref dummyMax);
+                    SpawnOrUpdateChildGO(td);
+                }
+            }
+            RecomputeActiveCounts();
+        }
+
+        private void RecomputeActiveCounts()
+        {
+            int v = 0; int t = 0;
+            foreach (var kv in _tileObjects)
+            {
+                var go = kv.Value; if (go == null) continue;
+                var mr = go.GetComponent<MeshRenderer>(); if (mr == null || !mr.enabled) continue;
+                var mf = go.GetComponent<MeshFilter>(); if (mf == null || mf.sharedMesh == null) continue;
+                var m = mf.sharedMesh; v += m.vertexCount; t += (m.triangles?.Length ?? 0) / 3;
+            }
+            foreach (var kv in _childTileObjects)
+            {
+                var go = kv.Value; if (go == null) continue;
+                var mr = go.GetComponent<MeshRenderer>(); if (mr == null || !mr.enabled) continue;
+                var mf = go.GetComponent<MeshFilter>(); if (mf == null || mf.sharedMesh == null) continue;
+                var m = mf.sharedMesh; v += m.vertexCount; t += (m.triangles?.Length ?? 0) / 3;
+            }
+            activeVertexCount = v; activeTriangleCount = t;
+        }
+
+    // Seam-fix helpers removed
     }
 }

@@ -193,21 +193,34 @@ MonoBehaviour:
   terrainMaterial: {fileID: 2100000, guid: 0df5d813211e9c6428c2aec838d9605d, type: 2}
   autoBakeOnStart: 1
   gizmoWireTiles: 1
-  gizmoHeightRanges: 0
+  gizmoHeightRanges: 1
   debugLogBake: 0
   debugTint: 0
+  enableEdgeConstraint: 1
+  childEdgeBlendRings: 3
+  enableInteriorBlendBand: 1
+  hierarchicalAlignedSampling: 1
+  promoteConstrainedEdgesPostFade: 1
+  refinementRatio: 1
   enableProximitySplit: 1
   splitTargetDepthOverride: -1
-  splitEnterFactor: 0.2
-  splitExitFactor: 0.5
+  splitEnterFactor: 1.11
+  splitExitFactor: 1.71
   splitFadeDuration: 0.15
   splitMaxPerFrame: 1
   destroyChildrenOnMerge: 1
   debugSplitChildrenGizmo: 0
+  splitDisableBeyondDistance: 45
+  splitChildResolutionMultiplier: 1.5
+  splitParentFadeDelayFrac: 0.35
+  splitChildFadeCurve: 3
+  splitParentFadeCurve: 2
   bakeInProgress: 0
   bakeProgress: 0
   bakedTileCount: 0
   bakedDepth: -1
+  activeVertexCount: 0
+  activeTriangleCount: 0
 --- !u!1 &881747947
 GameObject:
   m_ObjectHideFlags: 0

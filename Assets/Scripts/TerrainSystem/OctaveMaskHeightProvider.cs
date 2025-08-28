@@ -8,7 +8,7 @@ namespace HexGlobeProject.TerrainSystem
     /// If the underlying provider does not implement IOctaveSampler it falls back to full sampling.
     /// </summary>
     [System.Serializable]
-    public class OctaveMaskHeightProvider : TerrainHeightProviderBase
+    public class OctaveMaskHeightProvider : TerrainHeightProviderBase, IOctaveSampler
     {
         [SerializeReference] public TerrainHeightProviderBase inner;
         [Tooltip("Inclusive maximum octave to keep (-1 = all; 0 = first octave only)")] public int maxOctave = -1;
@@ -24,6 +24,19 @@ namespace HexGlobeProject.TerrainSystem
             if (_octaveSampler == null || maxOctave < 0 && maxOctave != -1) return inner.Sample(unitDirection);
             if (maxOctave < 0) return inner.Sample(unitDirection); // -1 means full
             return _octaveSampler.SampleOctaveMasked(unitDirection, maxOctave);
+        }
+
+        /// <summary>
+        /// Expose masked sampling for nested wrappers.
+        /// </summary>
+        public float SampleOctaveMasked(in Vector3 dir, int maxInclusive)
+        {
+            // Temporarily override maxOctave and call Sample
+            int prev = this.maxOctave;
+            this.maxOctave = maxInclusive;
+            float val = Sample(dir);
+            this.maxOctave = prev;
+            return val;
         }
     }
 

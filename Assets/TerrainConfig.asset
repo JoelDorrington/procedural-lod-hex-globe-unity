@@ -14,53 +14,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   baseRadius: 30
   baseResolution: 124
-  maxLod: 5
   heightProvider:
     rid: 691749285861523503
-  heightScale: 1
-  generateOcean: 1
+  heightScale: 0.4
   seaLevel: 0
-  autoSyncSeaLevel: 1
   shallowWaterBand: 2
-  oceanResolution: 64
-  oceanMaterial: {fileID: 0}
-  snowStartOffset: 12
-  snowFullOffset: 18
-  snowSlopeBoost: 0.5
-  snowColor: {r: 0.9, g: 0.9, b: 0.95, a: 1}
   cullBelowSea: 1
   removeFullySubmergedTris: 1
   seaClampEpsilon: 0.01
-  realisticHeights: 1
-  maxElevationPercent: 0.01
-  modalElevationPercent: 0.001
-  lowDepth: 1
-  mediumDepth: 2
-  highDepth: 3
-  ultraDepth: 4
-  extremeMinDepth: 5
-  baseScreenError: 5
-  lowResolution: 0
-  mediumResolution: 0
-  highResolution: 0
-  ultraResolution: 0
-  lowMaxOctave: -1
-  mediumMaxOctave: -1
-  highMaxOctave: -1
-  ultraMaxOctave: -1
-  useElevationEnvelope: 0
-  envelopeScaleOverSea: 1.01
-  typicalEnvelopeFill: 0.9
-  peakProbability: 0.002
-  peakExtraHeightPercent: 0.002
-  envelopeCompressionExponent: 4
-  enableDistanceDetail: 0
-  detailActivateDistance: 55
-  detailDeactivateDistance: 65
-  detailResolutionMultiplier: 2
-  detailRebuildCooldown: 1
-  enableCrossFade: 0
-  lodFadeDuration: 0.4
+  bakeDepth: 2
+  splitTargetDepth: 4
+  maxOctaveBake: -1
+  maxOctaveSplit: -1
   debugElevationMultiplier: 1
   debugDisableUnderwaterCulling: 0
   recalcNormals: 1
@@ -70,8 +35,6 @@ MonoBehaviour:
   shorelineDetailAmplitude: 0.6
   shorelineDetailFrequency: 6
   shorelinePreserveSign: 1
-  useFovScaling: 1
-  referenceFov: 60
   references:
     version: 2
     RefIds:

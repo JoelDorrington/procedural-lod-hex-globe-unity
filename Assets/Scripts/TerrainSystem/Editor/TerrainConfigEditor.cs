@@ -24,13 +24,8 @@ namespace HexGlobeProject.TerrainSystem.Editor
             var config = (TerrainConfig)target;
             DrawCoreSection();
             DrawLodSection();
-            DrawResolutionSection();
-            DrawOctaveSection();
             DrawElevationSection();
-            DrawOceanSnowSection();
             DrawUnderwaterSection();
-            DrawCrossFadeSection();
-            DrawDetailSection();
             EditorGUILayout.Space();
             DrawHeightProvider(config);
 
@@ -41,7 +36,7 @@ namespace HexGlobeProject.TerrainSystem.Editor
         }
 
         #region Section Drawing
-        private static bool _foldCore = true, _foldLod = true, _foldRes = true, _foldOct = true, _foldElev = false, _foldOcean = false, _foldUnder = false, _foldFade = false, _foldDetail = false;
+    private static bool _foldCore = true, _foldLod = true, _foldElev = false, _foldUnder = false;
 
         private void DrawCoreSection()
         {
@@ -51,141 +46,35 @@ namespace HexGlobeProject.TerrainSystem.Editor
             {
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("baseRadius"));
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("baseResolution"));
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    var maxLodProp = serializedObject.FindProperty("maxLod");
-                    EditorGUILayout.PropertyField(maxLodProp, new GUIContent("Max Lod (Deprecated)"));
-                    if (GUILayout.Button("?", GUILayout.Width(22)))
-                        EditorUtility.DisplayDialog("Deprecated", "'Max Lod' no longer drives generation; use depth fields below.", "OK");
-                }
+                // maxLod removed
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("heightScale"));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("realisticHeights"));
-                if (serializedObject.FindProperty("realisticHeights").boolValue)
-                {
-                    using (new EditorGUI.IndentLevelScope())
-                    {
-                        EditorGUILayout.PropertyField(serializedObject.FindProperty("maxElevationPercent"));
-                        EditorGUILayout.PropertyField(serializedObject.FindProperty("modalElevationPercent"));
-                    }
-                }
+                // Realistic height scaling fields removed
             }
             EditorGUILayout.Space();
         }
 
         private void DrawLodSection()
         {
-            _foldLod = EditorGUILayout.Foldout(_foldLod, "LOD Depths", true);
+            _foldLod = EditorGUILayout.Foldout(_foldLod, "LOD (Simplified)", true);
             if (!_foldLod) return;
             using (new EditorGUI.IndentLevelScope())
             {
-                var low = serializedObject.FindProperty("lowDepth");
-                var med = serializedObject.FindProperty("mediumDepth");
-                var high = serializedObject.FindProperty("highDepth");
-                var ultra = serializedObject.FindProperty("ultraDepth");
-                var extreme = serializedObject.FindProperty("extremeMinDepth");
-                EditorGUILayout.PropertyField(low);
-                EditorGUILayout.PropertyField(med);
-                EditorGUILayout.PropertyField(high);
-                EditorGUILayout.PropertyField(ultra);
-                EditorGUILayout.PropertyField(extreme);
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("baseScreenError"));
-                // Order validation
-                int l = low.intValue, m = med.intValue, h = high.intValue, u = ultra.intValue, ex = extreme.intValue;
-                if (!(l <= m && m <= h && h <= u))
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("bakeDepth"));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("splitTargetDepth"));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("maxOctaveBake"));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("maxOctaveSplit"));
+                var bake = serializedObject.FindProperty("bakeDepth").intValue;
+                var splitT = serializedObject.FindProperty("splitTargetDepth").intValue;
+                if (splitT <= bake)
                 {
-                    EditorGUILayout.HelpBox("Depth order should be Low <= Medium <= High <= Ultra. Fix suggested.", MessageType.Warning);
-                    if (GUILayout.Button("Normalize Ordering"))
-                    {
-                        if (m < l) med.intValue = l;
-                        if (h < med.intValue) high.intValue = med.intValue;
-                        if (u < high.intValue) ultra.intValue = high.intValue + 1;
-                    }
-                }
-                if (u <= h)
-                {
-                    EditorGUILayout.HelpBox("Ultra disabled (must be > High to add an extra tier).", MessageType.Info);
-                }
-                if (ex <= h)
-                {
-                    EditorGUILayout.HelpBox("Extreme streaming depth should exceed High/Ultra for future streaming.", MessageType.None);
+                    EditorGUILayout.HelpBox("Splitting disabled (splitTargetDepth <= bakeDepth).", MessageType.Info);
                 }
             }
             EditorGUILayout.Space();
         }
 
-        private void DrawResolutionSection()
-        {
-            _foldRes = EditorGUILayout.Foldout(_foldRes, "Per-Level Resolutions", true);
-            if (!_foldRes) return;
-            using (new EditorGUI.IndentLevelScope())
-            {
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("lowResolution"));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("mediumResolution"));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("highResolution"));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("ultraResolution"));
-                EditorGUILayout.HelpBox("0 = derive from baseResolution / 2^depth (with slight boosts on higher levels).", MessageType.None);
-            }
-            EditorGUILayout.Space();
-        }
-
-        private void DrawOctaveSection()
-        {
-            _foldOct = EditorGUILayout.Foldout(_foldOct, "Octave Masks", true);
-            if (!_foldOct) return;
-            using (new EditorGUI.IndentLevelScope())
-            {
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("lowMaxOctave"));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("mediumMaxOctave"));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("highMaxOctave"));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("ultraMaxOctave"));
-                EditorGUILayout.HelpBox("-1 = all octaves. Lower values calm distant tiles.", MessageType.None);
-            }
-            EditorGUILayout.Space();
-        }
-
-        private void DrawElevationSection()
-        {
-            _foldElev = EditorGUILayout.Foldout(_foldElev, "Elevation Envelope & Peaks", true);
-            if (!_foldElev) return;
-            using (new EditorGUI.IndentLevelScope())
-            {
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("useElevationEnvelope"));
-                if (serializedObject.FindProperty("useElevationEnvelope").boolValue)
-                {
-                    using (new EditorGUI.IndentLevelScope())
-                    {
-                        EditorGUILayout.PropertyField(serializedObject.FindProperty("envelopeScaleOverSea"));
-                        EditorGUILayout.PropertyField(serializedObject.FindProperty("typicalEnvelopeFill"));
-                        EditorGUILayout.PropertyField(serializedObject.FindProperty("envelopeCompressionExponent"));
-                        EditorGUILayout.PropertyField(serializedObject.FindProperty("peakProbability"));
-                        EditorGUILayout.PropertyField(serializedObject.FindProperty("peakExtraHeightPercent"));
-                    }
-                    EditorGUILayout.HelpBox("Most land compressed into lower band, sparse peaks exceed envelope.", MessageType.None);
-                }
-            }
-            EditorGUILayout.Space();
-        }
-
-        private void DrawOceanSnowSection()
-        {
-            _foldOcean = EditorGUILayout.Foldout(_foldOcean, "Ocean & Snow", true);
-            if (!_foldOcean) return;
-            using (new EditorGUI.IndentLevelScope())
-            {
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("generateOcean"));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("seaLevel"));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("autoSyncSeaLevel"));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("shallowWaterBand"));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("oceanResolution"));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("oceanMaterial"));
-                EditorGUILayout.Space();
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("snowStartOffset"));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("snowFullOffset"));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("snowSlopeBoost"));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("snowColor"));
-            }
-            EditorGUILayout.Space();
-        }
+    // ElevationSection removed (envelope & peaks feature deprecated)
+    private void DrawElevationSection() { }
 
         private void DrawUnderwaterSection()
         {
@@ -202,45 +91,6 @@ namespace HexGlobeProject.TerrainSystem.Editor
                         EditorGUILayout.PropertyField(serializedObject.FindProperty("seaClampEpsilon"));
                     }
                     EditorGUILayout.HelpBox("Triangle removal leaves coastline holes (good with ocean sphere). Disable to just clamp.", MessageType.Info);
-                }
-            }
-            EditorGUILayout.Space();
-        }
-
-        private void DrawCrossFadeSection()
-        {
-            _foldFade = EditorGUILayout.Foldout(_foldFade, "LOD Cross-Fade", true);
-            if (!_foldFade) return;
-            using (new EditorGUI.IndentLevelScope())
-            {
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("enableCrossFade"));
-                if (serializedObject.FindProperty("enableCrossFade").boolValue)
-                {
-                    using (new EditorGUI.IndentLevelScope())
-                    {
-                        EditorGUILayout.PropertyField(serializedObject.FindProperty("lodFadeDuration"));
-                    }
-                }
-            }
-            EditorGUILayout.Space();
-        }
-
-        private void DrawDetailSection()
-        {
-            _foldDetail = EditorGUILayout.Foldout(_foldDetail, "Distance Detail Boost", true);
-            if (!_foldDetail) return;
-            using (new EditorGUI.IndentLevelScope())
-            {
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("enableDistanceDetail"));
-                if (serializedObject.FindProperty("enableDistanceDetail").boolValue)
-                {
-                    using (new EditorGUI.IndentLevelScope())
-                    {
-                        EditorGUILayout.PropertyField(serializedObject.FindProperty("detailActivateDistance"));
-                        EditorGUILayout.PropertyField(serializedObject.FindProperty("detailDeactivateDistance"));
-                        EditorGUILayout.PropertyField(serializedObject.FindProperty("detailResolutionMultiplier"));
-                        EditorGUILayout.PropertyField(serializedObject.FindProperty("detailRebuildCooldown"));
-                    }
                 }
             }
             EditorGUILayout.Space();

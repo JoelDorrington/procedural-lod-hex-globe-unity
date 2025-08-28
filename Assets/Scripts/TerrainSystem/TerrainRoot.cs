@@ -34,19 +34,10 @@ namespace HexGlobeProject.TerrainSystem
 
         private void Update()
         {
-            if (!Application.isPlaying || config == null || !config.enableDistanceDetail) return;
+            if (!Application.isPlaying || config == null) return;
             if (Camera.main == null) return;
             float dist = Vector3.Distance(Camera.main.transform.position, transform.position);
-            bool wantDetail = dist < config.detailActivateDistance;
-            if (!wantDetail && _usingDetail && dist < config.detailDeactivateDistance) return; // hysteresis retain
-            if (wantDetail && !_usingDetail && Time.time - _lastRebuildTime >= config.detailRebuildCooldown)
-            {
-                _usingDetail = true; _lastRebuildTime = Time.time; Rebuild();
-            }
-            else if (!wantDetail && _usingDetail && Time.time - _lastRebuildTime >= config.detailRebuildCooldown)
-            {
-                _usingDetail = false; _lastRebuildTime = Time.time; Rebuild();
-            }
+            // Distance detail boost removed.
         }
 
         private void Clear()
@@ -71,7 +62,7 @@ namespace HexGlobeProject.TerrainSystem
 
         private void BuildBasePatches()
         {
-            int res = Mathf.Max(4, _usingDetail ? config.baseResolution * Mathf.Max(1, config.detailResolutionMultiplier) : config.baseResolution);
+            int res = Mathf.Max(4, config.baseResolution);
             float radius = config.baseRadius;
             var hp = config.heightProvider;
             for (int face = 0; face < 6; face++)
@@ -101,7 +92,8 @@ namespace HexGlobeProject.TerrainSystem
 
         private void CreateOceanIfNeeded(float baseRadius)
         {
-            if (config == null || !config.generateOcean) return;
+            // Ocean feature removed.
+            if (config == null) return;
             if (_oceanGO != null) return; // already
             float radius = baseRadius + config.seaLevel; // seaLevel expressed in same height units (pre heightScale)
             if (radius <= 0.01f) radius = Mathf.Max(0.01f, baseRadius * 0.01f);
@@ -109,8 +101,8 @@ namespace HexGlobeProject.TerrainSystem
             _oceanGO.transform.SetParent(transform, false);
             var mf = _oceanGO.AddComponent<MeshFilter>();
             var mr = _oceanGO.AddComponent<MeshRenderer>();
-            mr.sharedMaterial = config.oceanMaterial != null ? config.oceanMaterial : terrainMaterial;
-            mf.sharedMesh = BuildIcoSphere(config.oceanResolution, radius);
+            mr.sharedMaterial = terrainMaterial;
+            mf.sharedMesh = BuildIcoSphere(32, radius); // fixed moderate resolution
         }
 
         private Mesh BuildIcoSphere(int resolution, float radius)
@@ -174,8 +166,8 @@ namespace HexGlobeProject.TerrainSystem
                     float u = (x / (float)resolution) * 2f - 1f;
                     Vector3 dir = CubeSphere.FaceLocalToUnit(face, u, v);
                     float raw = hp.Sample(dir);
-                    // Direct scaling: raw assumed roughly in -1..1; scale to maxElevationPercent of radius
-                    float h = HexGlobeProject.TerrainSystem.HeightRemapper.MinimalRemap(raw, config);
+                    // Use raw sampled height directly (realistic height remap removed)
+                    float h = raw;
                     float finalR = radius + h;
                     bool submerged = doCull && finalR < seaRadius;
                     if (submerged)
