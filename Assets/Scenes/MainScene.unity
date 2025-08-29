@@ -194,11 +194,11 @@ MonoBehaviour:
   autoBakeOnStart: 1
   enableEdgeConstraint: 0
   hierarchicalAlignedSampling: 0
-  childHeightEnhancement: 1.5
+  childHeightEnhancement: 1
   enableProximitySplit: 1
   splitTargetDepthOverride: -1
   splitFadeDuration: 0.15
-  splitChildResolutionMultiplier: 1.5
+  splitChildResolutionMultiplier: 2
   splitDistanceThreshold: 35
   mergeDistanceThreshold: 38
 --- !u!1 &881747947

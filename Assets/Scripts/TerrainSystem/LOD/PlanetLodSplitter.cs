@@ -44,9 +44,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
             if (targetDepth < 0 || targetDepth <= BakedDepth) return;
             Vector3 camPos = TargetCamera.transform.position;
             int splitsStarted = 0;
-            float minDistance = float.MaxValue;
-            TileData closestTile = null;
-            bool closestIsSplit = false;
             foreach (var kv in Tiles)
             {
                 var parent = kv.Value;
@@ -64,23 +61,14 @@ namespace HexGlobeProject.TerrainSystem.LOD
                             break;
                         }
                     }
-                if (distance < minDistance)
+                if (ShouldSplit(isSplit, distance, splitsStarted))
                 {
-                    minDistance = distance;
-                    closestTile = parent;
-                    closestIsSplit = isSplit;
-                }
-            }
-            if (closestTile != null)
-            {
-                if (ShouldSplit(closestIsSplit, minDistance, splitsStarted))
-                {
-                    SplitParent(closestTile);
+                    SplitParent(parent);
                     splitsStarted++;
                 }
-                else if (ShouldMerge(closestIsSplit, minDistance))
+                else if (ShouldMerge(isSplit, distance))
                 {
-                    MergeParent(closestTile);
+                    MergeParent(parent);
                 }
             }
         }
