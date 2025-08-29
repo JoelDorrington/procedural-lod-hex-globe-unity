@@ -1,7 +1,7 @@
 Shader "HexGlobe/PlanetTerrain"
 {
-    Properties
-    {
+    Properties {
+        _FadeSeed ("Fade Seed", Float) = 0
         _ColorLow ("Low Color", Color) = (0.1,0.2,0.6,1)
         _ColorHigh ("High Color", Color) = (0.15,0.35,0.15,1)
         _ColorMountain ("Mountain Color", Color) = (0.5,0.5,0.5,1)
@@ -46,6 +46,7 @@ Shader "HexGlobe/PlanetTerrain"
             };
 
             UNITY_DECLARE_DEPTH_TEXTURE(_CameraDepthTexture);
+            float _FadeSeed;
 
             float4 _ColorLow;
             float4 _ColorHigh;
@@ -110,11 +111,11 @@ Shader "HexGlobe/PlanetTerrain"
                 snowT = saturate(snowT + flatFactor * _SnowSlopeBoost * (1 - snowT));
                 finalCol = lerp(finalCol, _SnowColor, snowT);
 
-                // Cross-fade support: _Morph in [0,1]; when <1 apply stochastic discard for fade-out or fade-in
-                // Tiles fading OUT drive _Morph from 1->0 (code sets); fading IN from 0->1.
+                // Cross-fade support: _Morph in [0,1]; use shared fade seed for stochastic fade
                 if (_Morph < 0.999)
                 {
-                    float h = Hash21(i.pos.xy * 0.25 + i.worldPos.xz);
+                    float2 fadeSeed2 = float2(_FadeSeed, _FadeSeed);
+                    float h = Hash21(i.pos.xy * 0.25 + i.worldPos.xz + fadeSeed2);
                     if (h > _Morph) discard;
                 }
                 return finalCol * _Color;

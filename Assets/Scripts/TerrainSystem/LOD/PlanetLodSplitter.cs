@@ -15,7 +15,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
         {
             if (fromTile == null || toTile == null) return;
             // Find an always-active MonoBehaviour to start the coroutine
-            var manager = GameObject.FindObjectOfType<PlanetLodManager>();
+            var manager = GameObject.FindFirstObjectByType<PlanetLodManager>();
             if (manager != null)
                 manager.StartCoroutine(FadeCoroutine(fromTile, toTile, duration));
         }
@@ -44,7 +44,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             mat.renderQueue = -1;
         }
 
-        private System.Collections.IEnumerator FadeCoroutine(GameObject fromTile, GameObject toTile, float duration)
+    public System.Collections.IEnumerator FadeCoroutine(GameObject fromTile, GameObject toTile, float duration)
         {
             var fromRenderer = fromTile.GetComponent<Renderer>();
             var toRenderer = toTile.GetComponent<Renderer>();
@@ -53,19 +53,32 @@ namespace HexGlobeProject.TerrainSystem.LOD
             Material toMat = toRenderer.material;
             SetMaterialTransparent(fromMat);
             SetMaterialTransparent(toMat);
+            Color fromBaseColor = fromMat.HasProperty("_Color") ? fromMat.GetColor("_Color") : Color.white;
+            Color toBaseColor = toMat.HasProperty("_Color") ? toMat.GetColor("_Color") : Color.white;
+            // Set shared fade seed for stochastic fade
+            float fadeSeed = Random.Range(0f, 10000f);
+            if (fromMat.HasProperty("_FadeSeed")) fromMat.SetFloat("_FadeSeed", fadeSeed);
+            if (toMat.HasProperty("_FadeSeed")) toMat.SetFloat("_FadeSeed", fadeSeed);
             float t = 0f;
+            fromTile.SetActive(true);
             toTile.SetActive(true);
             float startTime = Time.unscaledTime;
             while (t < duration)
             {
                 t = Time.unscaledTime - startTime;
-                float alpha = Mathf.Clamp01(t / duration);
-                fromMat.SetColor("_Color", new Color(1f, 1f, 1f, 1f - alpha));
-                toMat.SetColor("_Color", new Color(1f, 1f, 1f, alpha));
+                float outgoingAlpha = 1f - Mathf.Clamp01(t / duration);
+                float incomingAlpha = Mathf.Clamp01(t / duration);
+                // Animate both _Color.a and _Morph
+                fromMat.SetColor("_Color", new Color(fromBaseColor.r, fromBaseColor.g, fromBaseColor.b, outgoingAlpha));
+                toMat.SetColor("_Color", new Color(toBaseColor.r, toBaseColor.g, toBaseColor.b, incomingAlpha));
+                if (fromMat.HasProperty("_Morph")) fromMat.SetFloat("_Morph", outgoingAlpha);
+                if (toMat.HasProperty("_Morph")) toMat.SetFloat("_Morph", incomingAlpha);
                 yield return new WaitForEndOfFrame();
             }
-            fromMat.SetColor("_Color", new Color(1f, 1f, 1f, 0f));
-            toMat.SetColor("_Color", new Color(1f, 1f, 1f, 1f));
+            fromMat.SetColor("_Color", new Color(fromBaseColor.r, fromBaseColor.g, fromBaseColor.b, 0f));
+            toMat.SetColor("_Color", new Color(toBaseColor.r, toBaseColor.g, toBaseColor.b, 1f));
+            if (fromMat.HasProperty("_Morph")) fromMat.SetFloat("_Morph", 0f);
+            if (toMat.HasProperty("_Morph")) toMat.SetFloat("_Morph", 1f);
             fromTile.SetActive(false);
             SetMaterialOpaque(toMat);
         }
@@ -226,16 +239,25 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     var cid = new TileId(parent.id.face, (byte)(parent.id.depth + 1), (ushort)(parent.id.x * 2 + cx), (ushort)(parent.id.y * 2 + cy));
                     if (ChildTileObjects.TryGetValue(cid, out var go) && go != null)
                     {
-                        tileTransition.ApplyTransition(go, TileObjects[parent.id], manager.SplitFadeDuration);
-                        go.SetActive(false);
-                        if (Application.isPlaying) Object.Destroy(go); else Object.DestroyImmediate(go);
-                        ChildTileObjects.Remove(cid);
+                        // Start fade transition, then destroy after fade completes
+                        manager.StartCoroutine(DestroyAfterFade(go, TileObjects[parent.id], manager.SplitFadeDuration, cid));
                     }
                     if (ChildTiles.ContainsKey(cid))
                     {
                         ChildTiles.Remove(cid);
                     }
                 }
+        }
+
+        private System.Collections.IEnumerator DestroyAfterFade(GameObject fromTile, GameObject toTile, float duration, TileId cid)
+        {
+            // Use FadeTileTransition to run fade coroutine
+            var transition = tileTransition as FadeTileTransition;
+            if (transition != null)
+                yield return transition.FadeCoroutine(fromTile, toTile, duration);
+            fromTile.SetActive(false);
+            if (Application.isPlaying) Object.Destroy(fromTile); else Object.DestroyImmediate(fromTile);
+            ChildTileObjects.Remove(cid);
         }
     }
 }
