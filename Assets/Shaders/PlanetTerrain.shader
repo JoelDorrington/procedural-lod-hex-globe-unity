@@ -4,25 +4,27 @@ Shader "HexGlobe/PlanetTerrain"
     {
         _ColorLow ("Low Color", Color) = (0.1,0.2,0.6,1)
         _ColorHigh ("High Color", Color) = (0.15,0.35,0.15,1)
-    _ColorMountain ("Mountain Color", Color) = (0.5,0.5,0.5,1)
+        _ColorMountain ("Mountain Color", Color) = (0.5,0.5,0.5,1)
+        _Color ("Global Fade Color", Color) = (1,1,1,1)
         _Morph ("Morph", Range(0,1)) = 1
-    _SeaLevel ("Sea Level (world height)", Float) = 30
-    _MountainStart ("Mountain Start Height Offset", Float) = 4
-    _MountainFull ("Mountain Full Height Offset", Float) = 10
-    _SlopeBoost ("Slope Influence", Range(0,1)) = 0.4
-    _SnowStart ("Snow Start World Height", Float) = 42
-    _SnowFull ("Snow Full World Height", Float) = 48
-    _SnowSlopeBoost ("Snow Slope Influence", Range(0,1)) = 0.5
-    _SnowColor ("Snow Color", Color) = (0.9,0.9,0.95,1)
-    _ShallowBand ("Shallow Water Band Height", Float) = 2
-    _ShallowColor ("Shallow Water Color", Color) = (0.12,0.25,0.55,1)
+        _SeaLevel ("Sea Level (world height)", Float) = 30
+        _MountainStart ("Mountain Start Height Offset", Float) = 4
+        _MountainFull ("Mountain Full Height Offset", Float) = 10
+        _SlopeBoost ("Slope Influence", Range(0,1)) = 0.4
+        _SnowStart ("Snow Start World Height", Float) = 42
+        _SnowFull ("Snow Full World Height", Float) = 48
+        _SnowSlopeBoost ("Snow Slope Influence", Range(0,1)) = 0.5
+        _SnowColor ("Snow Color", Color) = (0.9,0.9,0.95,1)
+        _ShallowBand ("Shallow Water Band Height", Float) = 2
+        _ShallowColor ("Shallow Water Color", Color) = (0.12,0.25,0.55,1)
     }
     SubShader
     {
-        Tags { "RenderType"="Opaque" }
+        Tags { "RenderType"="Transparent" }
         LOD 200
     Pass
         {
+            Blend SrcAlpha OneMinusSrcAlpha
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
@@ -48,6 +50,7 @@ Shader "HexGlobe/PlanetTerrain"
             float4 _ColorLow;
             float4 _ColorHigh;
             float4 _ColorMountain;
+            float4 _Color;
             float _Morph; // global fallback if per-patch not set
             float _SeaLevel;
             float _MountainStart;
@@ -111,11 +114,10 @@ Shader "HexGlobe/PlanetTerrain"
                 // Tiles fading OUT drive _Morph from 1->0 (code sets); fading IN from 0->1.
                 if (_Morph < 0.999)
                 {
-                    // Screen-space hash (using SV_POSITION would be better; we approximate via worldPos & uv)
                     float h = Hash21(i.pos.xy * 0.25 + i.worldPos.xz);
-                    if (h > _Morph) discard; // dithered transparency
+                    if (h > _Morph) discard;
                 }
-                return finalCol;
+                return finalCol * _Color;
             }
             ENDHLSL
         }

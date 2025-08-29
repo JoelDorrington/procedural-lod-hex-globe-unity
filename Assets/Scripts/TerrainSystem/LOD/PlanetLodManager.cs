@@ -17,6 +17,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
         public bool EnableEdgeConstraint => enableEdgeConstraint;
         public float SplitChildResolutionMultiplier => splitChildResolutionMultiplier;
         public float ChildHeightEnhancement => childHeightEnhancement;
+        public float SplitFadeDuration => splitFadeDuration;
 
         public Dictionary<TileId, TileData> ChildTiles => _childTiles;
         public Dictionary<TileId, GameObject> ChildTileObjects => _childTileObjects;

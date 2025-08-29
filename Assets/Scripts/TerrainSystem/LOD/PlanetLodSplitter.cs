@@ -4,11 +4,83 @@ using HexGlobeProject.TerrainSystem;
 
 namespace HexGlobeProject.TerrainSystem.LOD
 {
+    public interface IPlanetTileTransition
+    {
+        void ApplyTransition(GameObject fromTile, GameObject toTile, float duration);
+    }
+
+    public class FadeTileTransition : IPlanetTileTransition
+    {
+        public void ApplyTransition(GameObject fromTile, GameObject toTile, float duration)
+        {
+            if (fromTile == null || toTile == null) return;
+            // Find an always-active MonoBehaviour to start the coroutine
+            var manager = GameObject.FindObjectOfType<PlanetLodManager>();
+            if (manager != null)
+                manager.StartCoroutine(FadeCoroutine(fromTile, toTile, duration));
+        }
+
+        private void SetMaterialTransparent(Material mat)
+        {
+            mat.SetFloat("_Mode", 3);
+            mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            mat.SetInt("_ZWrite", 0);
+            mat.DisableKeyword("_ALPHATEST_ON");
+            mat.EnableKeyword("_ALPHABLEND_ON");
+            mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            mat.renderQueue = 3000;
+        }
+
+        private void SetMaterialOpaque(Material mat)
+        {
+            mat.SetFloat("_Mode", 0);
+            mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.One);
+            mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.Zero);
+            mat.SetInt("_ZWrite", 1);
+            mat.EnableKeyword("_ALPHATEST_ON");
+            mat.DisableKeyword("_ALPHABLEND_ON");
+            mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            mat.renderQueue = -1;
+        }
+
+        private System.Collections.IEnumerator FadeCoroutine(GameObject fromTile, GameObject toTile, float duration)
+        {
+            var fromRenderer = fromTile.GetComponent<Renderer>();
+            var toRenderer = toTile.GetComponent<Renderer>();
+            if (fromRenderer == null || toRenderer == null) yield break;
+            Material fromMat = fromRenderer.material;
+            Material toMat = toRenderer.material;
+            SetMaterialTransparent(fromMat);
+            SetMaterialTransparent(toMat);
+            float t = 0f;
+            toTile.SetActive(true);
+            float startTime = Time.unscaledTime;
+            while (t < duration)
+            {
+                t = Time.unscaledTime - startTime;
+                float alpha = Mathf.Clamp01(t / duration);
+                fromMat.SetColor("_Color", new Color(1f, 1f, 1f, 1f - alpha));
+                toMat.SetColor("_Color", new Color(1f, 1f, 1f, alpha));
+                yield return new WaitForEndOfFrame();
+            }
+            fromMat.SetColor("_Color", new Color(1f, 1f, 1f, 0f));
+            toMat.SetColor("_Color", new Color(1f, 1f, 1f, 1f));
+            fromTile.SetActive(false);
+            SetMaterialOpaque(toMat);
+        }
+    }
+
     public class PlanetLodSplitter
     {
         private PlanetLodManager manager;
+        private IPlanetTileTransition tileTransition;
 
-        public PlanetLodSplitter(PlanetLodManager manager) { this.manager = manager; }
+        public PlanetLodSplitter(PlanetLodManager manager, IPlanetTileTransition transition = null)
+        {
+            this.manager = manager;
+            this.tileTransition = transition ?? new FadeTileTransition();
+        }
 
         private float SplitDistanceThreshold => manager.splitDistanceThreshold;
         private float MergeDistanceThreshold => manager.mergeDistanceThreshold;
@@ -103,6 +175,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     if (ChildTileObjects.TryGetValue(cid, out var childGO) && childGO != null)
                     {
                         childGO.SetActive(true);
+                        tileTransition.ApplyTransition(TileObjects[parent.id], childGO, manager.SplitFadeDuration);
                     }
                 }
         }
@@ -153,19 +226,14 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     var cid = new TileId(parent.id.face, (byte)(parent.id.depth + 1), (ushort)(parent.id.x * 2 + cx), (ushort)(parent.id.y * 2 + cy));
                     if (ChildTileObjects.TryGetValue(cid, out var go) && go != null)
                     {
-                        go.SetActive(false); // Hide child tile before destroying
+                        tileTransition.ApplyTransition(go, TileObjects[parent.id], manager.SplitFadeDuration);
+                        go.SetActive(false);
                         if (Application.isPlaying) Object.Destroy(go); else Object.DestroyImmediate(go);
                         ChildTileObjects.Remove(cid);
-                    }
-                    else
-                    {
                     }
                     if (ChildTiles.ContainsKey(cid))
                     {
                         ChildTiles.Remove(cid);
-                    }
-                    else
-                    {
                     }
                 }
         }

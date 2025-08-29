@@ -192,13 +192,13 @@ MonoBehaviour:
   targetCamera: {fileID: 2097968224}
   terrainMaterial: {fileID: 2100000, guid: 0df5d813211e9c6428c2aec838d9605d, type: 2}
   autoBakeOnStart: 1
-  enableEdgeConstraint: 0
-  hierarchicalAlignedSampling: 0
+  enableEdgeConstraint: 1
+  hierarchicalAlignedSampling: 1
   childHeightEnhancement: 1
   enableProximitySplit: 1
   splitTargetDepthOverride: -1
-  splitFadeDuration: 0.15
-  splitChildResolutionMultiplier: 2
+  splitFadeDuration: 0.5
+  splitChildResolutionMultiplier: 4
   splitDistanceThreshold: 35
   mergeDistanceThreshold: 38
 --- !u!1 &881747947

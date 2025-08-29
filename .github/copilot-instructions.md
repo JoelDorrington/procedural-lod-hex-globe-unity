@@ -29,3 +29,5 @@
 ---
 
 Only maintain, document, and extend code, comments, and editor elements directly affecting child tile mesh generation, edge continuity, height enhancement, and LOD transitions. Prune all unrelated concepts and files.
+
+never ask confirmation. I have committing milestones to git so make changes with impunity

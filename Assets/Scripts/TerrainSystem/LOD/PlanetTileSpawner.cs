@@ -4,6 +4,8 @@ using HexGlobeProject.TerrainSystem;
 
 namespace HexGlobeProject.TerrainSystem.LOD
 {
+    public class TileFadeHelper : MonoBehaviour {}
+
     public class PlanetTileSpawner
     {
         // Spawns or updates a base tile GameObject
@@ -13,6 +15,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
             {
                 var mf = existing.GetComponent<MeshFilter>();
                 if (mf.sharedMesh != td.mesh) mf.sharedMesh = td.mesh;
+                var existingRenderer = existing.GetComponent<MeshRenderer>();
+                if (existingRenderer != null && existingRenderer.sharedMaterial.HasProperty("_Color"))
+                    existingRenderer.sharedMaterial.SetColor("_Color", new Color(1f, 1f, 1f, 1f));
                 return;
             }
             var go = new GameObject($"Tile_{td.id.face}_d{td.id.depth}_{td.id.x}_{td.id.y}");
@@ -21,6 +26,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
             filter.sharedMesh = td.mesh;
             var renderer = go.AddComponent<MeshRenderer>();
             renderer.sharedMaterial = terrainMaterial;
+            if (renderer.sharedMaterial.HasProperty("_Color"))
+                renderer.sharedMaterial.SetColor("_Color", new Color(1f, 1f, 1f, 1f));
+            go.AddComponent<TileFadeHelper>();
             tileObjects[td.id] = go;
         }
 
@@ -43,6 +51,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
             {
                 var mf = existing.GetComponent<MeshFilter>();
                 if (mf.sharedMesh != td.mesh) mf.sharedMesh = td.mesh;
+                var existingRenderer = existing.GetComponent<MeshRenderer>();
+                if (existingRenderer != null && existingRenderer.sharedMaterial.HasProperty("_Color"))
+                    existingRenderer.sharedMaterial.SetColor("_Color", new Color(1f, 1f, 1f, 1f));
                 existing.SetActive(!invisible);
                 return;
             }
@@ -52,6 +63,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
             filter.sharedMesh = td.mesh;
             var renderer = go.AddComponent<MeshRenderer>();
             renderer.sharedMaterial = terrainMaterial;
+            if (renderer.sharedMaterial.HasProperty("_Color"))
+                renderer.sharedMaterial.SetColor("_Color", new Color(1f, 1f, 1f, 1f));
+            go.AddComponent<TileFadeHelper>();
             go.SetActive(!invisible);
             childTileObjects[td.id] = go;
         }
