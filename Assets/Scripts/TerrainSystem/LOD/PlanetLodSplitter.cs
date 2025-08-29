@@ -29,9 +29,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
         private Material TerrainMaterial => manager.TerrainMaterial;
         private TerrainConfig Config => manager.Config;
 
-        private bool ShouldSplit(bool isSplit, float distance, int splitsStarted)
+        private bool ShouldSplit(bool isSplit, float distance)
         {
-            return !isSplit && distance < SplitDistanceThreshold && splitsStarted < 2;
+            return !isSplit && distance < SplitDistanceThreshold;
         }
 
         private bool ShouldMerge(bool isSplit, float distance)
@@ -48,7 +48,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
             int targetDepth = SplitTargetDepthOverride >= 0 ? SplitTargetDepthOverride : ConfigSplitTargetDepth;
             if (targetDepth < 0 || targetDepth <= BakedDepth) return;
             Vector3 camPos = TargetCamera.transform.position;
-            int splitsStarted = 0;
             foreach (var kv in Tiles)
             {
                 var parent = kv.Value;
@@ -66,10 +65,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
                             break;
                         }
                     }
-                if (ShouldSplit(isSplit, distance, splitsStarted))
+                if (ShouldSplit(isSplit, distance))
                 {
                     SplitParent(parent);
-                    splitsStarted++;
                 }
                 else if (ShouldMerge(isSplit, distance))
                 {
@@ -178,27 +176,52 @@ namespace HexGlobeProject.TerrainSystem.LOD
             var fadeAnimator = manager.GetComponent<TileFadeAnimator>();
             if (fadeAnimator == null)
                 fadeAnimator = manager.gameObject.AddComponent<TileFadeAnimator>();
-            // Fade out parent tile
-            if (TileObjects.TryGetValue(parent.id, out var parentGO) && parentGO != null)
-            {
-                yield return fadeAnimator.FadeOut(parentGO, manager.SplitFadeDuration * 0.5f);
-                parentGO.SetActive(false);
-            }
-            // Fade in children simultaneously
-            var childCoroutines = new List<Coroutine>();
+            // Gather child tile GameObjects
+            var childGOs = new List<GameObject>();
             for (int cy = 0; cy < 2; cy++)
                 for (int cx = 0; cx < 2; cx++)
                 {
                     var cid = new TileId(parent.id.face, (byte)(parent.id.depth + 1), (ushort)(parent.id.x * 2 + cx), (ushort)(parent.id.y * 2 + cy));
                     if (ChildTileObjects.TryGetValue(cid, out var childGO) && childGO != null)
                     {
+                        childGOs.Add(childGO);
                         childGO.SetActive(true);
-                        childCoroutines.Add(fadeAnimator.FadeIn(childGO, manager.SplitFadeDuration * 0.5f));
+                        OffsetChildTile(childGO); // Apply offset before fade in
                     }
                 }
+            // Start parent fade out and child fade in simultaneously (true cross-fade)
+            Coroutine parentFade = null;
+            if (TileObjects.TryGetValue(parent.id, out var parentGO) && parentGO != null)
+            {
+                parentFade = fadeAnimator.FadeOut(parentGO, manager.SplitFadeDuration * 0.5f);
+            }
+            var childCoroutines = new List<Coroutine>();
+            foreach (var childGO in childGOs)
+            {
+                if (childGO != null)
+                {
+                    childCoroutines.Add(fadeAnimator.FadeIn(childGO, manager.SplitFadeDuration * 0.5f));
+                }
+            }
+            // Wait for all fades to complete
+            if (parentFade != null)
+                yield return parentFade;
             foreach (var co in childCoroutines)
             {
                 yield return co;
+            }
+            // Revert offset after fade in
+            foreach (var childGO in childGOs)
+            {
+                if (childGO != null)
+                {
+                    RevertOffset(childGO);
+                }
+            }
+            // Deactivate parent after fade out
+            if (TileObjects.TryGetValue(parent.id, out var parentGO2) && parentGO2 != null)
+            {
+                parentGO2.SetActive(false);
             }
             // Remove coroutine tracking when done
             if (parentFadeCoroutines.ContainsKey(parent.id))
@@ -213,6 +236,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 fadeAnimator = manager.gameObject.AddComponent<TileFadeAnimator>();
             var childFadeCoroutines = new List<Coroutine>();
             var childIds = new List<TileId>();
+            var childGOs = new List<GameObject>();
             for (int cy = 0; cy < 2; cy++)
                 for (int cx = 0; cx < 2; cx++)
                 {
@@ -221,12 +245,28 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     {
                         childFadeCoroutines.Add(fadeAnimator.FadeOut(go, manager.SplitFadeDuration * 0.5f));
                         childIds.Add(cid);
+                        childGOs.Add(go);
                     }
                 }
-            // Wait for all child fades to complete
+            // Start parent fade in simultaneously with child fade out (true cross-fade)
+            Coroutine parentFade = null;
+            if (TileObjects.TryGetValue(parent.id, out var parentGO) && parentGO != null)
+            {
+                parentGO.SetActive(true);
+                OffsetChildTile(parentGO, -0.001f); // Move parent slightly back to avoid overlap
+                parentFade = fadeAnimator.FadeIn(parentGO, manager.SplitFadeDuration * 0.5f);
+            }
+            // Wait for all fades to complete
             foreach (var co in childFadeCoroutines)
             {
                 yield return co;
+            }
+            if (parentFade != null)
+                yield return parentFade;
+            // Revert offset after fade in
+            if (TileObjects.TryGetValue(parent.id, out var parentGO2) && parentGO2 != null)
+            {
+                RevertOffset(parentGO2, -0.001f);
             }
             // Remove child tile data
             foreach (var cid in childIds)
@@ -234,14 +274,18 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 if (ChildTiles.ContainsKey(cid)) ChildTiles.Remove(cid);
                 if (ChildTileObjects.ContainsKey(cid)) ChildTileObjects.Remove(cid);
             }
-            // Fade in parent tile
-            if (TileObjects.TryGetValue(parent.id, out var parentGO) && parentGO != null)
-            {
-                parentGO.SetActive(true);
-                yield return fadeAnimator.FadeIn(parentGO, manager.SplitFadeDuration * 0.5f);
-            }
         }
 
+        private void OffsetChildTile(GameObject tileGO, float offset = 0.001f)
+        {
+            tileGO.transform.position += tileGO.transform.up * offset;
+            Debug.Log($"[OffsetChildTile] {tileGO.name} offset by {offset}");
+        }
+        private void RevertOffset(GameObject tileGO, float offset = 0.001f)
+        {
+            tileGO.transform.position -= tileGO.transform.up * offset;
+            Debug.Log($"[RevertOffset] {tileGO.name} offset reverted by {offset}");
+        }
     }
 }
 

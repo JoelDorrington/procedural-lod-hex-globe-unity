@@ -109,9 +109,12 @@ Shader "HexGlobe/PlanetTerrain"
                 snowT = saturate(snowT + flatFactor * _SnowSlopeBoost * (1 - snowT));
                 finalCol = lerp(finalCol, _SnowColor, snowT);
 
-                // Output biome color (height banded) with fade mask only on alpha
+                // Output biome color (height banded) with robust dithered fade mask on alpha
                 float fade = _FadeProgress;
-                finalCol.a *= fade;
+                // Dither mask: fade pixel only if hash < fade
+                float dither = Hash21(i.uv * 1024.0);
+                float ditheredAlpha = finalCol.a * step(dither, fade);
+                finalCol.a = ditheredAlpha;
                 return finalCol;
             }
             ENDHLSL
