@@ -45,7 +45,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
         }
 
         // Child tile spawning/updating routines
-        public void SpawnOrUpdateChildTileGO(TileData td, Dictionary<TileId, GameObject> childTileObjects, Material terrainMaterial, Transform parent, bool invisible = false)
+        public void SpawnOrUpdateChildTileGO(TileData td, Dictionary<TileId, GameObject> childTileObjects, Material terrainMaterial, Transform parent)
         {
             if (childTileObjects.TryGetValue(td.id, out var existing) && existing != null)
             {
@@ -54,7 +54,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 var existingRenderer = existing.GetComponent<MeshRenderer>();
                 if (existingRenderer != null && existingRenderer.sharedMaterial.HasProperty("_Color"))
                     existingRenderer.sharedMaterial.SetColor("_Color", new Color(1f, 1f, 1f, 1f));
-                existing.SetActive(!invisible);
+                existing.SetActive(true);
                 return;
             }
             var go = new GameObject($"ChildTile_{td.id.face}_d{td.id.depth}_{td.id.x}_{td.id.y}");
@@ -66,7 +66,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             if (renderer.material.HasProperty("_Color"))
                 renderer.material.SetColor("_Color", new Color(1f, 1f, 1f, 1f));
             go.AddComponent<TileFadeHelper>();
-            go.SetActive(!invisible);
+            go.SetActive(true);
             childTileObjects[td.id] = go;
         }
     }
