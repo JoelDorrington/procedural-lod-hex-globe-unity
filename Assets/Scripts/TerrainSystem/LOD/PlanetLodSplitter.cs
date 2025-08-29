@@ -31,6 +31,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
         private bool ShouldMerge(bool isSplit, float distance)
         {
+            // Returns true only if the tile is currently split and the camera is farther than the merge threshold
+            // If merge is never triggered, check that isSplit is true for the correct tile and that mergeDistanceThreshold is set lower than the camera distance when zoomed out
             return isSplit && distance > MergeDistanceThreshold;
         }
 
@@ -42,7 +44,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
             if (targetDepth < 0 || targetDepth <= BakedDepth) return;
             Vector3 camPos = TargetCamera.transform.position;
             int splitsStarted = 0;
-            Debug.Log($"[LOD] Frame: Camera pos: {camPos}, splitDistanceThreshold: {SplitDistanceThreshold}, mergeDistanceThreshold: {MergeDistanceThreshold}");
             float minDistance = float.MaxValue;
             TileData closestTile = null;
             bool closestIsSplit = false;
@@ -51,7 +52,18 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 var parent = kv.Value;
                 if (parent.id.depth != BakedDepth) continue;
                 float distance = Vector3.Distance(camPos, parent.center);
-                bool isSplit = ChildTiles.ContainsKey(parent.id);
+                // isSplit is true if any child tiles exist for this parent
+                bool isSplit = false;
+                for (int cy = 0; cy < 2; cy++)
+                    for (int cx = 0; cx < 2; cx++)
+                    {
+                        var cid = new TileId(parent.id.face, (byte)(parent.id.depth + 1), (ushort)(parent.id.x * 2 + cx), (ushort)(parent.id.y * 2 + cy));
+                        if (ChildTiles.ContainsKey(cid))
+                        {
+                            isSplit = true;
+                            break;
+                        }
+                    }
                 if (distance < minDistance)
                 {
                     minDistance = distance;
@@ -61,16 +73,13 @@ namespace HexGlobeProject.TerrainSystem.LOD
             }
             if (closestTile != null)
             {
-                Debug.Log($"[LOD] Closest tile {closestTile.id}: distance to camera {minDistance:F2}, splitDistanceThreshold: {SplitDistanceThreshold}, mergeDistanceThreshold: {MergeDistanceThreshold}, isSplit: {closestIsSplit}");
                 if (ShouldSplit(closestIsSplit, minDistance, splitsStarted))
                 {
-                    Debug.Log($"[LOD] Splitting tile {closestTile.id} (distance {minDistance:F2})");
                     SplitParent(closestTile);
                     splitsStarted++;
                 }
                 else if (ShouldMerge(closestIsSplit, minDistance))
                 {
-                    Debug.Log($"[LOD] Merging tile {closestTile.id} (distance {minDistance:F2})");
                     MergeParent(closestTile);
                 }
             }
@@ -130,6 +139,13 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
         private void MergeParent(TileData parent)
         {
+            // Ensure parent mesh is assigned
+            if (parent.mesh == null)
+            {
+                var meshBuilder = new PlanetTileMeshBuilder(Config, Config.heightProvider, manager.OctaveWrapper, manager.HierarchicalAlignedSampling, manager.EnableEdgeConstraint, manager.BakedDepth, manager.SplitChildResolutionMultiplier, manager.ChildHeightEnhancement, manager.EdgePromotionRebuild);
+                float dummyMin = 0, dummyMax = 0;
+                meshBuilder.BuildTileMesh(parent, ref dummyMin, ref dummyMax);
+            }
             // Show parent tile GameObject (use base tile dictionary)
             if (!TileObjects.TryGetValue(parent.id, out var parentGO) || parentGO == null)
             {
@@ -142,6 +158,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             {
                 parentGO.SetActive(true);
             }
+            // Remove all child tiles and their GameObjects
             for (int cy = 0; cy < 2; cy++)
                 for (int cx = 0; cx < 2; cx++)
                 {
@@ -151,7 +168,16 @@ namespace HexGlobeProject.TerrainSystem.LOD
                         go.SetActive(false); // Hide child tile before destroying
                         if (Application.isPlaying) Object.Destroy(go); else Object.DestroyImmediate(go);
                         ChildTileObjects.Remove(cid);
+                    }
+                    else
+                    {
+                    }
+                    if (ChildTiles.ContainsKey(cid))
+                    {
                         ChildTiles.Remove(cid);
+                    }
+                    else
+                    {
                     }
                 }
         }
