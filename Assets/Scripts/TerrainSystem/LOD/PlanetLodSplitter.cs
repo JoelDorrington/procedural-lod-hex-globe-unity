@@ -113,7 +113,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             var td = new TileData
             {
                 id = cid,
-                resolution = Config.baseResolution / (1 << (parent.id.depth + 1)),
+                resolution = Mathf.RoundToInt(Config.baseResolution / (1 << (parent.id.depth + 1)) * manager.SplitChildResolutionMultiplier),
                 isBaked = true
             };
             // Generate mesh for child tile
