@@ -9,24 +9,21 @@ namespace HexGlobeProject.TerrainSystem.LOD
         private readonly TerrainConfig config;
         private readonly TerrainHeightProviderBase heightProvider;
         private readonly OctaveMaskHeightProvider octaveWrapper;
-        private readonly bool hierarchicalAlignedSampling;
-        private readonly bool enableEdgeConstraint;
         private readonly int bakedDepth;
         private readonly float splitChildResolutionMultiplier;
         private readonly float childHeightEnhancement;
         private readonly bool _edgePromotionRebuild;
 
-        // Temporary lists for mesh generation
-        private readonly List<Vector3> _verts = new();
-        private readonly List<int> _tris = new();
-        private readonly List<Vector3> _normals = new();
+    // Temporary lists for mesh generation
+    private readonly List<Vector3> _verts = new();
+    private readonly List<int> _tris = new();
+    private readonly List<Vector3> _normals = new();
+    private readonly List<Vector2> _uvs = new();
 
         public PlanetTileMeshBuilder(
             TerrainConfig config,
             TerrainHeightProviderBase heightProvider,
             OctaveMaskHeightProvider octaveWrapper,
-            bool hierarchicalAlignedSampling,
-            bool enableEdgeConstraint,
             int bakedDepth,
             float splitChildResolutionMultiplier,
             float childHeightEnhancement,
@@ -35,8 +32,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
             this.config = config;
             this.heightProvider = heightProvider;
             this.octaveWrapper = octaveWrapper;
-            this.hierarchicalAlignedSampling = hierarchicalAlignedSampling;
-            this.enableEdgeConstraint = enableEdgeConstraint;
             this.bakedDepth = bakedDepth;
             this.splitChildResolutionMultiplier = splitChildResolutionMultiplier;
             this.childHeightEnhancement = childHeightEnhancement;
@@ -48,6 +43,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             _verts.Clear();
             _tris.Clear();
             _normals.Clear();
+            _uvs.Clear();
 
             int res = data.resolution;
             float inv = 1f / (res - 1);
@@ -75,10 +71,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     float u = (i * inv + data.id.x) / (1 << data.id.depth);
                     float v = (j * inv + data.id.y) / (1 << data.id.depth);
                     Vector3 dir = CubeSphere.FaceLocalToUnit(data.id.face, u * 2f - 1f, v * 2f - 1f);
+                    _uvs.Add(new Vector2(u, v));
 
                     int ring = Mathf.Min(Mathf.Min(i, j), Mathf.Min(res - 1 - i, res - 1 - j));
                     bool treatAsParent = false;
-                    if (hierarchicalAlignedSampling && enableEdgeConstraint && isFirstSplitDepth && ring == 0)
+                    if (isFirstSplitDepth && ring == 0)
                     {
                         if (!_edgePromotionRebuild)
                         {
@@ -185,6 +182,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             mesh.SetVertices(_verts);
             mesh.SetTriangles(_tris, 0, true);
             mesh.SetNormals(_normals);
+            mesh.SetUVs(0, _uvs);
             if (config.recalcNormals)
             {
                 mesh.RecalculateNormals();

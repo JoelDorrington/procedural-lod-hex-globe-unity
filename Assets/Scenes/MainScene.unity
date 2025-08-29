@@ -197,7 +197,7 @@ MonoBehaviour:
   childHeightEnhancement: 1
   enableProximitySplit: 1
   splitTargetDepthOverride: -1
-  splitFadeDuration: 0.5
+  splitFadeDuration: 1
   splitChildResolutionMultiplier: 4
   splitDistanceThreshold: 35
   mergeDistanceThreshold: 38

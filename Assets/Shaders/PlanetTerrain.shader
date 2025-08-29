@@ -1,12 +1,11 @@
 Shader "HexGlobe/PlanetTerrain"
 {
     Properties {
-        _FadeSeed ("Fade Seed", Float) = 0
         _ColorLow ("Low Color", Color) = (0.1,0.2,0.6,1)
         _ColorHigh ("High Color", Color) = (0.15,0.35,0.15,1)
         _ColorMountain ("Mountain Color", Color) = (0.5,0.5,0.5,1)
-        _Color ("Global Fade Color", Color) = (1,1,1,1)
-        _Morph ("Morph", Range(0,1)) = 1
+        _Color ("Color", Color) = (1,1,1,1)
+        _FadeProgress ("Fade Progress", Float) = 1.0
         _SeaLevel ("Sea Level (world height)", Float) = 30
         _MountainStart ("Mountain Start Height Offset", Float) = 4
         _MountainFull ("Mountain Full Height Offset", Float) = 10
@@ -46,13 +45,12 @@ Shader "HexGlobe/PlanetTerrain"
             };
 
             UNITY_DECLARE_DEPTH_TEXTURE(_CameraDepthTexture);
-            float _FadeSeed;
+            float _FadeProgress;
 
             float4 _ColorLow;
             float4 _ColorHigh;
             float4 _ColorMountain;
             float4 _Color;
-            float _Morph; // global fallback if per-patch not set
             float _SeaLevel;
             float _MountainStart;
             float _MountainFull;
@@ -111,14 +109,10 @@ Shader "HexGlobe/PlanetTerrain"
                 snowT = saturate(snowT + flatFactor * _SnowSlopeBoost * (1 - snowT));
                 finalCol = lerp(finalCol, _SnowColor, snowT);
 
-                // Cross-fade support: _Morph in [0,1]; use shared fade seed for stochastic fade
-                if (_Morph < 0.999)
-                {
-                    float2 fadeSeed2 = float2(_FadeSeed, _FadeSeed);
-                    float h = Hash21(i.pos.xy * 0.25 + i.worldPos.xz + fadeSeed2);
-                    if (h > _Morph) discard;
-                }
-                return finalCol * _Color;
+                // Output biome color (height banded) with fade mask only on alpha
+                float fade = _FadeProgress;
+                finalCol.a *= fade;
+                return finalCol;
             }
             ENDHLSL
         }

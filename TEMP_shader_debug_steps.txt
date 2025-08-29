@@ -1,0 +1,5 @@
+TEMP: Shader Debug Steps for Patchy Fade Investigation
+
+1. In the shader, temporarily output only _Color.a as the fragment color to visualize the fade mask.
+2. Output uv, normal, and worldPos as colors to see if there are discontinuities or ring patterns.
+3. Check if any biome or gradient logic uses these values in a way that could cause artifacts.

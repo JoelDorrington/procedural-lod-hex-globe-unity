@@ -25,9 +25,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
             var filter = go.AddComponent<MeshFilter>();
             filter.sharedMesh = td.mesh;
             var renderer = go.AddComponent<MeshRenderer>();
-            renderer.sharedMaterial = terrainMaterial;
-            if (renderer.sharedMaterial.HasProperty("_Color"))
-                renderer.sharedMaterial.SetColor("_Color", new Color(1f, 1f, 1f, 1f));
+            renderer.material = new Material(terrainMaterial);
+            if (renderer.material.HasProperty("_Color"))
+                renderer.material.SetColor("_Color", new Color(1f, 1f, 1f, 1f));
             go.AddComponent<TileFadeHelper>();
             tileObjects[td.id] = go;
         }
@@ -62,9 +62,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
             var filter = go.AddComponent<MeshFilter>();
             filter.sharedMesh = td.mesh;
             var renderer = go.AddComponent<MeshRenderer>();
-            renderer.sharedMaterial = terrainMaterial;
-            if (renderer.sharedMaterial.HasProperty("_Color"))
-                renderer.sharedMaterial.SetColor("_Color", new Color(1f, 1f, 1f, 1f));
+            renderer.material = new Material(terrainMaterial);
+            if (renderer.material.HasProperty("_Color"))
+                renderer.material.SetColor("_Color", new Color(1f, 1f, 1f, 1f));
             go.AddComponent<TileFadeHelper>();
             go.SetActive(!invisible);
             childTileObjects[td.id] = go;

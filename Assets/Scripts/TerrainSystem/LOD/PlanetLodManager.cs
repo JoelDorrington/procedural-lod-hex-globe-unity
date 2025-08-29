@@ -13,8 +13,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
     {
         public OctaveMaskHeightProvider OctaveWrapper => _octaveWrapper;
         public bool EdgePromotionRebuild => _edgePromotionRebuild;
-        public bool HierarchicalAlignedSampling => hierarchicalAlignedSampling;
-        public bool EnableEdgeConstraint => enableEdgeConstraint;
         public float SplitChildResolutionMultiplier => splitChildResolutionMultiplier;
         public float ChildHeightEnhancement => childHeightEnhancement;
         public float SplitFadeDuration => splitFadeDuration;
@@ -27,8 +25,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
         [SerializeField] private Camera targetCamera;
         [SerializeField] private Material terrainMaterial;
         [SerializeField] private bool autoBakeOnStart = true;
-        [SerializeField] private bool enableEdgeConstraint = true;
-        [SerializeField] private bool hierarchicalAlignedSampling = true;
         [SerializeField] private float childHeightEnhancement = 1.0f;
         [SerializeField] private bool enableProximitySplit = true;
         [SerializeField] private int splitTargetDepthOverride = -1;
@@ -98,8 +94,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 config,
                 heightProvider,
                 _octaveWrapper,
-                hierarchicalAlignedSampling,
-                enableEdgeConstraint,
                 bakedDepth,
                 splitChildResolutionMultiplier,
                 childHeightEnhancement,

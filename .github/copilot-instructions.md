@@ -3,17 +3,16 @@
 ## Focused Architecture
 - Only the following files are relevant:
   - `PlanetLodManager.cs`: Orchestrates child tile creation, proximity split, and LOD logic.
-  - `PlanetTileMeshBuilder.cs`: Generates meshes for child tiles, including height sampling, edge continuity, and enhancement.
+  - `PlanetTileMeshBuilder.cs`: Generates meshes for child tiles, including height sampling and enhancement.
   - `PlanetLodSplitter.cs`: Handles split/merge logic for child tiles.
   - `TerrainConfig.cs`: Stores parameters affecting child tile detail, enhancement, and height provider.
   - Supporting types: `TileData`, `TileId`, `TileFade` (if used in child tile logic).
 
 ## Essential Patterns
-- **Child tile mesh generation:** All logic is in `PlanetTileMeshBuilder`. Always instantiate with current config and runtime values before mesh generation.
-- **Edge continuity:** Child tiles can constrain perimeter vertices to parent-level sampling for seamless LOD transitions. Controlled by `enableEdgeConstraint` and `hierarchicalAlignedSampling`.
-- **Height enhancement:** Child tiles can exaggerate elevation via `childHeightEnhancement` (float, default 1.0).
-- **Octave masking:** Height sampling can be capped by octave for LOD; see `PrepareOctaveMaskForDepth` and `SampleRawWithOctaveCap`.
-- **Proximity split:** Controlled by camera position and `enableProximitySplit` in `PlanetLodManager`. Fade transitions managed by `PlanetLodSplitter` and `TileFade`.
+**Child tile mesh generation:** All logic is in `PlanetTileMeshBuilder`. Always instantiate with current config and runtime values before mesh generation.
+**Height enhancement:** Child tiles can exaggerate elevation via `childHeightEnhancement` (float, default 1.0).
+**Octave masking:** Height sampling can be capped by octave for LOD; see `PrepareOctaveMaskForDepth` and `SampleRawWithOctaveCap`.
+**Proximity split:** Controlled by camera position and `enableProximitySplit` in `PlanetLodManager`. Fade transitions managed by `PlanetLodSplitter` and `TileFade`.
 
 ## Developer Workflows
 - **Bake terrain:** Use context menu or call `BakeBaseDepthContextMenu()` in `PlanetLodManager`.
@@ -28,6 +27,6 @@
 
 ---
 
-Only maintain, document, and extend code, comments, and editor elements directly affecting child tile mesh generation, edge continuity, height enhancement, and LOD transitions. Prune all unrelated concepts and files.
+Only maintain, document, and extend code, comments, and editor elements directly affecting child tile mesh generation, height enhancement, and LOD transitions. Prune all unrelated concepts and files.
 
 never ask confirmation. I have committing milestones to git so make changes with impunity
