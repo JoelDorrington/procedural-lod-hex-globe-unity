@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace HexGlobeProject.TerrainSystem.LOD
@@ -17,8 +18,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
         public bool isBaked; // baked (Low/Medium/High) vs streamed (Extreme)
         public Vector3[] tempVerts; // transient during build (can be cleared)
         public Vector3[] normals;   // optional baked normals
-    // Runtime spatial helpers
-    public Vector3 center; // approximate tile center (world)
-    public float boundsRadius; // approximate tile bounding sphere radius (unused yet)
+        public Boolean isSplit = false; // whether this tile has been split into children
+        // Runtime spatial helpers
+        public Vector3 center; // approximate tile center (world)
+        public float boundsRadius; // approximate tile bounding sphere radius (unused yet)
     }
 }

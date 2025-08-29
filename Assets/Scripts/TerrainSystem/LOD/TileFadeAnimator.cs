@@ -5,68 +5,60 @@ namespace HexGlobeProject.TerrainSystem.LOD
 {
     public class TileFadeAnimator : MonoBehaviour
     {
-        public Coroutine FadeOutAndDestroy(GameObject tile, float duration)
+
+        public Coroutine FadeOut(GameObject tile, float duration)
         {
-            return StartCoroutine(FadeOutAndDestroyCoroutine(tile, duration));
+            return StartCoroutine(FadeOutCoroutine(tile, duration));
         }
 
-        public Coroutine FadeOutThenIn(GameObject fromTile, GameObject toTile, float duration)
+        private IEnumerator FadeOutCoroutine(GameObject tile, float duration)
         {
-            return StartCoroutine(FadeOutThenInCoroutine(fromTile, toTile, duration));
-        }
-
-        private IEnumerator FadeOutThenInCoroutine(GameObject fromTile, GameObject toTile, float duration)
-        {
-            yield return FadeOutCoroutine(fromTile, duration * 0.5f);
-            if (fromTile != null)
-                fromTile.SetActive(false);
-            if (toTile != null)
-            {
-                toTile.SetActive(true);
-                yield return FadeInCoroutine(toTile, duration * 0.5f);
-            }
-        }
-
-        public IEnumerator FadeOutCoroutine(GameObject tile, float duration)
-        {
-            var renderer = tile.GetComponent<Renderer>();
+            var renderer = tile.gameObject.GetComponent<Renderer>();
             if (renderer == null) yield break;
-            Material mat = renderer.material;
-            SetMaterialTransparent(mat);
-            float t = 0f;
-            float startTime = Time.unscaledTime;
-            while (t < duration)
+            var meshRenderers = tile.gameObject.GetComponentsInChildren<MeshRenderer>();
+            Debug.Log($"[FadeOut] Tile {tile.gameObject.name} has {meshRenderers.Length} MeshRenderers");
+                foreach (var mr in meshRenderers)
+                {
+                    // Force unique material instance for each renderer
+                    mr.material = new Material(mr.material);
+                    Debug.Log($"[FadeOut] Renderer {mr.GetInstanceID()} using material instance {mr.material.GetInstanceID()}");
+                    SetMaterialTransparent(mr.material);
+                }
+            float startAlpha = 1f;
+            float endAlpha = 0f;
+            float startFade = 1f;
+            float endFade = 0f;
+            float elapsed = 0f;
+            while (elapsed < duration)
             {
-                t = Time.unscaledTime - startTime;
-                float fadeProgress = 1f - Mathf.Clamp01(t / duration);
-                if (mat.HasProperty("_FadeProgress")) mat.SetFloat("_FadeProgress", fadeProgress);
-                yield return new WaitForEndOfFrame();
+                float t = elapsed / duration;
+                float fadeProgress = Mathf.Lerp(startFade, endFade, t);
+                float alpha = Mathf.Lerp(startAlpha, endAlpha, t);
+                    foreach (var mr in meshRenderers)
+                    {
+                        var material = mr.material;
+                        material.SetFloat("_FadeProgress", fadeProgress);
+                        Color color = material.color;
+                        color.a = alpha;
+                        material.color = color;
+                        Debug.Log($"[FadeOut] Tile {tile.gameObject.name} Renderer {mr.GetInstanceID()} t={t:F2} fade={fadeProgress:F2} alpha={alpha:F2} matID={material.GetInstanceID()}");
+                    }
+                elapsed += Time.unscaledDeltaTime;
+                yield return null;
             }
-            if (mat.HasProperty("_FadeProgress")) mat.SetFloat("_FadeProgress", 0f);
+                foreach (var mr in meshRenderers)
+                {
+                    var material = mr.material;
+                    material.SetFloat("_FadeProgress", endFade);
+                    Color finalColor = material.color;
+                    finalColor.a = endAlpha;
+                    material.color = finalColor;
+                    Debug.Log($"[FadeOut] Tile {tile.gameObject.name} Renderer {mr.GetInstanceID()} DONE fade={endFade:F2} alpha={endAlpha:F2} matID={material.GetInstanceID()}");
+                }
+                Debug.Log($"[FadeOut] Tile {tile.gameObject.name} ALL RENDERERS DONE");
         }
 
-        private IEnumerator FadeOutAndDestroyCoroutine(GameObject tile, float duration)
-        {
-            var renderer = tile.GetComponent<Renderer>();
-            if (renderer == null) yield break;
-            Material mat = renderer.material;
-            SetMaterialTransparent(mat);
-            float t = 0f;
-            float startTime = Time.unscaledTime;
-            while (t < duration)
-            {
-                t = Time.unscaledTime - startTime;
-                float fadeProgress = 1f - Mathf.Clamp01(t / duration);
-                if (mat.HasProperty("_FadeProgress")) mat.SetFloat("_FadeProgress", fadeProgress);
-                yield return new WaitForEndOfFrame();
-            }
-            if (mat.HasProperty("_FadeProgress")) mat.SetFloat("_FadeProgress", 0f);
-            if (tile != null && tile)
-            {
-                tile.SetActive(false);
-                if (Application.isPlaying) Destroy(tile); else DestroyImmediate(tile);
-            }
-        }
+
 
         public Coroutine FadeIn(GameObject tile, float duration)
         {
@@ -75,22 +67,49 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
         private IEnumerator FadeInCoroutine(GameObject tile, float duration)
         {
-            var renderer = tile.GetComponent<Renderer>();
+            var renderer = tile.gameObject.GetComponent<Renderer>();
             if (renderer == null) yield break;
-            Material mat = renderer.material;
-            SetMaterialTransparent(mat);
-            yield return new WaitForEndOfFrame();
-            float t = 0f;
-            float startTime = Time.unscaledTime;
-            while (t < duration)
+            var meshRenderers = tile.gameObject.GetComponentsInChildren<MeshRenderer>();
+            Debug.Log($"[FadeIn] Tile {tile.gameObject.name} has {meshRenderers.Length} MeshRenderers");
+                foreach (var mr in meshRenderers)
+                {
+                    mr.material = new Material(mr.material);
+                    Debug.Log($"[FadeIn] Renderer {mr.GetInstanceID()} using material instance {mr.material.GetInstanceID()}");
+                    SetMaterialTransparent(mr.material);
+                }
+            float startAlpha = 0f;
+            float endAlpha = 1f;
+            float startFade = 0f;
+            float endFade = 1f;
+            float elapsed = 0f;
+            while (elapsed < duration)
             {
-                t = Time.unscaledTime - startTime;
-                float fadeProgress = Mathf.Clamp01(t / duration);
-                if (mat.HasProperty("_FadeProgress")) mat.SetFloat("_FadeProgress", fadeProgress);
-                yield return new WaitForEndOfFrame();
+                float t = elapsed / duration;
+                float fadeProgress = Mathf.Lerp(startFade, endFade, t);
+                float alpha = Mathf.Lerp(startAlpha, endAlpha, t);
+                    foreach (var mr in meshRenderers)
+                    {
+                        var material = mr.material;
+                        material.SetFloat("_FadeProgress", fadeProgress);
+                        Color color = material.color;
+                        color.a = alpha;
+                        material.color = color;
+                        Debug.Log($"[FadeIn] Tile {tile.gameObject.name} Renderer {mr.GetInstanceID()} t={t:F2} fade={fadeProgress:F2} alpha={alpha:F2} matID={material.GetInstanceID()}");
+                    }
+                elapsed += Time.unscaledDeltaTime;
+                yield return null;
             }
-            if (mat.HasProperty("_FadeProgress")) mat.SetFloat("_FadeProgress", 1f);
-            SetMaterialOpaque(mat);
+                foreach (var mr in meshRenderers)
+                {
+                    var material = mr.material;
+                    material.SetFloat("_FadeProgress", endFade);
+                    Color finalColor = material.color;
+                    finalColor.a = endAlpha;
+                    material.color = finalColor;
+                    SetMaterialOpaque(material);
+                    Debug.Log($"[FadeIn] Tile {tile.gameObject.name} Renderer {mr.GetInstanceID()} DONE fade={endFade:F2} alpha={endAlpha:F2} matID={material.GetInstanceID()}");
+                }
+                Debug.Log($"[FadeIn] Tile {tile.gameObject.name} ALL RENDERERS DONE");
         }
 
         private void SetMaterialTransparent(Material mat)

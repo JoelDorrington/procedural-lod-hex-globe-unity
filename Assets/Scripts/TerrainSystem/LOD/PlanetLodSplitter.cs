@@ -7,6 +7,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
     public class PlanetLodSplitter
     {
         private PlanetLodManager manager;
+        // Track running fade coroutines for parent tiles
+        private Dictionary<TileId, Coroutine> parentFadeCoroutines = new Dictionary<TileId, Coroutine>();
 
         public PlanetLodSplitter(PlanetLodManager manager)
         {
@@ -92,26 +94,24 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 spawner.SpawnOrUpdateTileGO(parent, TileObjects, TerrainMaterial, PlanetTransform);
                 TileObjects.TryGetValue(parent.id, out parentGO);
             }
-            if (parentGO != null)
-            {
-                parentGO.SetActive(false);
-            }
-            var fadeAnimator = manager.GetComponent<TileFadeAnimator>();
-            if (fadeAnimator == null)
-                fadeAnimator = manager.gameObject.AddComponent<TileFadeAnimator>();
+            // Spawn child tiles if missing
             for (int cy = 0; cy < 2; cy++)
                 for (int cx = 0; cx < 2; cx++)
                 {
                     var cid = new TileId(parent.id.face, (byte)(parent.id.depth + 1), (ushort)(parent.id.x * 2 + cx), (ushort)(parent.id.y * 2 + cy));
                     if (!ChildTiles.ContainsKey(cid))
                         SpawnChildTile(parent, cx, cy);
-                    // Always ensure child tile is visible
-                    if (ChildTileObjects.TryGetValue(cid, out var childGO) && childGO != null)
-                    {
-                        childGO.SetActive(true);
-                        fadeAnimator.FadeIn(childGO, manager.SplitFadeDuration * 0.5f);
-                    }
                 }
+            // Start fade out parent, fade in children coroutine
+            // Guard against duplicate fade coroutines for parent tiles
+            if (parentFadeCoroutines.TryGetValue(parent.id, out var runningCo) && runningCo != null)
+            {
+                manager.StopCoroutine(runningCo);
+            }
+            var newCo = manager.StartCoroutine(FadeOutParentThenFadeInChildren(parent));
+            parentFadeCoroutines[parent.id] = newCo;
+            bool isRunning = parentFadeCoroutines.ContainsKey(parent.id) && parentFadeCoroutines[parent.id] != null;
+            UnityEngine.Debug.Log($"[SplitParent] Parent {parent.id}: Coroutine running = {isRunning}");
         }
 
         private void SpawnChildTile(TileData parent, int cx, int cy)
@@ -169,6 +169,42 @@ namespace HexGlobeProject.TerrainSystem.LOD
             manager.StartCoroutine(FadeOutChildrenThenFadeInParent(parent));
         }
 
+        // Coroutine: Fade out parent, then fade in children
+        private System.Collections.IEnumerator FadeOutParentThenFadeInChildren(TileData parent)
+        {
+            // Log the number of running coroutines for this parent tile
+            bool isRunning = parentFadeCoroutines.ContainsKey(parent.id) && parentFadeCoroutines[parent.id] != null;
+            UnityEngine.Debug.Log($"[FadeOutParentThenFadeInChildren] Parent {parent.id}: Coroutine running = {isRunning}");
+            var fadeAnimator = manager.GetComponent<TileFadeAnimator>();
+            if (fadeAnimator == null)
+                fadeAnimator = manager.gameObject.AddComponent<TileFadeAnimator>();
+            // Fade out parent tile
+            if (TileObjects.TryGetValue(parent.id, out var parentGO) && parentGO != null)
+            {
+                yield return fadeAnimator.FadeOut(parentGO, manager.SplitFadeDuration * 0.5f);
+                parentGO.SetActive(false);
+            }
+            // Fade in children simultaneously
+            var childCoroutines = new List<Coroutine>();
+            for (int cy = 0; cy < 2; cy++)
+                for (int cx = 0; cx < 2; cx++)
+                {
+                    var cid = new TileId(parent.id.face, (byte)(parent.id.depth + 1), (ushort)(parent.id.x * 2 + cx), (ushort)(parent.id.y * 2 + cy));
+                    if (ChildTileObjects.TryGetValue(cid, out var childGO) && childGO != null)
+                    {
+                        childGO.SetActive(true);
+                        childCoroutines.Add(fadeAnimator.FadeIn(childGO, manager.SplitFadeDuration * 0.5f));
+                    }
+                }
+            foreach (var co in childCoroutines)
+            {
+                yield return co;
+            }
+            // Remove coroutine tracking when done
+            if (parentFadeCoroutines.ContainsKey(parent.id))
+                parentFadeCoroutines[parent.id] = null;
+    }
+
         private System.Collections.IEnumerator FadeOutChildrenThenFadeInParent(TileData parent)
         {
             // Use TileFadeAnimator for child fade-out and parent fade-in
@@ -183,7 +219,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     var cid = new TileId(parent.id.face, (byte)(parent.id.depth + 1), (ushort)(parent.id.x * 2 + cx), (ushort)(parent.id.y * 2 + cy));
                     if (ChildTileObjects.TryGetValue(cid, out var go) && go != null)
                     {
-                        childFadeCoroutines.Add(fadeAnimator.FadeOutAndDestroy(go, manager.SplitFadeDuration * 0.5f));
+                        childFadeCoroutines.Add(fadeAnimator.FadeOut(go, manager.SplitFadeDuration * 0.5f));
                         childIds.Add(cid);
                     }
                 }
