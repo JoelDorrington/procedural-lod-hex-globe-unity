@@ -1,36 +1,74 @@
 using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 
 namespace HexGlobeProject.TerrainSystem.LOD
 {
+    public class CoroutineLimiter
+    {
+        private readonly int maxConcurrent;
+        private readonly Queue<IEnumerator> queue = new Queue<IEnumerator>();
+        private int runningCount = 0;
+
+        public CoroutineLimiter(int maxConcurrent)
+        {
+            this.maxConcurrent = maxConcurrent;
+        }
+
+        public void Enqueue(MonoBehaviour owner, IEnumerator coroutine)
+        {
+            queue.Enqueue(coroutine);
+            TryStartNext(owner);
+        }
+
+        private void TryStartNext(MonoBehaviour owner)
+        {
+            while (runningCount < maxConcurrent && queue.Count > 0)
+            {
+                var co = queue.Dequeue();
+                owner.StartCoroutine(RunCoroutine(co, owner));
+                runningCount++;
+            }
+        }
+
+        private IEnumerator RunCoroutine(IEnumerator coroutine, MonoBehaviour owner)
+        {
+            yield return owner.StartCoroutine(coroutine);
+            runningCount--;
+            TryStartNext(owner);
+        }
+    }
+
     public class TileFadeAnimator : MonoBehaviour
     {
+
+        private CoroutineLimiter fadeLimiter;
+
+        private void Awake()
+        {
+            fadeLimiter = new CoroutineLimiter(10); // Limit concurrency to 10
+        }
 
         public Coroutine FadeOut(GameObject tile, float duration)
         {
             var meshRenderers = tile.GetComponentsInChildren<MeshRenderer>();
-            Debug.Log($"[FadeOut] Tile {tile.name} has {meshRenderers.Length} MeshRenderers (parent/child logic unified)");
             foreach (var mr in meshRenderers)
             {
                 mr.material = new Material(mr.material);
                 mr.material.SetFloat("_FadeDirection", -1f); // Parent tile fades out
-                Debug.Log($"[FadeOut] Renderer {mr.GetInstanceID()} using material instance {mr.material.GetInstanceID()} (parent tile)");
             }
-            return StartCoroutine(FadeOutCoroutine(tile, duration, null));
-
+            fadeLimiter.Enqueue(this, FadeOutCoroutine(tile, duration, null));
+            return null;
         }
 
         // Overload: FadeOut with child tiles to temporarily disable
         public Coroutine FadeOut(GameObject tile, float duration, GameObject[] childTilesToDisable)
         {
-            Debug.Log($"[FadeOut] Starting fade for tile {tile.name}");
             var meshRenderers = tile.GetComponentsInChildren<MeshRenderer>();
-            Debug.Log($"[FadeOut] Tile {tile.name} has {meshRenderers.Length} MeshRenderers (parent/child logic unified)");
             foreach (var mr in meshRenderers)
             {
                 mr.material = new Material(mr.material);
                 mr.material.SetFloat("_FadeDirection", -1f); // Parent tile fades out
-                Debug.Log($"[FadeOut] Renderer {mr.GetInstanceID()} using material instance {mr.material.GetInstanceID()} (parent tile)");
             }
             if (childTilesToDisable != null)
             {
@@ -39,11 +77,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     if (child != null && child.activeSelf)
                     {
                         child.SetActive(false);
-                        Debug.Log($"[FadeOut] Disabled child tile {child.name} during parent fade");
                     }
                 }
             }
-            return StartCoroutine(FadeOutCoroutine(tile, duration, childTilesToDisable));
+            fadeLimiter.Enqueue(this, FadeOutCoroutine(tile, duration, childTilesToDisable));
+            return null;
         }
 
         private IEnumerator FadeOutCoroutine(GameObject tile, float duration)
@@ -58,12 +96,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
             var renderer = tile.gameObject.GetComponent<Renderer>();
             if (renderer == null) yield break;
             var meshRenderers = tile.gameObject.GetComponentsInChildren<MeshRenderer>();
-            Debug.Log($"[FadeOut] Tile {tile.gameObject.name} has {meshRenderers.Length} MeshRenderers");
             foreach (var mr in meshRenderers)
             {
                 // Force unique material instance for each renderer
                 mr.material = new Material(mr.material);
-                Debug.Log($"[FadeOut] Renderer {mr.GetInstanceID()} using material instance {mr.material.GetInstanceID()}");
                 SetMaterialTransparent(mr.material);
             }
             float startAlpha = 1f;
@@ -83,7 +119,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     Color color = material.color;
                     color.a = alpha;
                     material.color = color;
-                    Debug.Log($"[FadeOut] Tile {tile.gameObject.name} Renderer {mr.GetInstanceID()} t={t:F2} fade={fadeProgress:F2} alpha={alpha:F2} matID={material.GetInstanceID()}");
                 }
                 elapsed += Time.unscaledDeltaTime;
                 yield return null;
@@ -95,9 +130,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 Color finalColor = material.color;
                 finalColor.a = endAlpha;
                 material.color = finalColor;
-                Debug.Log($"[FadeOut] Tile {tile.gameObject.name} Renderer {mr.GetInstanceID()} DONE fade={endFade:F2} alpha={endAlpha:F2} matID={material.GetInstanceID()}");
             }
-            Debug.Log($"[FadeOut] Tile {tile.gameObject.name} ALL RENDERERS DONE");
             // Re-enable child tiles after fade
             if (childTilesToReenable != null)
             {
@@ -106,7 +139,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     if (child != null && !child.activeSelf)
                     {
                         child.SetActive(true);
-                        Debug.Log($"[FadeOut] Re-enabled child tile {child.name} after parent fade");
                     }
                 }
             }
@@ -117,14 +149,13 @@ namespace HexGlobeProject.TerrainSystem.LOD
         public Coroutine FadeIn(GameObject tile, float duration)
         {
             var meshRenderers = tile.GetComponentsInChildren<MeshRenderer>();
-            Debug.Log($"[FadeIn] Tile {tile.name} has {meshRenderers.Length} MeshRenderers (parent/child logic unified)");
             foreach (var mr in meshRenderers)
             {
                 mr.material = new Material(mr.material);
                 mr.material.SetFloat("_FadeDirection", 1f); // Child tile fades in
-                Debug.Log($"[FadeIn] Renderer {mr.GetInstanceID()} using material instance {mr.material.GetInstanceID()} (child tile)");
             }
-            return StartCoroutine(FadeInCoroutine(tile, duration));
+            fadeLimiter.Enqueue(this, FadeInCoroutine(tile, duration));
+            return null;
         }
 
         private IEnumerator FadeInCoroutine(GameObject tile, float duration)
@@ -132,11 +163,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
             var renderer = tile.gameObject.GetComponent<Renderer>();
             if (renderer == null) yield break;
             var meshRenderers = tile.gameObject.GetComponentsInChildren<MeshRenderer>();
-            Debug.Log($"[FadeIn] Tile {tile.gameObject.name} has {meshRenderers.Length} MeshRenderers");
                 foreach (var mr in meshRenderers)
                 {
                     mr.material = new Material(mr.material);
-                    Debug.Log($"[FadeIn] Renderer {mr.GetInstanceID()} using material instance {mr.material.GetInstanceID()}");
                     SetMaterialTransparent(mr.material);
                 }
             float startAlpha = 0f;
@@ -156,7 +185,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
                         Color color = material.color;
                         color.a = alpha;
                         material.color = color;
-                        Debug.Log($"[FadeIn] Tile {tile.gameObject.name} Renderer {mr.GetInstanceID()} t={t:F2} fade={fadeProgress:F2} alpha={alpha:F2} matID={material.GetInstanceID()}");
                     }
                 elapsed += Time.unscaledDeltaTime;
                 yield return null;
@@ -169,9 +197,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     finalColor.a = endAlpha;
                     material.color = finalColor;
                     SetMaterialOpaque(material);
-                    Debug.Log($"[FadeIn] Tile {tile.gameObject.name} Renderer {mr.GetInstanceID()} DONE fade={endFade:F2} alpha={endAlpha:F2} matID={material.GetInstanceID()}");
                 }
-                Debug.Log($"[FadeIn] Tile {tile.gameObject.name} ALL RENDERERS DONE");
         }
 
         private void SetMaterialTransparent(Material mat)
@@ -189,7 +215,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 mat.renderQueue = 3001;
             else
                 mat.renderQueue = 3000;
-            Debug.Log($"[ZWrite] {mat.name} ZWrite set to 1 (Transparent)");
         }
 
         private void SetMaterialOpaque(Material mat)
@@ -202,7 +227,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
             mat.DisableKeyword("_ALPHABLEND_ON");
             mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
             mat.renderQueue = -1;
-            Debug.Log($"[ZWrite] {mat.name} ZWrite set to 1 (Opaque)");
         }
     }
 }
