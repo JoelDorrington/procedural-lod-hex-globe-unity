@@ -130,6 +130,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             spawner.SpawnOrUpdateChildTileGO(td, ChildTileObjects, TerrainMaterial, PlanetTransform);
             if (ChildTileObjects.TryGetValue(cid, out var go) && go != null)
             {
+                // Restore: do not reposition, let mesh builder/spawner set correct surface position
                 var renderer = go.GetComponent<Renderer>();
                 if (renderer != null)
                 {
@@ -165,14 +166,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
             }
             // Start independent merge coroutine for this parent
             manager.StartCoroutine(FadeOutChildrenThenFadeInParent(parent));
-                // Remove child tile entries so subsequent splits/merges work
-                for (int cy = 0; cy < 2; cy++)
-                    for (int cx = 0; cx < 2; cx++)
-                    {
-                        var cid = new TileId(parent.id.face, (byte)(parent.id.depth + 1), (ushort)(parent.id.x * 2 + cx), (ushort)(parent.id.y * 2 + cy));
-                        ChildTiles.Remove(cid);
-                        ChildTileObjects.Remove(cid);
-                    }
         }
 
         // Coroutine: Fade out parent, then fade in children
@@ -199,7 +192,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             // Start parent fade out and child fade in simultaneously (true cross-fade)
             float duration = manager.SplitFadeDuration;
             float elapsed = 0f;
-            Vector3 planetCenter = PlanetTransform.position;
+            Vector3 planetCenter = manager.PlanetSphereTransform.position;
             // Store original positions
             Vector3 parentOrig = TileObjects[parent.id].transform.position;
             List<Vector3> childOrigs = new List<Vector3>();
@@ -259,36 +252,49 @@ namespace HexGlobeProject.TerrainSystem.LOD
             // Deactivate child tile GameObjects for reuse
             for (int i = 0; i < childGOs.Count; i++)
                 childGOs[i].SetActive(false);
-            // Deactivate child tile GameObjects for reuse
-            for (int i = 0; i < childGOs.Count; i++)
-                childGOs[i].SetActive(false);
+
+            // Remove child tile entries after merge animation completes
+            for (int cy = 0; cy < 2; cy++)
+                for (int cx = 0; cx < 2; cx++)
+                {
+                    var cid = new TileId(parent.id.face, (byte)(parent.id.depth + 1), (ushort)(parent.id.x * 2 + cx), (ushort)(parent.id.y * 2 + cy));
+                    ChildTiles.Remove(cid);
+                    ChildTileObjects.Remove(cid);
+                }
         }
         // Coroutine to slide parent and child tiles vertically relative to the ocean sphere
         private System.Collections.IEnumerator SlideTilesVerticallyCoroutine(TileId parentId, List<GameObject> childGOs, Vector3 parentOrig, List<Vector3> childOrigs, float duration, bool isMerge = false)
         {
+            Debug.Log($"[TileAnim] SlideTilesVerticallyCoroutine started for parent {parentId}, duration={duration}");
             float elapsed = 0f;
-            Vector3 planetCenter = PlanetTransform.position;
+            Vector3 planetCenter = manager.PlanetSphereTransform.position;
+            Debug.Log($"[TileAnim] Initial parentOrig: {parentOrig}, planetCenter: {planetCenter}, parentRadial: {(parentOrig - planetCenter).normalized}");
+            for (int i = 0; i < childOrigs.Count; i++)
+                Debug.Log($"[TileAnim] Initial child {i} orig: {childOrigs[i]}, childRadial: {(childOrigs[i] - planetCenter).normalized}");
             while (elapsed < duration)
             {
                 float t = elapsed / duration;
                 float slideAmount = 0.5f * Mathf.Sin(Mathf.PI * t); // smooth ease
-                // Parent movement (radial direction)
+                // Parent movement (radial direction from original position)
                 if (TileObjects.TryGetValue(parentId, out var parentGO) && parentGO != null)
                 {
-                    Vector3 parentRadial = (parentOrig - planetCenter).normalized;
+                    Vector3 parentRadial = parentOrig.normalized;
                     float parentDir = isMerge ? 1f : -1f;
                     parentGO.transform.position = parentOrig + parentRadial * parentDir * slideAmount;
+                    Debug.Log($"[TileAnim] Parent {parentId} pos: {parentGO.transform.position} (slideAmount={slideAmount})");
                 }
-                // Children movement (radial direction)
+                // Children movement (radial direction from original position)
                 for (int i = 0; i < childGOs.Count; i++)
                 {
-                    Vector3 childRadial = (childOrigs[i] - planetCenter).normalized;
+                    Vector3 childRadial = childOrigs[i].normalized;
                     float childDir = isMerge ? -1f : 1f;
                     childGOs[i].transform.position = childOrigs[i] + childRadial * childDir * slideAmount;
+                    Debug.Log($"[TileAnim] Child {i} pos: {childGOs[i].transform.position} (slideAmount={slideAmount})");
                 }
                 elapsed += Time.deltaTime;
                 yield return null;
             }
+            Debug.Log($"[TileAnim] SlideTilesVerticallyCoroutine finished for parent {parentId}");
         }
     // ...existing code...
     }

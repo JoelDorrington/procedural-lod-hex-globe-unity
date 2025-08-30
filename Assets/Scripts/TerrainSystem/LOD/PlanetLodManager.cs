@@ -11,6 +11,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
     /// </summary>
     public class PlanetLodManager : MonoBehaviour
     {
+        // ...existing fields...
+        [Header("References")]
+        [SerializeField] public Transform planetSphereTransform;
+        public Transform PlanetSphereTransform => planetSphereTransform != null ? planetSphereTransform : this.transform;
         public OctaveMaskHeightProvider OctaveWrapper => _octaveWrapper;
         public bool EdgePromotionRebuild => _edgePromotionRebuild;
         public float SplitChildResolutionMultiplier => splitChildResolutionMultiplier;
