@@ -1,4 +1,4 @@
-Shader "HexGlobe/PlanetTerrain"
+Shader "HexGlobe/PlanetTerrain_DitherBackup"
 {
     Properties {
         _ColorLow ("Low Color", Color) = (0.1,0.2,0.6,1)
@@ -19,12 +19,11 @@ Shader "HexGlobe/PlanetTerrain"
     }
     SubShader
     {
-    Tags { "RenderType"="Opaque" }
+        Tags { "RenderType"="Transparent" }
         LOD 200
     Pass
         {
-            // No alpha blending needed for opaque terrain
-            Blend Off
+            Blend SrcAlpha OneMinusSrcAlpha
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
@@ -58,7 +57,6 @@ Shader "HexGlobe/PlanetTerrain"
             float _SlopeBoost;
             float _SnowStart; float _SnowFull; float _SnowSlopeBoost; float4 _SnowColor;
             float _ShallowBand; float4 _ShallowColor;
-            float _FadeDirection; // 1 for child (fade in), -1 for parent (fade out)
 
             v2f vert(appdata v)
             {
@@ -70,40 +68,42 @@ Shader "HexGlobe/PlanetTerrain"
                 return o;
             }
 
+            float Hash21(float2 p)
+            {
+                p = frac(p * float2(123.34, 345.45));
+                p += dot(p, p + 34.345);
+                return frac(p.x * p.y);
+            }
+
             float4 frag(v2f i) : SV_Target
             {
-                // Approximate height: distance from world origin minus sea level
                 float worldR = length(i.worldPos);
                 float height = worldR - _SeaLevel;
                 float mountainT = saturate((height - _MountainStart) / max(0.0001, (_MountainFull - _MountainStart)));
-                // Slope factor: steeper (normal more horizontal) -> higher slopeFactor
-                float slope = 1 - saturate(abs(i.n.y)); // 0 at flat top/bottom, 1 at vertical cliff
+                float slope = 1 - saturate(abs(i.n.y));
                 float slopeInfluence = slope * _SlopeBoost;
                 mountainT = saturate(mountainT + slopeInfluence);
-                // Base biome gradient between low/high using normalized height within sea->mountain range
                 float baseT = saturate(height / max(0.0001, _MountainStart));
                 float4 baseCol = lerp(_ColorLow, _ColorHigh, baseT);
-                // Shallow water tint: blend near/below sea level
                 float shallowT = 0.0;
                 if (_ShallowBand > 0.0)
                 {
-                    // Negative heights (below sea) full shallow, then fade out over band above sea
-                    float below = saturate((-height) / max(0.0001, _ShallowBand)); // below sea level
-                    float above = saturate(1.0 - (height / _ShallowBand)); // within band above
-                    shallowT = max(below, above) * 0.85; // slight cap for subtlety
+                    float below = saturate((-height) / max(0.0001, _ShallowBand));
+                    float above = saturate(1.0 - (height / _ShallowBand));
+                    shallowT = max(below, above) * 0.85;
                 }
                 baseCol = lerp(baseCol, _ShallowColor, shallowT);
                 float4 finalCol = lerp(baseCol, _ColorMountain, mountainT);
-                // Snow layer
                 float snowRange = max(0.0001, _SnowFull - _SnowStart);
                 float snowT = saturate((worldR - _SnowStart) / snowRange);
-                // Flatter surfaces (higher normal.y) accumulate more snow
                 float flatFactor = saturate(i.n.y);
                 snowT = saturate(snowT + flatFactor * _SnowSlopeBoost * (1 - snowT));
                 finalCol = lerp(finalCol, _SnowColor, snowT);
 
-                // Opaque: ignore fade, always return full alpha
-                finalCol.a = 1.0;
+                float fade = _FadeProgress;
+                float dither = Hash21(i.uv * 1024.0);
+                float ditheredAlpha = finalCol.a * step(dither, fade);
+                finalCol.a = ditheredAlpha;
                 return finalCol;
             }
             ENDHLSL

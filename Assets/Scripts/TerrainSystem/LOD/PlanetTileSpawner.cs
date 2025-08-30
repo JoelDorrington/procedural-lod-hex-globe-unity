@@ -24,10 +24,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
             go.transform.SetParent(parent, false);
             var filter = go.AddComponent<MeshFilter>();
             filter.sharedMesh = td.mesh;
-            var renderer = go.AddComponent<MeshRenderer>();
-            renderer.material = new Material(terrainMaterial);
-            if (renderer.material.HasProperty("_Color"))
-                renderer.material.SetColor("_Color", new Color(1f, 1f, 1f, 1f));
+                var renderer = go.AddComponent<MeshRenderer>();
+                // Assign a unique material instance per tile
+                renderer.material = new Material(terrainMaterial);
+                if (renderer.material.HasProperty("_Color"))
+                    renderer.material.SetColor("_Color", new Color(1f, 1f, 1f, 1f));
             go.AddComponent<TileFadeHelper>();
             tileObjects[td.id] = go;
         }
@@ -61,10 +62,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
             go.transform.SetParent(parent, false);
             var filter = go.AddComponent<MeshFilter>();
             filter.sharedMesh = td.mesh;
-            var renderer = go.AddComponent<MeshRenderer>();
-            renderer.material = new Material(terrainMaterial);
-            if (renderer.material.HasProperty("_Color"))
-                renderer.material.SetColor("_Color", new Color(1f, 1f, 1f, 1f));
+                var renderer = go.AddComponent<MeshRenderer>();
+                // Assign a unique material instance per child tile
+                renderer.material = new Material(terrainMaterial);
+                if (renderer.material.HasProperty("_Color"))
+                    renderer.material.SetColor("_Color", new Color(1f, 1f, 1f, 1f));
             go.AddComponent<TileFadeHelper>();
             go.SetActive(true);
             childTileObjects[td.id] = go;

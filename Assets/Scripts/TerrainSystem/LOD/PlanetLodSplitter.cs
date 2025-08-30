@@ -165,6 +165,14 @@ namespace HexGlobeProject.TerrainSystem.LOD
             }
             // Start independent merge coroutine for this parent
             manager.StartCoroutine(FadeOutChildrenThenFadeInParent(parent));
+                // Remove child tile entries so subsequent splits/merges work
+                for (int cy = 0; cy < 2; cy++)
+                    for (int cx = 0; cx < 2; cx++)
+                    {
+                        var cid = new TileId(parent.id.face, (byte)(parent.id.depth + 1), (ushort)(parent.id.x * 2 + cx), (ushort)(parent.id.y * 2 + cy));
+                        ChildTiles.Remove(cid);
+                        ChildTileObjects.Remove(cid);
+                    }
         }
 
         // Coroutine: Fade out parent, then fade in children
@@ -186,44 +194,26 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     {
                         childGOs.Add(childGO);
                         childGO.SetActive(true);
-                        OffsetChildTile(childGO); // Apply offset before fade in
                     }
                 }
             // Start parent fade out and child fade in simultaneously (true cross-fade)
-            Coroutine parentFade = null;
-            if (TileObjects.TryGetValue(parent.id, out var parentGO) && parentGO != null)
-            {
-                parentFade = fadeAnimator.FadeOut(parentGO, manager.SplitFadeDuration * 0.5f);
-            }
-            var childCoroutines = new List<Coroutine>();
-            foreach (var childGO in childGOs)
-            {
-                if (childGO != null)
-                {
-                    childCoroutines.Add(fadeAnimator.FadeIn(childGO, manager.SplitFadeDuration * 0.5f));
-                }
-            }
-            // Wait for all fades to complete
-            if (parentFade != null)
-                yield return parentFade;
-            foreach (var co in childCoroutines)
-            {
-                yield return co;
-            }
-            // Revert offset after fade in
-            foreach (var childGO in childGOs)
-            {
-                if (childGO != null)
-                {
-                    RevertOffset(childGO);
-                }
-            }
-            // Deactivate parent after fade out
+            float duration = manager.SplitFadeDuration;
+            float elapsed = 0f;
+            Vector3 planetCenter = PlanetTransform.position;
+            // Store original positions
+            Vector3 parentOrig = TileObjects[parent.id].transform.position;
+            List<Vector3> childOrigs = new List<Vector3>();
+            foreach (var childGO in childGOs) childOrigs.Add(childGO.transform.position);
+            // Animate movement vertically relative to ocean sphere
+            yield return manager.StartCoroutine(SlideTilesVerticallyCoroutine(parent.id, childGOs, parentOrig, childOrigs, duration));
+            // Reset positions
+            if (TileObjects.TryGetValue(parent.id, out var parentGO3) && parentGO3 != null)
+                parentGO3.transform.position = parentOrig;
+            for (int i = 0; i < childGOs.Count; i++)
+                childGOs[i].transform.position = childOrigs[i];
+            // Deactivate parent after animation
             if (TileObjects.TryGetValue(parent.id, out var parentGO2) && parentGO2 != null)
-            {
                 parentGO2.SetActive(false);
-            }
-            // Remove coroutine tracking when done
             if (parentFadeCoroutines.ContainsKey(parent.id))
                 parentFadeCoroutines[parent.id] = null;
     }
@@ -249,43 +239,58 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     }
                 }
             // Start parent fade in simultaneously with child fade out (true cross-fade)
-            Coroutine parentFade = null;
-            if (TileObjects.TryGetValue(parent.id, out var parentGO) && parentGO != null)
-            {
-                parentGO.SetActive(true);
-                OffsetChildTile(parentGO, -0.001f); // Move parent slightly back to avoid overlap
-                parentFade = fadeAnimator.FadeIn(parentGO, manager.SplitFadeDuration * 0.5f);
-            }
-            // Wait for all fades to complete
-            foreach (var co in childFadeCoroutines)
-            {
-                yield return co;
-            }
-            if (parentFade != null)
-                yield return parentFade;
-            // Revert offset after fade in
+            float duration = manager.SplitFadeDuration;
+            float elapsed = 0f;
+            Vector3 planetCenter = PlanetTransform.position;
+            // Store original positions
+            Vector3 parentOrig = TileObjects[parent.id].transform.position;
+            List<Vector3> childOrigs = new List<Vector3>();
+            foreach (var go in childGOs) childOrigs.Add(go.transform.position);
+            // Animate movement vertically relative to ocean sphere
+            yield return manager.StartCoroutine(SlideTilesVerticallyCoroutine(parent.id, childGOs, parentOrig, childOrigs, duration, true));
+            // Reset parent position and ensure it's active
             if (TileObjects.TryGetValue(parent.id, out var parentGO2) && parentGO2 != null)
             {
-                RevertOffset(parentGO2, -0.001f);
+                parentGO2.transform.position = parentOrig;
+                parentGO2.SetActive(true);
             }
-            // Remove child tile data
-            foreach (var cid in childIds)
+            for (int i = 0; i < childGOs.Count; i++)
+                childGOs[i].transform.position = childOrigs[i];
+            // Deactivate child tile GameObjects for reuse
+            for (int i = 0; i < childGOs.Count; i++)
+                childGOs[i].SetActive(false);
+            // Deactivate child tile GameObjects for reuse
+            for (int i = 0; i < childGOs.Count; i++)
+                childGOs[i].SetActive(false);
+        }
+        // Coroutine to slide parent and child tiles vertically relative to the ocean sphere
+        private System.Collections.IEnumerator SlideTilesVerticallyCoroutine(TileId parentId, List<GameObject> childGOs, Vector3 parentOrig, List<Vector3> childOrigs, float duration, bool isMerge = false)
+        {
+            float elapsed = 0f;
+            Vector3 planetCenter = PlanetTransform.position;
+            while (elapsed < duration)
             {
-                if (ChildTiles.ContainsKey(cid)) ChildTiles.Remove(cid);
-                if (ChildTileObjects.ContainsKey(cid)) ChildTileObjects.Remove(cid);
+                float t = elapsed / duration;
+                float slideAmount = 0.5f * Mathf.Sin(Mathf.PI * t); // smooth ease
+                // Parent movement (radial direction)
+                if (TileObjects.TryGetValue(parentId, out var parentGO) && parentGO != null)
+                {
+                    Vector3 parentRadial = (parentOrig - planetCenter).normalized;
+                    float parentDir = isMerge ? 1f : -1f;
+                    parentGO.transform.position = parentOrig + parentRadial * parentDir * slideAmount;
+                }
+                // Children movement (radial direction)
+                for (int i = 0; i < childGOs.Count; i++)
+                {
+                    Vector3 childRadial = (childOrigs[i] - planetCenter).normalized;
+                    float childDir = isMerge ? -1f : 1f;
+                    childGOs[i].transform.position = childOrigs[i] + childRadial * childDir * slideAmount;
+                }
+                elapsed += Time.deltaTime;
+                yield return null;
             }
         }
-
-        private void OffsetChildTile(GameObject tileGO, float offset = 0.001f)
-        {
-            tileGO.transform.position += tileGO.transform.up * offset;
-            Debug.Log($"[OffsetChildTile] {tileGO.name} offset by {offset}");
-        }
-        private void RevertOffset(GameObject tileGO, float offset = 0.001f)
-        {
-            tileGO.transform.position -= tileGO.transform.up * offset;
-            Debug.Log($"[RevertOffset] {tileGO.name} offset reverted by {offset}");
-        }
+    // ...existing code...
     }
 }
 

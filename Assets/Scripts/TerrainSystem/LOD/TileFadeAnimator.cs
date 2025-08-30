@@ -8,7 +8,15 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
         public Coroutine FadeOut(GameObject tile, float duration)
         {
-            return FadeOut(tile, duration, null);
+            var meshRenderers = tile.GetComponentsInChildren<MeshRenderer>();
+            Debug.Log($"[FadeOut] Tile {tile.name} has {meshRenderers.Length} MeshRenderers (parent/child logic unified)");
+            foreach (var mr in meshRenderers)
+            {
+                mr.material = new Material(mr.material);
+                mr.material.SetFloat("_FadeDirection", -1f); // Parent tile fades out
+                Debug.Log($"[FadeOut] Renderer {mr.GetInstanceID()} using material instance {mr.material.GetInstanceID()} (parent tile)");
+            }
+            return StartCoroutine(FadeOutCoroutine(tile, duration, null));
 
         }
 
@@ -21,6 +29,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             foreach (var mr in meshRenderers)
             {
                 mr.material = new Material(mr.material);
+                mr.material.SetFloat("_FadeDirection", -1f); // Parent tile fades out
                 Debug.Log($"[FadeOut] Renderer {mr.GetInstanceID()} using material instance {mr.material.GetInstanceID()} (parent tile)");
             }
             if (childTilesToDisable != null)
@@ -107,13 +116,13 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
         public Coroutine FadeIn(GameObject tile, float duration)
         {
-            Debug.Log($"[FadeIn] Starting fade for tile {tile.name}");
             var meshRenderers = tile.GetComponentsInChildren<MeshRenderer>();
             Debug.Log($"[FadeIn] Tile {tile.name} has {meshRenderers.Length} MeshRenderers (parent/child logic unified)");
             foreach (var mr in meshRenderers)
             {
                 mr.material = new Material(mr.material);
-                Debug.Log($"[FadeIn] Renderer {mr.GetInstanceID()} using material instance {mr.material.GetInstanceID()} (parent tile)");
+                mr.material.SetFloat("_FadeDirection", 1f); // Child tile fades in
+                Debug.Log($"[FadeIn] Renderer {mr.GetInstanceID()} using material instance {mr.material.GetInstanceID()} (child tile)");
             }
             return StartCoroutine(FadeInCoroutine(tile, duration));
         }
@@ -170,13 +179,17 @@ namespace HexGlobeProject.TerrainSystem.LOD
             mat.SetFloat("_Mode", 3);
             mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
             mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-            mat.SetInt("_ZWrite", 0); // Ensure ZWrite is off for all fades
+            mat.SetInt("_ZWrite", 1); // Keep ZWrite enabled for transparent fades
             mat.DisableKeyword("_ALPHATEST_ON");
             mat.EnableKeyword("_ALPHABLEND_ON");
             mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
             mat.SetFloat("_FadeProgress", 0f);
-            mat.renderQueue = 3000; // Ensure render queue is always Transparent
-            Debug.Log($"[SetMaterialTransparent] {mat.name} ZWrite=0, renderQueue={mat.renderQueue}");
+            // Set child tiles to higher renderQueue (3001), parent tiles to 3000
+            if (mat.name.Contains("Child"))
+                mat.renderQueue = 3001;
+            else
+                mat.renderQueue = 3000;
+            Debug.Log($"[ZWrite] {mat.name} ZWrite set to 1 (Transparent)");
         }
 
         private void SetMaterialOpaque(Material mat)
@@ -189,7 +202,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             mat.DisableKeyword("_ALPHABLEND_ON");
             mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
             mat.renderQueue = -1;
-            Debug.Log($"[SetMaterialOpaque] {mat.name} ZWrite=1, renderQueue={mat.renderQueue}");
+            Debug.Log($"[ZWrite] {mat.name} ZWrite set to 1 (Opaque)");
         }
     }
 }
