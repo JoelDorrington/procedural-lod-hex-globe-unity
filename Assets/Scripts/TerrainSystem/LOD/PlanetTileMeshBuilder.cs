@@ -47,8 +47,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
         /// <param name="outwardNormals">If true, flip triangles for outward-facing normals; if false, leave as-is for inward-facing normals.</param>
         public void BuildTileMesh(TileData data, ref float rawMin, ref float rawMax, bool outwardNormals = true)
         {
-            Debug.Log($"[TileMeshBuilder] Building mesh for tile: {data.id} with resolution {data.resolution}");
-
             _verts.Clear();
             _tris.Clear();
             _normals.Clear();

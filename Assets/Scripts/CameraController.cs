@@ -21,7 +21,8 @@ public class CameraController : MonoBehaviour
     public float distance = 30f;
     public float minDistance = 5f;
     public float maxDistance = 200f;
-    [Tooltip("Base zoom speed factor (scaled by current distance)")] public float zoomSpeed = 5f;
+    [Tooltip("Min zoom speed factor (scaled by current distance)")] public float zoomSpeedMin = .5f;
+    [Tooltip("Max zoom speed factor (scaled by current distance)")] public float zoomSpeedMax = 20f;
     [Tooltip("Smoothing time for zoom interpolation")] public float zoomSmoothTime = 0.15f;
     private float _targetDistance;
     private float _zoomVelocity;
@@ -100,9 +101,12 @@ public class CameraController : MonoBehaviour
         float scroll = Input.GetAxis("Mouse ScrollWheel");
         if (Mathf.Abs(scroll) > 0.0001f)
         {
-            // Scale zoom step by current distance to get exponential-ish feel
-            float scale = Mathf.Max(0.01f, distance * 0.15f);
-            _targetDistance -= scroll * zoomSpeed * scale;
+            float proportionalDistance = Mathf.InverseLerp(minDistance, maxDistance, distance);
+            Debug.Log($"[CameraController] Proportional distance: {proportionalDistance}");
+            float scale = Mathf.Lerp(zoomSpeedMin, zoomSpeedMax, proportionalDistance);
+            float scrollStep = scroll * scale;
+            Debug.Log($"[CameraController] Zoom scroll: {scroll}, distance: {distance}, scale: {scale}, scrollStep: {scrollStep}");
+            _targetDistance -= scrollStep;
             _targetDistance = Mathf.Clamp(_targetDistance, minDistance, maxDistance);
         }
 

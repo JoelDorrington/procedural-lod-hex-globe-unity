@@ -14,16 +14,25 @@ namespace HexGlobeProject.TerrainSystem.LOD
     public class PlanetTileExplorerCam : MonoBehaviour
     {
         private int _lastDepth = -1;
+        private int _currentDepth = 0;
         private void Update()
         {
+            // Map camera FOV to depth
+            if (GameCamera != null)
+            {
+                float minFov = 20f, maxFov = 80f; // Adjust as needed
+                float fov = Mathf.Clamp(GameCamera.fieldOfView, minFov, maxFov);
+                float t = (fov - minFov) / (maxFov - minFov);
+                int newDepth = Mathf.Clamp(Mathf.RoundToInt(t * maxDepth), 0, maxDepth);
+                if (newDepth != _currentDepth)
+                {
+                    Debug.Log($"[TileRaycast] Depth changed: {newDepth}");
+                    _currentDepth = newDepth;
+                }
+            }
             if (_heuristicCoroutine == null && Time.time - _lastHeuristicTime >= HeuristicInterval)
             {
                 _lastHeuristicTime = Time.time;
-                if (maxDepth != _lastDepth)
-                {
-                    Debug.Log($"[TileRaycast] Depth changed: {maxDepth}");
-                    _lastDepth = maxDepth;
-                }
                 _heuristicCoroutine = StartCoroutine(RunTileRaycastHeuristicCoroutine());
             }
         }
@@ -53,14 +62,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
             {
                 Debug.LogError("PlanetTileExplorerCam: PlanetLodManager reference not assigned. Please assign it in the inspector.");
             }
-        }
-
-        /// <summary>
-        /// Updates visible tiles based on ray tracing heuristic only.
-        /// </summary>
-        public void UpdateVisibleTiles()
-        {
-            // No-op: visibility is now managed exclusively by the ray tracing heuristic coroutine.
         }
 
         // Fetch or spawn a tile at given coordinates and depth
@@ -117,7 +118,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             }
             HashSet<TileId> hitTiles = new HashSet<TileId>();
             int raysToCast = _maxRays;
-            int depth = maxDepth;
+            int depth = _currentDepth;
             int tilesPerEdge = 1 << depth;
             float planetRadius = manager.Config.baseRadius;
             int sqrtRays = Mathf.CeilToInt(Mathf.Sqrt(raysToCast));

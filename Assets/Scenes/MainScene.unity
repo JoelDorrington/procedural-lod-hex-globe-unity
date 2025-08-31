@@ -193,7 +193,6 @@ MonoBehaviour:
   config: {fileID: 11400000, guid: 39abb1e81f4f4774a84dbe903a64257d, type: 2}
   targetCamera: {fileID: 2097968224}
   terrainMaterial: {fileID: 2100000, guid: 0df5d813211e9c6428c2aec838d9605d, type: 2}
-  autoBakeOnStart: 1
   childHeightEnhancement: 1
   enableProximitySplit: 1
   splitTargetDepthOverride: -1
@@ -423,7 +422,8 @@ MonoBehaviour:
   distance: 50
   minDistance: 32
   maxDistance: 70
-  zoomSpeed: 10
+  zoomSpeedMin: 0.5
+  zoomSpeedMax: 50
   zoomSmoothTime: 0.15
   rotationSpeed: 50
   rollSpeed: 60
