@@ -165,7 +165,7 @@ namespace HexGlobeProject.TerrainSystem
                 {
                     float u = (x / (float)resolution) * 2f - 1f;
                     Vector3 dir = CubeSphere.FaceLocalToUnit(face, u, v);
-                    float raw = hp.Sample(dir);
+                    float raw = hp.Sample(dir, resolution);
                     // Use raw sampled height directly (realistic height remap removed)
                     float h = raw;
                     float finalR = radius + h;

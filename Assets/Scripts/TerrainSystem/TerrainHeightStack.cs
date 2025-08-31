@@ -10,12 +10,12 @@ namespace HexGlobeProject.TerrainSystem
     public class TerrainHeightStack : TerrainHeightProviderBase
     {
         [SerializeReference] public List<TerrainHeightProviderBase> layers = new();
-        public override float Sample(in Vector3 unitDirection)
+        public override float Sample(in Vector3 unitDirection, int resolution)
         {
             float h = 0f;
             for (int i = 0; i < layers.Count; i++)
             {
-                h += layers[i].Sample(unitDirection);
+                h += layers[i].Sample(unitDirection, resolution);
             }
             return h;
         }

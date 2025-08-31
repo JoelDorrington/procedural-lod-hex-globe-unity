@@ -38,7 +38,7 @@ namespace HexGlobeProject.TerrainSystem
         private int _cachedCount;
         private float _cachedWidthDeg;
 
-        public override float Sample(in Vector3 unitDirection)
+    public override float Sample(in Vector3 unitDirection, int resolution)
         {
             EnsureRanges();
             // Base continents (soft)

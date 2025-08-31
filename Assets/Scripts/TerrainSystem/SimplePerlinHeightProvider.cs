@@ -15,13 +15,14 @@ namespace HexGlobeProject.TerrainSystem
         public float amplitude = 1f;
         public int seed = 12345;
 
-    public override float Sample(in Vector3 unitDirection)
+        public override float Sample(in Vector3 unitDirection, int resolution)
         {
-            Vector3 p = unitDirection * baseFrequency;
+            // Use resolution to scale baseFrequency for more detail at higher resolutions
+            float freqScale = Mathf.Max(1f, resolution / 16f);
+            Vector3 p = unitDirection * baseFrequency * freqScale;
             float sum = 0f;
             float amp = 1f;
             float freq = 1f;
-            // Simple deterministic offset per seed
             Vector3 seedOffset = new Vector3(
                 (seed * 0.0137f) % 10f,
                 (seed * 0.0173f) % 10f,
@@ -30,7 +31,6 @@ namespace HexGlobeProject.TerrainSystem
             for (int i = 0; i < octaves; i++)
             {
                 sum += (Mathf.PerlinNoise(p.x * freq, p.y * freq) * 2f - 1f) * amp;
-                // rotate coordinates for variety
                 p = new Vector3(p.y, p.z, p.x);
                 freq *= lacunarity;
                 amp *= gain;

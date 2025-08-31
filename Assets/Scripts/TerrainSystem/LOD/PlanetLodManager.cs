@@ -41,7 +41,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
         private OctaveMaskHeightProvider _octaveWrapper;
         private bool _edgePromotionRebuild = false;
         private int bakedDepth = -1;
-        private PlanetLodSplitter _splitter = null;
         private PlanetTileSpawner _tileSpawner = new PlanetTileSpawner();
 
         private readonly Dictionary<TileId, TileData> _tiles = new();
@@ -67,7 +66,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             yield return StartCoroutine(BakeDepthSingle(depth));
             bakedDepth = depth;
             Debug.Log($"BakeBaseDepth finished, depth={depth}, tiles={_tiles.Count}");
-            SpawnAllTiles(); // Only spawn after baking is done
+            // Tile spawning is now managed by PlanetLodSpawnCam
         }
 
         private IEnumerator BakeDepthSingle(int depth)
@@ -155,29 +154,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
         {
             if (heightProvider == null && config != null && config.heightProvider != null)
                 heightProvider = config.heightProvider;
-        }
-
-        private void Awake()
-        {
-            if (autoBakeOnStart)
-            {
-                StartCoroutine(BakeBaseDepth());
-            }
-        }
-
-        private void Start()
-        {
-            _splitter = new PlanetLodSplitter(this);
-            _tileSpawner = new PlanetTileSpawner();
-            // Do not spawn tiles here; wait for baking to complete
-        }
-
-        private void Update()
-        {
-            if (_splitter != null)
-            {
-                _splitter.UpdateProximitySplits();
-            }
         }
 
         public TerrainConfig Config => config;

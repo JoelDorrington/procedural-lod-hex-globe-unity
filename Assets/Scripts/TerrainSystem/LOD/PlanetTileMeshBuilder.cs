@@ -14,11 +14,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
         private readonly float childHeightEnhancement;
         private readonly bool _edgePromotionRebuild;
 
-    // Temporary lists for mesh generation
-    private readonly List<Vector3> _verts = new();
-    private readonly List<int> _tris = new();
-    private readonly List<Vector3> _normals = new();
-    private readonly List<Vector2> _uvs = new();
+        // Temporary lists for mesh generation
+        private readonly List<Vector3> _verts = new();
+        private readonly List<int> _tris = new();
+        private readonly List<Vector3> _normals = new();
+        private readonly List<Vector2> _uvs = new();
 
         public PlanetTileMeshBuilder(
             TerrainConfig config,
@@ -38,7 +38,14 @@ namespace HexGlobeProject.TerrainSystem.LOD
             this._edgePromotionRebuild = edgePromotionRebuild;
         }
 
-        public void BuildTileMesh(TileData data, ref float rawMin, ref float rawMax)
+        /// <summary>
+        /// Builds the tile mesh and allows caller to specify triangle winding direction.
+        /// </summary>
+        /// <param name="data">Tile data to populate</param>
+        /// <param name="rawMin">Minimum sampled height</param>
+        /// <param name="rawMax">Maximum sampled height</param>
+        /// <param name="outwardNormals">If true, flip triangles for outward-facing normals; if false, leave as-is for inward-facing normals.</param>
+        public void BuildTileMesh(TileData data, ref float rawMin, ref float rawMax, bool outwardNormals = true)
         {
             _verts.Clear();
             _tris.Clear();
@@ -52,17 +59,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
             float maxH = float.MinValue;
             Vector3 centerAccum = Vector3.zero;
             int vertCounter = 0;
-
-            bool isChildTile = bakedDepth >= 0 && data.id.depth > bakedDepth;
             bool doCull = config.cullBelowSea && !config.debugDisableUnderwaterCulling;
             bool removeTris = doCull && config.removeFullySubmergedTris;
             float seaR = config.baseRadius + config.seaLevel;
             float eps = config.seaClampEpsilon;
             var submergedFlags = removeTris ? new List<bool>(res * res) : null;
-
-            bool isFirstSplitDepth = isChildTile && data.id.depth == bakedDepth + 1;
-            int childLocalXMask = data.id.x & 1;
-            int childLocalYMask = data.id.y & 1;
 
             for (int j = 0; j < res; j++)
             {
@@ -73,39 +74,15 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     Vector3 dir = CubeSphere.FaceLocalToUnit(data.id.face, u * 2f - 1f, v * 2f - 1f);
                     _uvs.Add(new Vector2(u, v));
 
-                    int ring = Mathf.Min(Mathf.Min(i, j), Mathf.Min(res - 1 - i, res - 1 - j));
-                    bool treatAsParent = false;
-                    if (isFirstSplitDepth && ring == 0)
-                    {
-                        if (!_edgePromotionRebuild)
-                        {
-                            bool onLeft = (i == 0) && childLocalXMask == 0;
-                            bool onRight = (i == res - 1) && childLocalXMask == 1;
-                            bool onBottom = (j == 0) && childLocalYMask == 0;
-                            bool onTop = (j == res - 1) && childLocalYMask == 1;
-                            treatAsParent = onLeft || onRight || onBottom || onTop;
-                        }
-                    }
-
-                    float raw;
-                    if (treatAsParent)
-                        raw = SampleRawWithOctaveCap(dir, config.maxOctaveBake);
-                    else if (isChildTile && config.maxOctaveSplit >= 0)
-                        raw = SampleRawWithOctaveCap(dir, config.maxOctaveSplit);
-                    else if (octaveWrapper != null && octaveWrapper.inner != null)
-                        raw = octaveWrapper.inner.Sample(dir);
-                    else
-                        raw = heightProvider != null ? heightProvider.Sample(dir) : 0f;
-
+                    float raw = heightProvider != null ? heightProvider.Sample(in dir, res) : 0f;
                     raw *= config.heightScale;
                     if (raw < rawMin) rawMin = raw;
                     if (raw > rawMax) rawMax = raw;
 
-                    float enhancement = (isChildTile && childHeightEnhancement > 1.01f) ? childHeightEnhancement : 1.0f;
-                    float hSample = raw * enhancement;
+                    float hSample = raw;
                     float finalR = radius + hSample;
 
-                    if (!treatAsParent && config.shorelineDetail && data.id.depth >= config.shorelineDetailMinDepth)
+                    if (config.shorelineDetail && data.id.depth >= config.shorelineDetailMinDepth)
                     {
                         float seaRLocal = config.baseRadius + config.seaLevel;
                         if (Mathf.Abs(finalR - seaRLocal) <= config.shorelineBand)
@@ -160,23 +137,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 }
             }
 
-            if (_tris.Count >= 3)
+            // Fast triangle winding correction: flip if outwardNormals is true
+            if (outwardNormals)
             {
-                Vector3 va = _verts[_tris[0]];
-                Vector3 vb = _verts[_tris[1]];
-                Vector3 vc = _verts[_tris[2]];
-                Vector3 triN = Vector3.Cross(vb - va, vc - va);
-                if (Vector3.Dot(triN, va) < 0f)
-                {
-                    for (int t = 0; t < _tris.Count; t += 3)
-                    {
-                        int tmp = _tris[t + 1];
-                        _tris[t + 1] = _tris[t + 2];
-                        _tris[t + 2] = tmp;
-                    }
-                }
+                FlipTriangleWinding(_tris);
             }
-
             var mesh = new Mesh();
             mesh.indexFormat = (res * res > 65000) ? UnityEngine.Rendering.IndexFormat.UInt32 : UnityEngine.Rendering.IndexFormat.UInt16;
             mesh.SetVertices(_verts);
@@ -199,12 +164,26 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 data.boundsRadius = 0.5f * ((radius + maxH) - (radius + minH)) + (radius + (minH + maxH) * 0.5f);
             }
         }
+        /// <summary>
+        /// Flips the winding order of triangles in the index list (in-place).
+        /// </summary>
+        private static void FlipTriangleWinding(List<int> tris)
+        {
+            for (int t = 0; t < tris.Count; t += 3)
+            {
+                int tmp = tris[t + 1];
+                tris[t + 1] = tris[t + 2];
+                tris[t + 2] = tmp;
+            }
+        }
 
         private float SampleRawWithOctaveCap(Vector3 dir, int maxOctave)
         {
             if (heightProvider is IOctaveSampler sampler && maxOctave >= 0)
                 return sampler.SampleOctaveMasked(dir, maxOctave);
-            return heightProvider != null ? heightProvider.Sample(dir) : 0f;
+            // Use bakedDepth as a fallback for resolution, or pass a suitable value
+            int resolution = bakedDepth > 0 ? bakedDepth : 1;
+            return heightProvider != null ? heightProvider.Sample(in dir, resolution) : 0f;
         }
     }
 }

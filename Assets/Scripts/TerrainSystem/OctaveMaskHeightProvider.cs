@@ -17,12 +17,12 @@ namespace HexGlobeProject.TerrainSystem
 
         public void SetMaxOctave(int value) => maxOctave = value;
 
-        public override float Sample(in Vector3 unitDirection)
+        public override float Sample(in Vector3 unitDirection, int resolution)
         {
             if (inner == null) return 0f;
             _octaveSampler ??= inner as IOctaveSampler;
-            if (_octaveSampler == null || maxOctave < 0 && maxOctave != -1) return inner.Sample(unitDirection);
-            if (maxOctave < 0) return inner.Sample(unitDirection); // -1 means full
+            if (_octaveSampler == null || maxOctave < 0 && maxOctave != -1) return inner.Sample(unitDirection, resolution);
+            if (maxOctave < 0) return inner.Sample(unitDirection, resolution); // -1 means full
             return _octaveSampler.SampleOctaveMasked(unitDirection, maxOctave);
         }
 
@@ -34,7 +34,7 @@ namespace HexGlobeProject.TerrainSystem
             // Temporarily override maxOctave and call Sample
             int prev = this.maxOctave;
             this.maxOctave = maxInclusive;
-            float val = Sample(dir);
+            float val = Sample(dir, 0); // Pass 0 or a suitable default for resolution
             this.maxOctave = prev;
             return val;
         }

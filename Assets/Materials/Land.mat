@@ -65,6 +65,7 @@ Material:
     - _Cutoff: 0.5
     - _DetailNormalMapScale: 1
     - _DstBlend: 0
+    - _FadeProgress: 1
     - _FadeSeed: 0
     - _GlossMapScale: 1
     - _Glossiness: 0.5
@@ -89,9 +90,9 @@ Material:
     - _ZWrite: 1
     m_Colors:
     - _Color: {r: 1, g: 1, b: 1, a: 1}
-    - _ColorHigh: {r: 0.15, g: 0.35, b: 0.15, a: 1}
-    - _ColorLow: {r: 0.68283564, g: 0.7509433, b: 0.14027049, a: 1}
-    - _ColorMountain: {r: 0.5, g: 0.5, b: 0.5, a: 1}
+    - _ColorHigh: {r: 0.1882165, g: 0.4641509, b: 0.0026272312, a: 1}
+    - _ColorLow: {r: 0.23455009, g: 0.6301887, b: 0, a: 1}
+    - _ColorMountain: {r: 0.3660378, g: 0.3660378, b: 0.3660378, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _ShallowColor: {r: 0.3075471, g: 0.56973, b: 1, a: 1}
     - _SnowColor: {r: 0.9, g: 0.9, b: 0.95, a: 1}

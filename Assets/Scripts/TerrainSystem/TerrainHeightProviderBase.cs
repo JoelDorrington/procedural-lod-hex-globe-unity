@@ -8,7 +8,8 @@ namespace HexGlobeProject.TerrainSystem
     [System.Serializable]
     public abstract class TerrainHeightProviderBase
     {
-        /// <param name="unitDirection">Normalized direction from planet center.</param>
-        public abstract float Sample(in Vector3 unitDirection);
+    /// <param name="unitDirection">Normalized direction from planet center.</param>
+    /// <param name="resolution">Tile resolution for noise detail.</param>
+    public abstract float Sample(in Vector3 unitDirection, int resolution);
     }
 }

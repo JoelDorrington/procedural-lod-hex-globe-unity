@@ -4,9 +4,13 @@ using HexGlobeProject.TerrainSystem.LOD;
 
 namespace HexGlobeProject.TerrainSystem.LOD
 {
-    public class PlanetLodSplitter
-    {
-        private PlanetLodManager manager;
+
+// LEGACY: This class is deprecated and no longer used. All LOD logic is now handled by PlanetLodManager and PlanetTileExplorerCam.
+[System.Obsolete("PlanetLodSplitter is deprecated. Use PlanetLodManager and PlanetTileExplorerCam instead.")]
+public class PlanetLodSplitter
+{
+    private PlanetLodManager manager;
+    private TileCache tileCache;
         private Dictionary<TileId, Coroutine> parentFadeCoroutines = new Dictionary<TileId, Coroutine>();
         private CoroutineLimiter fadeLimiter = new CoroutineLimiter(10); // Limit concurrency to 10
         private TileSlideAnimator slideAnimator;
@@ -15,6 +19,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
         {
             this.manager = manager;
             slideAnimator = new TileSlideAnimator(manager.PlanetSphereTransform);
+            var meshBuilder = new PlanetTileMeshBuilder(Config, Config.heightProvider, manager.OctaveWrapper, manager.BakedDepth, manager.SplitChildResolutionMultiplier, manager.ChildHeightEnhancement, manager.EdgePromotionRebuild);
+            tileCache = new TileCache(meshBuilder, manager.PlanetSphereTransform, TerrainMaterial);
+            // Disable all cached tiles on start
+            foreach (var kv in manager.TileObjects)
+                if (kv.Value != null) kv.Value.SetActive(false);
         }
 
         private float SplitDistanceThreshold => manager.splitDistanceThreshold;
@@ -54,11 +63,21 @@ namespace HexGlobeProject.TerrainSystem.LOD
             int targetDepth = SplitTargetDepthOverride >= 0 ? SplitTargetDepthOverride : ConfigSplitTargetDepth;
             if (targetDepth < 0 || targetDepth <= BakedDepth) return;
             Vector3 camPos = TargetCamera.transform.position;
+            Plane[] frustumPlanes = GeometryUtility.CalculateFrustumPlanes(TargetCamera);
             foreach (var kv in Tiles)
             {
                 var parent = kv.Value;
                 if (parent.id.depth != BakedDepth) continue;
                 float distance = Vector3.Distance(camPos, parent.center);
+                // Frustum culling: deactivate tile if not visible
+                var parentGO = tileCache.GetOrCreateTile(parent.id, parent.resolution);
+                if (parentGO != null)
+                {
+                    Bounds bounds = parentGO.GetComponent<Renderer>()?.bounds ?? new Bounds(parent.center, Vector3.one * 1f);
+                    bool isVisible = GeometryUtility.TestPlanesAABB(frustumPlanes, bounds);
+                    tileCache.SetTileActive(parent.id, isVisible);
+                    if (!isVisible) continue;
+                }
                 // isSplit is true if any child tiles exist for this parent
                 bool isSplit = false;
                 for (int cy = 0; cy < 2; cy++)
@@ -95,13 +114,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 float dummyMin = 0, dummyMax = 0;
                 meshBuilder.BuildTileMesh(parent, ref dummyMin, ref dummyMax);
             }
-            if (!TileObjects.TryGetValue(parent.id, out var parentGO) || parentGO == null)
-            {
-                // Respawn parent tile GameObject if missing
-                var spawner = new PlanetTileSpawner();
-                spawner.SpawnOrUpdateTileGO(parent, TileObjects, TerrainMaterial, PlanetTransform);
-                TileObjects.TryGetValue(parent.id, out parentGO);
-            }
+            var parentGO = tileCache.GetOrCreateTile(parent.id, parent.resolution);
+            tileCache.SetTileActive(parent.id, true);
             // Spawn child tiles if missing
             for (int cy = 0; cy < 2; cy++)
                 for (int cx = 0; cx < 2; cx++)
@@ -166,13 +180,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 meshBuilder.BuildTileMesh(parent, ref dummyMin, ref dummyMax);
             }
             // Show parent tile GameObject (use base tile dictionary)
-            if (!TileObjects.TryGetValue(parent.id, out var parentGO) || parentGO == null)
-            {
-                // Respawn parent tile GameObject if missing
-                var spawner = new PlanetTileSpawner();
-                spawner.SpawnOrUpdateTileGO(parent, TileObjects, TerrainMaterial, PlanetTransform);
-                TileObjects.TryGetValue(parent.id, out parentGO);
-            }
+            var parentGO = tileCache.GetOrCreateTile(parent.id, parent.resolution);
+            tileCache.SetTileActive(parent.id, true);
             // Start independent merge coroutine for this parent
             fadeLimiter.Enqueue(manager, FadeOutChildrenThenFadeInParent(parent));
         }
@@ -201,8 +210,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
             Vector3 parentOrig = TileObjects[parent.id].transform.position;
             List<Vector3> childOrigs = new List<Vector3>();
             foreach (var childGO in childGOs) childOrigs.Add(childGO.transform.position);
-            // Animate movement vertically relative to ocean sphere (split phase)
-            yield return manager.StartCoroutine(slideAnimator.SlideTilesVerticallyCoroutine(parent.id, childGOs, parentOrig, childOrigs, duration, false, TileObjects));
+            // Animation disabled for now
+            yield return null;
             // Reset positions
             if (TileObjects.TryGetValue(parent.id, out var parentGO3) && parentGO3 != null)
                 parentGO3.transform.position = parentOrig;
@@ -241,8 +250,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
             Vector3 parentOrig = TileObjects[parent.id].transform.position;
             List<Vector3> childOrigs = new List<Vector3>();
             foreach (var go in childGOs) childOrigs.Add(go.transform.position);
-            // Animate movement vertically relative to ocean sphere (merge phase)
-            yield return manager.StartCoroutine(slideAnimator.SlideTilesVerticallyCoroutine(parent.id, childGOs, parentOrig, childOrigs, duration, true, TileObjects));
+            // Animation disabled for now
+            yield return null;
             // Reset parent position and ensure it's active
             if (TileObjects.TryGetValue(parent.id, out var parentGO2) && parentGO2 != null)
             {

@@ -130,6 +130,7 @@ GameObject:
   - component: {fileID: 257686384}
   - component: {fileID: 257686383}
   - component: {fileID: 257686385}
+  - component: {fileID: 257686386}
   m_Layer: 0
   m_Name: Planet
   m_TagString: Untagged
@@ -188,6 +189,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f3ca1b32fd3067a47b6d8fe2af623d2c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  planetSphereTransform: {fileID: 0}
   config: {fileID: 11400000, guid: 39abb1e81f4f4774a84dbe903a64257d, type: 2}
   targetCamera: {fileID: 2097968224}
   terrainMaterial: {fileID: 2100000, guid: 0df5d813211e9c6428c2aec838d9605d, type: 2}
@@ -199,6 +201,20 @@ MonoBehaviour:
   splitChildResolutionMultiplier: 4
   splitDistanceThreshold: 35
   mergeDistanceThreshold: 38
+--- !u!114 &257686386
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 257686382}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 145b3e5808783e44d88b33d3d2a85e85, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  manager: {fileID: 257686385}
+  GameCamera: {fileID: 2097968224}
 --- !u!1 &881747947
 GameObject:
   m_ObjectHideFlags: 0
