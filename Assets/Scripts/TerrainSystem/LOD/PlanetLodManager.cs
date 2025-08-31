@@ -28,7 +28,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
         [SerializeField] private TerrainHeightProviderBase heightProvider;
         [SerializeField] private Camera targetCamera;
         [SerializeField] private Material terrainMaterial;
-        [SerializeField] private bool autoBakeOnStart = true;
         [SerializeField] private float childHeightEnhancement = 1.0f;
         [SerializeField] private bool enableProximitySplit = true;
         [SerializeField] private int splitTargetDepthOverride = -1;

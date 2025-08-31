@@ -36,7 +36,7 @@ namespace HexGlobeProject.TerrainSystem.Editor
         }
 
         #region Section Drawing
-    private static bool _foldCore = true, _foldLod = true, _foldElev = false, _foldUnder = false;
+    private static bool _foldCore = true, _foldLod = true, _foldUnder = false;
 
         private void DrawCoreSection()
         {

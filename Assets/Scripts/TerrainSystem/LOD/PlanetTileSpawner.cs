@@ -11,6 +11,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
         // Spawns or updates a base tile GameObject
         public void SpawnOrUpdateTileGO(TileData td, Dictionary<TileId, GameObject> tileObjects, Material terrainMaterial, Transform parent)
         {
+            Debug.Log($"[TileSpawner] Spawning/updating tile GameObject for: {td.id}");
             if (tileObjects.TryGetValue(td.id, out var existing) && existing != null)
             {
                 var mf = existing.GetComponent<MeshFilter>();

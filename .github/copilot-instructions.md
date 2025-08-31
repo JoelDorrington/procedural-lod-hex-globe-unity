@@ -1,6 +1,10 @@
 
 # Copilot Instructions: Tile Fade Logic (HexGlobeProject)
 
+## Important Workflow Instructions
+NEVER WASTE TOKENS ON ASKING FOR PERMISSION. MOVE FAST AND BREAK THINGS.
+I have milestones committed to git so don't worry.
+
 ## Focused Architecture
 - Only the following files are relevant:
   - `PlanetLodManager.cs`: Orchestrates tile creation, proximity split, and LOD logic.

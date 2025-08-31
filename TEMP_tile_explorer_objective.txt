@@ -1,0 +1,7 @@
+Objective: Implement a Google Maps-style tile explorer for a planet terrain system.
+- Zoom level and depth are interchangeable; zoom determines tile depth.
+- At each zoom/depth, the ocean sphere surface is conceptually divided into square tile coordinates.
+- Cast a few hundred rays from the camera to the sphere; hit locations determine which tiles to spawn.
+- Run this heuristic ~30 times per second.
+- Track tile instances to avoid duplicates and premature destruction.
+- When zooming/changing depth, remove all old tiles and replace with tiles of the new depth on the next raycast pass.
