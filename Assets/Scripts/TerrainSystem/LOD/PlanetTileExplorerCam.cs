@@ -13,11 +13,17 @@ namespace HexGlobeProject.TerrainSystem.LOD
     [AddComponentMenu("HexGlobe/Planet Tile Explorer Cam")]
     public class PlanetTileExplorerCam : MonoBehaviour
     {
+        private int _lastDepth = -1;
         private void Update()
         {
             if (_heuristicCoroutine == null && Time.time - _lastHeuristicTime >= HeuristicInterval)
             {
                 _lastHeuristicTime = Time.time;
+                if (maxDepth != _lastDepth)
+                {
+                    Debug.Log($"[TileRaycast] Depth changed: {maxDepth}");
+                    _lastDepth = maxDepth;
+                }
                 _heuristicCoroutine = StartCoroutine(RunTileRaycastHeuristicCoroutine());
             }
         }
@@ -50,67 +56,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
         }
 
         /// <summary>
-        /// Updates visible tiles based on camera frustum and LOD.
-        /// Call this in Update() or when camera moves.
+        /// Updates visible tiles based on ray tracing heuristic only.
         /// </summary>
         public void UpdateVisibleTiles()
         {
-            if (GameCamera == null) return;
-            Plane[] frustumPlanes = GeometryUtility.CalculateFrustumPlanes(GameCamera);
-            int maxDepthToShow = maxDepth;
-            float planetRadius = manager != null ? manager.Config.baseRadius : 1f;
-            // For each possible tile at each depth, check if it should be visible
-            HashSet<TileId> visibleTiles = new HashSet<TileId>();
-            for (int depth = 0; depth <= maxDepthToShow; depth++)
-            {
-                int tilesPerEdge = 1 << depth;
-                int resolution = manager != null ? manager.ResolveResolutionForDepth(depth, tilesPerEdge) : 8;
-                for (int face = 0; face < 6; face++)
-                {
-                    for (int y = 0; y < tilesPerEdge; y++)
-                    {
-                        for (int x = 0; x < tilesPerEdge; x++)
-                        {
-                            var id = new TileId((byte)face, (byte)depth, (ushort)x, (ushort)y);
-                            Vector3 center = CubeSphere.FaceLocalToUnit(face, (x + 0.5f) / tilesPerEdge * 2f - 1f, (y + 0.5f) / tilesPerEdge * 2f - 1f) * planetRadius;
-                            float boundsRadius = planetRadius / tilesPerEdge;
-                            Bounds tileBounds = new Bounds(center, Vector3.one * boundsRadius * 2f);
-                            bool frustumVisible = GeometryUtility.TestPlanesAABB(frustumPlanes, tileBounds);
-                            Vector3 camPos = GameCamera.transform.position;
-                            Vector3 toTile = (center - camPos).normalized;
-                            Vector3 camForward = GameCamera.transform.forward;
-                            bool facingCamera = Vector3.Dot(toTile, camForward) > 0.15f;
-                            bool visible = frustumVisible && facingCamera;
-                            if (visible)
-                            {
-                                visibleTiles.Add(id);
-                                if (tileObjects.TryGetValue(id, out var go))
-                                {
-                                    if (!go.activeSelf)
-                                    {
-                                        go.SetActive(true);
-                                        Debug.Log($"Activated tile: {id}");
-                                    }
-                                }
-                                else
-                                {
-                                    go = GetOrSpawnTile(id, resolution);
-                                    Debug.Log($"Spawned and activated tile: {id}");
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            // Cull (deactivate) tiles that are not visible
-            foreach (var kv in tileObjects)
-            {
-                if (!visibleTiles.Contains(kv.Key) && kv.Value != null && kv.Value.activeSelf)
-                {
-                    kv.Value.SetActive(false);
-                    Debug.Log($"Deactivated tile: {kv.Key}");
-                }
-            }
+            // No-op: visibility is now managed exclusively by the ray tracing heuristic coroutine.
         }
 
         // Fetch or spawn a tile at given coordinates and depth
@@ -121,13 +71,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 if (go != null)
                 {
                     go.SetActive(true);
-                    Debug.Log($"[TileSpawn] Activated existing tile: {id}");
                     return go;
                 }
                 else
                 {
                     tileObjects.Remove(id);
-                    Debug.LogWarning($"[TileSpawn] Removed stale tile entry: {id}");
                 }
             }
             tileSpawnTimes[id] = Time.time;
@@ -140,11 +88,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
             if (go != null)
             {
                 go.SetActive(true);
-                Debug.Log($"[TileSpawn] Spawned and activated tile: {id} (GO: {go.name})");
-            }
-            else
-            {
-                Debug.LogError($"[TileSpawn] Failed to spawn tile GameObject for: {id}");
             }
             return go;
         }
@@ -156,7 +99,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
             {
                 if (tileSpawnTimes.TryGetValue(id, out float spawnTime) && Time.time - spawnTime < 0.5f)
                 {
-                    Debug.Log($"[TileSpawn] Skipping immediate destruction for: {id}");
                     return;
                 }
                 Object.Destroy(go);
@@ -234,11 +176,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 if (!hitTiles.Contains(id))
                 {
                     hitTiles.Add(id);
-                    Debug.Log($"[TileRaycast] Hit tile: F{face} D{depth} ({x},{y}) at hitPoint {hitPoint}");
-                }
-                else
-                {
-                    Debug.Log($"[TileRaycast] Duplicate tile detected: F{face} D{depth} ({x},{y})");
                 }
                 if (i % 50 == 0) yield return null;
             }
@@ -246,15 +183,12 @@ namespace HexGlobeProject.TerrainSystem.LOD
             foreach (var id in hitTiles)
             {
                 int resolution = manager.ResolveResolutionForDepth(depth, tilesPerEdge);
-                Debug.Log($"[TileRaycast] Spawning tile: {id} with resolution {resolution}");
                 GetOrSpawnTile(id, resolution);
                 toRemove.Remove(id);
             }
-            Debug.Log($"[TileRaycast] Total unique tiles to spawn: {hitTiles.Count}");
             // Remove tiles not in hitTiles or with mismatched depth
             foreach (var id in toRemove)
             {
-                Debug.Log($"[TileRaycast] Deactivating/removing tile: {id}");
                 DestroyTile(id);
             }
             // Remove tiles with mismatched depth
@@ -262,7 +196,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
             {
                 if (kv.Key.depth != depth)
                 {
-                    Debug.Log($"[TileRaycast] Removing tile due to depth mismatch: {kv.Key}");
                     DestroyTile(kv.Key);
                 }
             }
