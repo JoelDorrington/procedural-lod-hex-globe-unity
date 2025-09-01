@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 /// <summary>
@@ -97,15 +98,15 @@ public class CameraController : MonoBehaviour
             if (t >= 1f) _rollResetActive = false;
         }
 
-    // Mouse scroll zoom
+        // Mouse scroll zoom
         float scroll = Input.GetAxis("Mouse ScrollWheel");
-        if (Mathf.Abs(scroll) > 0.0001f)
+        // scroll is usually between -0.3 and 0.3
+        float absScroll = Mathf.Abs(scroll);
+        if (absScroll > 0.0001f)
         {
             float proportionalDistance = Mathf.InverseLerp(minDistance, maxDistance, distance);
-            Debug.Log($"[CameraController] Proportional distance: {proportionalDistance}");
-            float scale = Mathf.Lerp(zoomSpeedMin, zoomSpeedMax, proportionalDistance);
-            float scrollStep = scroll * scale;
-            Debug.Log($"[CameraController] Zoom scroll: {scroll}, distance: {distance}, scale: {scale}, scrollStep: {scrollStep}");
+            float distanceScale = Mathf.Lerp(zoomSpeedMin, zoomSpeedMax, proportionalDistance);
+            float scrollStep = scroll * distanceScale;
             _targetDistance -= scrollStep;
             _targetDistance = Mathf.Clamp(_targetDistance, minDistance, maxDistance);
         }

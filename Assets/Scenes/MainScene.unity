@@ -420,11 +420,11 @@ MonoBehaviour:
   latitude: 0
   longitude: 0
   distance: 50
-  minDistance: 32
+  minDistance: 20
   maxDistance: 70
-  zoomSpeedMin: 0.5
-  zoomSpeedMax: 50
-  zoomSmoothTime: 0.15
+  zoomSpeedMin: 3
+  zoomSpeedMax: 20
+  zoomSmoothTime: 0.35
   rotationSpeed: 50
   rollSpeed: 60
   roll: 0
