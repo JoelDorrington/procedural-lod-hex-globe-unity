@@ -8,7 +8,13 @@ namespace HexGlobeProject.TerrainSystem.LOD
 {
     /// <summary>
     /// Manages baking and child tile LOD for procedural planet terrain.
+    ///
+    /// DEPRECATION NOTICE:
+    /// This class is deprecated. Tile streaming and camera-driven spawning have been
+    /// moved into camera-centric components such as `PlanetTileExplorerCam` and
+    /// `PlanetTileSpawner`. Prefer using those newer components for runtime LOD.
     /// </summary>
+    [System.Obsolete("PlanetLodManager is deprecated. Use PlanetTileExplorerCam and PlanetTileSpawner for camera-driven tile streaming.")]
     public class PlanetLodManager : MonoBehaviour
     {
         // ...existing fields...

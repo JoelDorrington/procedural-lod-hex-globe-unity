@@ -41,7 +41,12 @@ namespace HexGlobeProject.TerrainSystem
     public override float Sample(in Vector3 unitDirection, int resolution)
         {
             EnsureRanges();
-            // Base continents (soft)
+            
+            // IMPORTANT: Resolution should NOT affect the height values themselves!
+            // Higher resolution tiles must match the topology of lower resolution tiles.
+            // Resolution is only used for mesh density, not terrain generation.
+            
+            // Base continents (soft) - always at consistent frequency
             float continents = FractalPerlin(unitDirection, continentFrequency, continentOctaves, continentLacunarity, continentGain);
             // Shift to -1..1 then scale
             continents = continents * 2f - 1f;
@@ -61,7 +66,7 @@ namespace HexGlobeProject.TerrainSystem
             }
             mask = Mathf.Clamp01(mask); // accumulate then clamp
 
-            // Ridged fractal for mountains
+            // Ridged fractal for mountains - consistent parameters regardless of resolution
             float ridged = RidgedFractal(unitDirection, ridgeBaseFrequency, ridgeOctaves, ridgeLacunarity, ridgeGain, ridgeSharpness);
             float mountain = ridged * ridgeAmplitude * rangeAmplitude * mask;
 

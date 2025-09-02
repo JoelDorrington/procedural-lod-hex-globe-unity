@@ -19,15 +19,15 @@ MonoBehaviour:
   heightScale: 0.4
   seaLevel: 0
   shallowWaterBand: 2
-  cullBelowSea: 1
-  removeFullySubmergedTris: 1
+  cullBelowSea: 0
+  removeFullySubmergedTris: 0
   seaClampEpsilon: 0.01
   bakeDepth: 2
   splitTargetDepth: 4
   maxOctaveBake: -1
   maxOctaveSplit: -1
   debugElevationMultiplier: 1
-  debugDisableUnderwaterCulling: 0
+  debugDisableUnderwaterCulling: 1
   recalcNormals: 1
   shorelineDetail: 1
   shorelineDetailMinDepth: 4

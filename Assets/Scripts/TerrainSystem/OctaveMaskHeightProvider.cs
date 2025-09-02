@@ -31,10 +31,12 @@ namespace HexGlobeProject.TerrainSystem
         /// </summary>
         public float SampleOctaveMasked(in Vector3 dir, int maxInclusive)
         {
-            // Temporarily override maxOctave and call Sample
+            // Temporarily override maxOctave and call Sample with appropriate resolution
             int prev = this.maxOctave;
             this.maxOctave = maxInclusive;
-            float val = Sample(dir, 0); // Pass 0 or a suitable default for resolution
+            // Use a reasonable resolution for octave sampling - this maintains consistency
+            int samplingResolution = 32; // Base resolution for octave sampling
+            float val = Sample(dir, samplingResolution);
             this.maxOctave = prev;
             return val;
         }

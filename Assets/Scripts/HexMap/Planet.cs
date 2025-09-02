@@ -24,6 +24,9 @@ namespace HexGlobeProject.HexMap
         // Public settings for wireframe
         public Color wireframeColor = Color.black;
         public float lineThickness = 1f; // Note: line thickness might require a custom shader to be visible
+        [SerializeField]
+        [Tooltip("Enable dual wireframe overlay (hex game-board). Disabled by default during LOD development.")]
+        private bool enableWireframe = false;
         public enum DualSmoothingMode { None, Laplacian, LaplacianTangent, Taubin, TaubinTangent }
         [Tooltip("Smoothing method for dual vertices. Tangent variants preserve radius; Taubin reduces shrink.")]
         [HideInInspector] public DualSmoothingMode dualSmoothingMode = DualSmoothingMode.TaubinTangent;
@@ -84,8 +87,12 @@ namespace HexGlobeProject.HexMap
             Mesh sphereMesh = IcosphereGenerator.GenerateIcosphere(radius: sphereR, subdivisions: Mathf.Max(0, subdivisions));
             meshFilter.sharedMesh = sphereMesh;
 
-            // Build dual-mesh wireframe from triangle duals; projection to sphere is optional
-            BuildDualWireframe(sphereMesh, sphereR);
+            // Optionally build dual-mesh wireframe from triangle duals; projection to sphere is optional
+            // Guarded by `enableWireframe` so wireframe can be disabled during LOD development.
+            if (enableWireframe)
+            {
+                BuildDualWireframe(sphereMesh, sphereR);
+            }
 
             Debug.Log($"Icosphere: Subdiv={subdivisions}, Vertices={sphereMesh.vertexCount}, Triangles={sphereMesh.triangles.Length / 3}");
         }

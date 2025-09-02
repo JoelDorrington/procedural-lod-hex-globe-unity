@@ -45,7 +45,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
         /// <param name="rawMin">Minimum sampled height</param>
         /// <param name="rawMax">Maximum sampled height</param>
         /// <param name="outwardNormals">If true, flip triangles for outward-facing normals; if false, leave as-is for inward-facing normals.</param>
-        public void BuildTileMesh(TileData data, ref float rawMin, ref float rawMax, bool outwardNormals = true)
+    public void BuildTileMesh(TileData data, ref float rawMin, ref float rawMax, bool outwardNormals = true)
         {
             _verts.Clear();
             _tris.Clear();
@@ -69,11 +69,21 @@ namespace HexGlobeProject.TerrainSystem.LOD
             {
                 for (int i = 0; i < res; i++)
                 {
-                    float u = (i * inv + data.id.x) / (1 << data.id.depth);
-                    float v = (j * inv + data.id.y) / (1 << data.id.depth);
-                    Vector3 dir = CubeSphere.FaceLocalToUnit(data.id.face, u * 2f - 1f, v * 2f - 1f);
-                    _uvs.Add(new Vector2(u, v));
+                    // Calculate global normalized coordinates that are consistent across all depth levels
+                    // This ensures the same world position always samples the same height regardless of tile depth
+                    // Fixed: Map tile coordinates to include proper boundaries to eliminate gaps between tiles
+                    float tileU = (float)i / (float)(res - 1); // Map i from [0, res-1] to [0, 1] within tile
+                    float tileV = (float)j / (float)(res - 1); // Map j from [0, res-1] to [0, 1] within tile
+                    
+                    // Map tile-local coordinates to global face coordinates
+                    int tilesPerEdge = 1 << data.id.depth;
+                    float globalU = ((float)data.id.x + tileU) / (float)tilesPerEdge;
+                    float globalV = ((float)data.id.y + tileV) / (float)tilesPerEdge;
+                    
+                    Vector3 dir = CubeSphere.FaceLocalToUnit(data.id.face, globalU * 2f - 1f, globalV * 2f - 1f);
+                    _uvs.Add(new Vector2(globalU, globalV));
 
+                    // Sample height using the consistent world direction, with resolution passed for detail control
                     float raw = heightProvider != null ? heightProvider.Sample(in dir, res) : 0f;
                     raw *= config.heightScale;
                     if (raw < rawMin) rawMin = raw;
@@ -137,6 +147,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 }
             }
 
+            // stitching removed: mesh uses shared global samples to ensure edge consistency
+
             // Fast triangle winding correction: flip if outwardNormals is true
             if (outwardNormals)
             {
@@ -185,5 +197,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             int resolution = bakedDepth > 0 ? bakedDepth : 1;
             return heightProvider != null ? heightProvider.Sample(in dir, resolution) : 0f;
         }
+
+    // stitching implementation removed: tile edges use shared global sample coordinates for seamlessness
     }
 }

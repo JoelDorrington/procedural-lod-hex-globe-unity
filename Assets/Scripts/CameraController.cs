@@ -20,8 +20,9 @@ public class CameraController : MonoBehaviour
     [Header("Distance Settings")]
     // Current distance from target
     public float distance = 30f;
+    private float _proportionalDistance = 0f;
     public float minDistance = 5f;
-    public float maxDistance = 200f;
+    public float maxDistance = 80f;
     [Tooltip("Min zoom speed factor (scaled by current distance)")] public float zoomSpeedMin = .5f;
     [Tooltip("Max zoom speed factor (scaled by current distance)")] public float zoomSpeedMax = 20f;
     [Tooltip("Smoothing time for zoom interpolation")] public float zoomSmoothTime = 0.15f;
@@ -42,6 +43,8 @@ public class CameraController : MonoBehaviour
     [Header("Framing / Auto-Fit")]
     [Tooltip("Optional: approximate radius of target object for auto framing (0 = disabled)")] public float targetRadius = 0f;
     [Tooltip("Press this key to reframe camera to show targetRadius within view")] public KeyCode reframeKey = KeyCode.F;
+
+    public float ProportionalDistance => _proportionalDistance;
 
     void Start()
     {
@@ -100,12 +103,12 @@ public class CameraController : MonoBehaviour
 
         // Mouse scroll zoom
         float scroll = Input.GetAxis("Mouse ScrollWheel");
+        _proportionalDistance = Mathf.InverseLerp(minDistance, maxDistance, distance);
         // scroll is usually between -0.3 and 0.3
         float absScroll = Mathf.Abs(scroll);
         if (absScroll > 0.0001f)
         {
-            float proportionalDistance = Mathf.InverseLerp(minDistance, maxDistance, distance);
-            float distanceScale = Mathf.Lerp(zoomSpeedMin, zoomSpeedMax, proportionalDistance);
+            float distanceScale = Mathf.Lerp(zoomSpeedMin, zoomSpeedMax, _proportionalDistance);
             float scrollStep = scroll * distanceScale;
             _targetDistance -= scrollStep;
             _targetDistance = Mathf.Clamp(_targetDistance, minDistance, maxDistance);

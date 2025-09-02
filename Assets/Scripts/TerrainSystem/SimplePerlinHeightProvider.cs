@@ -17,9 +17,11 @@ namespace HexGlobeProject.TerrainSystem
 
         public override float Sample(in Vector3 unitDirection, int resolution)
         {
-            // Use resolution to scale baseFrequency for more detail at higher resolutions
-            float freqScale = Mathf.Max(1f, resolution / 16f);
-            Vector3 p = unitDirection * baseFrequency * freqScale;
+            // IMPORTANT: Resolution should NOT affect the height values themselves!
+            // Higher resolution tiles must match the topology of lower resolution tiles.
+            // Resolution is only used for mesh density, not terrain generation.
+            
+            Vector3 p = unitDirection * baseFrequency;
             float sum = 0f;
             float amp = 1f;
             float freq = 1f;

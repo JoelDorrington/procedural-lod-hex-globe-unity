@@ -129,7 +129,6 @@ GameObject:
   m_Component:
   - component: {fileID: 257686384}
   - component: {fileID: 257686383}
-  - component: {fileID: 257686385}
   - component: {fileID: 257686386}
   m_Layer: 0
   m_Name: Planet
@@ -177,29 +176,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &257686385
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 257686382}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f3ca1b32fd3067a47b6d8fe2af623d2c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  planetSphereTransform: {fileID: 0}
-  config: {fileID: 11400000, guid: 39abb1e81f4f4774a84dbe903a64257d, type: 2}
-  targetCamera: {fileID: 2097968224}
-  terrainMaterial: {fileID: 2100000, guid: 0df5d813211e9c6428c2aec838d9605d, type: 2}
-  childHeightEnhancement: 1
-  enableProximitySplit: 1
-  splitTargetDepthOverride: -1
-  splitFadeDuration: 1
-  splitChildResolutionMultiplier: 4
-  splitDistanceThreshold: 35
-  mergeDistanceThreshold: 38
 --- !u!114 &257686386
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -212,8 +188,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 145b3e5808783e44d88b33d3d2a85e85, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  manager: {fileID: 257686385}
-  GameCamera: {fileID: 2097968224}
+  GameCamera: {fileID: 2097968226}
+  config: {fileID: 11400000, guid: 39abb1e81f4f4774a84dbe903a64257d, type: 2}
+  planetTransform: {fileID: 257686384}
+  terrainMaterial: {fileID: 2100000, guid: 0df5d813211e9c6428c2aec838d9605d, type: 2}
+  maxDepth: 2
+  _maxRays: 200
 --- !u!1 &881747947
 GameObject:
   m_ObjectHideFlags: 0
@@ -419,10 +399,10 @@ MonoBehaviour:
   target: {fileID: 257686384}
   latitude: 0
   longitude: 0
-  distance: 50
-  minDistance: 20
+  distance: 65
+  minDistance: 31
   maxDistance: 70
-  zoomSpeedMin: 3
+  zoomSpeedMin: 2
   zoomSpeedMax: 20
   zoomSmoothTime: 0.35
   rotationSpeed: 50
