@@ -14,13 +14,14 @@ namespace HexGlobeProject.TerrainSystem.LOD
         public float minHeight;
         public float maxHeight;
         public float error; // geometric error vs parent (screen-space later)
+        public Vector3[] tileSlotCornerBounds; // corner positions of the tile slots on the ocean surface for pre-computed reasoning
         public Mesh mesh;
         public bool isBaked; // baked (Low/Medium/High) vs streamed (Extreme)
         public Vector3[] tempVerts; // transient during build (can be cleared)
         public Vector3[] normals;   // optional baked normals
-        public Boolean isSplit = false; // whether this tile has been split into children
         // Runtime spatial helpers
         public Vector3 center; // approximate tile center (world)
         public float boundsRadius; // approximate tile bounding sphere radius (unused yet)
+
     }
 }

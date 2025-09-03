@@ -53,7 +53,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
             _uvs.Clear();
 
             int res = data.resolution;
-            float inv = 1f / (res - 1);
             float radius = config.baseRadius;
             float minH = float.MaxValue;
             float maxH = float.MinValue;
@@ -61,7 +60,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             int vertCounter = 0;
             bool doCull = config.cullBelowSea && !config.debugDisableUnderwaterCulling;
             bool removeTris = doCull && config.removeFullySubmergedTris;
-            float seaR = config.baseRadius + config.seaLevel;
+            float seaR = radius + config.seaLevel;
             float eps = config.seaClampEpsilon;
             var submergedFlags = removeTris ? new List<bool>(res * res) : null;
 
@@ -147,12 +146,29 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 }
             }
 
-            // stitching removed: mesh uses shared global samples to ensure edge consistency
-
-            // Fast triangle winding correction: flip if outwardNormals is true
-            if (outwardNormals)
+            // Ensure triangle winding matches vertex normals (so triangles naturally face away from sphere)
+            // Check the geometric normal of the first triangle against the averaged vertex normal;
+            // flip winding only when necessary to satisfy the requested outwardNormals parameter.
+            if (_tris.Count >= 3 && _normals.Count > 0)
             {
-                FlipTriangleWinding(_tris);
+                int aIdx = _tris[0];
+                int bIdx = _tris[1];
+                int cIdx = _tris[2];
+                Vector3 aPos = _verts[aIdx];
+                Vector3 bPos = _verts[bIdx];
+                Vector3 cPos = _verts[cIdx];
+                Vector3 triNormal = Vector3.Cross(bPos - aPos, cPos - aPos).normalized;
+                Vector3 avgVertNormal = (_normals[aIdx] + _normals[bIdx] + _normals[cIdx]).normalized;
+
+                // dot > 0 => triangle geometric normal points roughly same direction as vertex normals
+                float dot = Vector3.Dot(triNormal, avgVertNormal);
+
+                bool triFacesSameAsVertexNormals = dot >= 0f;
+
+                if (!triFacesSameAsVertexNormals)
+                { // just in case
+                    FlipTriangleWinding(_tris);
+                }
             }
             var mesh = new Mesh();
             mesh.indexFormat = (res * res > 65000) ? UnityEngine.Rendering.IndexFormat.UInt32 : UnityEngine.Rendering.IndexFormat.UInt16;
@@ -188,16 +204,5 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 tris[t + 2] = tmp;
             }
         }
-
-        private float SampleRawWithOctaveCap(Vector3 dir, int maxOctave)
-        {
-            if (heightProvider is IOctaveSampler sampler && maxOctave >= 0)
-                return sampler.SampleOctaveMasked(dir, maxOctave);
-            // Use bakedDepth as a fallback for resolution, or pass a suitable value
-            int resolution = bakedDepth > 0 ? bakedDepth : 1;
-            return heightProvider != null ? heightProvider.Sample(in dir, resolution) : 0f;
-        }
-
-    // stitching implementation removed: tile edges use shared global sample coordinates for seamlessness
     }
 }

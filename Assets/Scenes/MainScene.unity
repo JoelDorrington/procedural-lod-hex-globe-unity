@@ -152,6 +152,7 @@ MonoBehaviour:
   sphereRadius: 30
   wireframeColor: {r: 0.19999999, g: 0.19999999, b: 0.19999999, a: 1}
   lineThickness: 1
+  enableWireframe: 0
   dualSmoothingMode: 4
   dualSmoothingIterations: 64
   smoothLambda: 1
@@ -192,8 +193,15 @@ MonoBehaviour:
   config: {fileID: 11400000, guid: 39abb1e81f4f4774a84dbe903a64257d, type: 2}
   planetTransform: {fileID: 257686384}
   terrainMaterial: {fileID: 2100000, guid: 0df5d813211e9c6428c2aec838d9605d, type: 2}
-  maxDepth: 2
+  maxDepth: 4
   _maxRays: 200
+  radialBiasExponent: 2
+  debugShowSphereBounds: 1
+  debugDrawRays: 1
+  debugRayColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
+  debugRayLength: 100
+  debugSampleLifetime: 0.03
+  viewportPadding: 0.1
 --- !u!1 &881747947
 GameObject:
   m_ObjectHideFlags: 0

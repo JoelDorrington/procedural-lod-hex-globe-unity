@@ -37,14 +37,145 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
         [SerializeField]
         [Tooltip("Approximate number of rays to cast; actual cast uses a square sampling grid <= this value")]
-        private int _maxRays = 200;
+        private int _maxRays = 100;
 
-    // stitching removed: tile meshes rely on shared sample coordinates for edge consistency
+    [Header("Adaptive Ray Distribution")]
+    [SerializeField]
+    [Tooltip("Exponent for radial bias smoothing function. Higher values concentrate rays more toward sphere edges.")]
+    private float radialBiasExponent = 2.0f;
+
+    [SerializeField]
+    [Tooltip("Debug: show sphere bounds in viewport space")]
+    private bool debugShowSphereBounds = false;    [Header("Debug (editor/runtime)")]
+    [SerializeField]
+    [Tooltip("Draw sampled rays in the Scene view / Game view when running.")]
+    private bool debugDrawRays = false;
+
+    [SerializeField]
+    [Tooltip("Color used for rays that did not hit the sphere")]
+    private Color debugRayColor = Color.yellow;
+
+    [SerializeField]
+    [Tooltip("Length for debug ray visualization (in world units)")]
+    private float debugRayLength = 1000f;
+
+    // Runtime storage for last sampling pass (not serialized)
+    private List<Vector3> _dbgSampleOrigins = new();
+    private List<Vector3> _dbgSampleDirs = new();
+    private List<bool> _dbgSampleHit = new();
+    // timestamps for each debug sample so we can keep samples visible for a short time to avoid flicker
+    private List<float> _dbgSampleTime = new();
+
+    [SerializeField]
+    [Tooltip("How long (seconds) to keep debug samples visible before they're culled - prevents flicker when samples are updated asynchronously.")]
+    private float debugSampleLifetime = 0.25f;
+
+        private void OnDrawGizmos()
+        {
+            if (!debugDrawRays) 
+            {
+                // clear any stored samples to avoid unbounded growth
+                _dbgSampleOrigins.Clear();
+                _dbgSampleDirs.Clear();
+                _dbgSampleHit.Clear();
+                _dbgSampleTime.Clear();
+                return;
+            }
+
+            // Draw all stored samples (do not pop them) to avoid flicker when Gizmos updates between frames.
+            // Samples are kept for debugSampleLifetime seconds and then removed.
+            float now = Time.realtimeSinceStartup;
+            int count = _dbgSampleOrigins.Count;
+            for (int i = 0; i < count; i++)
+            {
+                Vector3 o = _dbgSampleOrigins[i];
+                Vector3 d = _dbgSampleDirs[i];
+                bool hit = _dbgSampleHit[i];
+                Gizmos.color = hit ? Color.green : debugRayColor;
+                Gizmos.DrawLine(o, o + d * debugRayLength);
+                Gizmos.DrawSphere(o + d * Mathf.Min(debugRayLength, 10f), 0.5f);
+            }
+
+            // Cull old samples while iterating backwards to keep list indices valid
+            for (int i = _dbgSampleOrigins.Count - 1; i >= 0; i--)
+            {
+                if (now - _dbgSampleTime[i] > debugSampleLifetime)
+                {
+                    _dbgSampleOrigins.RemoveAt(i);
+                    _dbgSampleDirs.RemoveAt(i);
+                    _dbgSampleHit.RemoveAt(i);
+                    _dbgSampleTime.RemoveAt(i);
+                }
+            }
+
+            // Debug: draw sphere bounds in viewport
+            if (debugShowSphereBounds && GameCamera != null)
+            {
+                Camera cam = GameCamera.GetComponent<Camera>();
+                if (cam != null)
+                {
+                    Vector3 planetCenter = planetTransform != null ? planetTransform.position : this.transform.position;
+                    float cameraDistance = (cam.transform.position - planetCenter).magnitude;
+                    float planetRadius = config != null ? config.baseRadius : 1f;
+                    
+                    if (cameraDistance > planetRadius && planetRadius > 0f)
+                    {
+                        float angularRadius = Mathf.Asin(planetRadius / cameraDistance);
+                        float vFovHalf = cam.fieldOfView * Mathf.Deg2Rad * 0.5f;
+                        float sphereViewportRadius = Mathf.Tan(angularRadius) / Mathf.Tan(vFovHalf);
+                        sphereViewportRadius = Mathf.Clamp(sphereViewportRadius, 0f, 1.0f);
+                        
+                        // Draw sphere bounds as a circle in screen space
+                        Gizmos.color = Color.cyan;
+                        Vector3 screenCenter = cam.ViewportToWorldPoint(new Vector3(0.5f, 0.5f, cam.nearClipPlane + 1f));
+                        float distance = cam.nearClipPlane + 1f;
+                        float worldRadius = sphereViewportRadius * distance * Mathf.Tan(vFovHalf) * 2f;
+                        
+                        // Draw circle approximation
+                        int segments = 32;
+                        Vector3 prevPoint = screenCenter + cam.transform.right * worldRadius;
+                        for (int i = 1; i <= segments; i++)
+                        {
+                            float angle = (float)i / segments * 2f * Mathf.PI;
+                            Vector3 point = screenCenter + cam.transform.right * (Mathf.Cos(angle) * worldRadius) 
+                                                        + cam.transform.up * (Mathf.Sin(angle) * worldRadius);
+                            Gizmos.DrawLine(prevPoint, point);
+                            prevPoint = point;
+                        }
+                    }
+                }
+            }
+        }
+
+        [SerializeField]
+        [Tooltip("Viewport padding (0..0.2) - fraction of the viewport to sample outside the screen so tiles are spawned slightly before they enter view. Clamped to 20% max. Example: 0.05 = 5% padding on each side.")]
+        private float viewportPadding = 0.05f;
+
+        // stitching removed: tile meshes rely on shared sample coordinates for edge consistency
 
         // ----- Internal state -----
         private PlanetTileMeshBuilder meshBuilder;
         private readonly Dictionary<TileId, GameObject> tileObjects = new();
         private readonly Dictionary<TileId, float> tileSpawnTimes = new();
+        private Vector2[] _baseSamples = null;
+        private int _baseSampleGrid = 0; // sqrtRays
+        private int _sampleCapacity = 0;
+
+        private void EnsureBaseSamples(int sqrtRays)
+        {
+            if (_baseSamples != null && _baseSampleGrid == sqrtRays) return;
+            _baseSampleGrid = sqrtRays;
+            _sampleCapacity = sqrtRays * sqrtRays;
+            _baseSamples = new Vector2[_sampleCapacity];
+            int idx = 0;
+            for (int y = 0; y < sqrtRays; y++)
+            {
+                for (int x = 0; x < sqrtRays; x++)
+                {
+                    _baseSamples[idx++] = new Vector2((x + 0.5f) / sqrtRays, (y + 0.5f) / sqrtRays);
+                }
+            }
+        }
 
         private Coroutine _heuristicCoroutine;
         private float _lastHeuristicTime = 0f;
@@ -63,6 +194,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 throw new System.NotImplementedException("Default config not available");
             }
             meshBuilder = new PlanetTileMeshBuilder(config, config.heightProvider, null, 0, 1, 0f, false);
+
+            // Ensure viewport padding stays in a reasonable range to avoid excessive off-screen sampling
+                float originalPadding = viewportPadding;
+                viewportPadding = Mathf.Clamp(viewportPadding, 0f, 0.2f);
         }
 
         /// <summary>
@@ -76,7 +211,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 int newDepth = Mathf.RoundToInt(Mathf.Lerp(0, maxDepth, 1-GameCamera.ProportionalDistance));
                 if (newDepth != _currentDepth)
                 {
-                    Debug.Log($"[TileDepth] Depth changed: {_currentDepth} -> {newDepth} (distance: {GameCamera.ProportionalDistance:F3})");
                     _currentDepth = newDepth;
                 }
             }
@@ -95,6 +229,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
         /// </summary>
         public GameObject GetOrSpawnTile(TileId id, int resolution)
         {
+            // Debug logging for north pole tiles
+            bool isNorthPole = (id.face == 2 && debugDrawRays && id.depth > 0);
+            
             if (tileObjects.TryGetValue(id, out var go))
             {
                 if (go != null)
@@ -120,7 +257,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
             var spawner = new PlanetTileSpawner();
             spawner.SpawnOrUpdateTileGO(tileData, tileObjects, terrainMaterial, this.transform);
 
-            tileObjects.TryGetValue(id, out go);
+            bool foundAfterSpawn = tileObjects.TryGetValue(id, out go);
+
             if (go != null)
             {
                 go.SetActive(true);
@@ -176,32 +314,124 @@ namespace HexGlobeProject.TerrainSystem.LOD
             
             int sqrtRays = Mathf.CeilToInt(Mathf.Sqrt(raysToCast));
             int rayCount = sqrtRays * sqrtRays;
+            EnsureBaseSamples(sqrtRays);
 
             Vector3 planetCenter = planetTransform != null ? planetTransform.position : this.transform.position;
 
-            for (int i = 0; i < rayCount; i++)
+            // Expand sampling range by viewportPadding so we cast rays slightly off-screen.
+            // Apply an extra vertical multiplier to account for aspect differences.
+            float vPadMultiplier = 1.618f;
+            float padH = Mathf.Clamp01(viewportPadding);
+            float padV = Mathf.Clamp01(viewportPadding) * vPadMultiplier;
+
+            float minU = -padH;
+            float maxU = 1f + padH;
+            float minV = -padV;
+            float maxV = 1f + padV;
+
+            int iter = 0;
+            
+            // Calculate sphere's angular radius and viewport bounds for adaptive ray distribution
+            float cameraDistance = (cam.transform.position - planetCenter).magnitude;
+            
+            // Calculate angular radius of sphere as seen from camera
+            float angularRadius = 0f;
+            float sphereViewportRadius = 0f;
+            if (cameraDistance > planetRadius && planetRadius > 0f)
             {
-                float u = (i % sqrtRays + 0.5f) / sqrtRays;
-                float v = (i / sqrtRays + 0.5f) / sqrtRays;
+                angularRadius = Mathf.Asin(planetRadius / cameraDistance);
+                // Convert angular radius to viewport radius using camera's field of view
+                float vFovHalf = cam.fieldOfView * Mathf.Deg2Rad * 0.5f;
+                sphereViewportRadius = Mathf.Tan(angularRadius) / Mathf.Tan(vFovHalf);
+                sphereViewportRadius = Mathf.Clamp(sphereViewportRadius, 0f, 1.0f);
+            }
+            
+            // Linear transition: ProportionalDistance 1.0 (far) = full bias, 0.0 (close) = even distribution
+            float biasStrength = GameCamera != null ? GameCamera.ProportionalDistance : 0f;
+            
+            // Deterministic sampling over the precomputed grid
+            int rayCountIter = sqrtRays * sqrtRays;
+            for (int s = 0; s < rayCountIter; s++)
+            {
+                float su = _baseSamples[s].x;
+                float sv = _baseSamples[s].y;
+
+                // Apply adaptive radial bias based on camera distance
+                if (biasStrength > 0f && sphereViewportRadius > 0f)
+                {
+                    // Convert to centered coordinates [-0.5, 0.5]
+                    float centeredU = su - 0.5f;
+                    float centeredV = sv - 0.5f;
+                    float currentRadius = Mathf.Sqrt(centeredU * centeredU + centeredV * centeredV);
+                    
+                    if (currentRadius > 0f)
+                    {
+                        // Apply quadratic radial bias - push samples toward sphere edge
+                        float normalizedRadius = currentRadius / 0.5f; // normalize to [0,1]
+                        float biasedRadius = Mathf.Pow(normalizedRadius, radialBiasExponent);
+                        
+                        // Scale biased radius to sphere bounds and blend with original based on bias strength
+                        float targetRadius = Mathf.Lerp(normalizedRadius, biasedRadius * sphereViewportRadius, biasStrength);
+                        targetRadius = Mathf.Min(targetRadius, sphereViewportRadius); // clamp to sphere bounds
+                        
+                        float scale = (targetRadius * 0.5f) / currentRadius;
+                        centeredU *= scale;
+                        centeredV *= scale;
+                        
+                        su = centeredU + 0.5f;
+                        sv = centeredV + 0.5f;
+                        
+                        // Clamp to valid viewport range
+                        su = Mathf.Clamp01(su);
+                        sv = Mathf.Clamp01(sv);
+                    }
+                }
+
+                // map into expanded viewport using separate horizontal/vertical padding
+                float u = Mathf.Lerp(minU, maxU, su);
+                float v = Mathf.Lerp(minV, maxV, sv);
 
                 Ray ray = cam.ViewportPointToRay(new Vector3(u, v, 0f));
 
-                // Ray-sphere intersection test (quick reject using closest approach)
+                // For rays that would miss the sphere, clamp them to hit the sphere edge
                 Vector3 camToPlanet = planetCenter - ray.origin;
-                float t = Vector3.Dot(camToPlanet, ray.direction);
-                Vector3 closest = ray.origin + ray.direction * t;
-                float distToCenter = (closest - planetCenter).magnitude;
-                if (distToCenter > planetRadius) continue;
+                float projectionLength = Vector3.Dot(camToPlanet, ray.direction);
+                Vector3 closestPoint = ray.origin + ray.direction * projectionLength;
+                float distToCenter = (closestPoint - planetCenter).magnitude;
+                
+                if (distToCenter > planetRadius)
+                {
+                    // Clamp ray to sphere edge with minimal padding
+                    float sphereRadiusWithPadding = planetRadius * 0.999f; // slight inward padding
+                    Vector3 directionToClosest = (closestPoint - planetCenter).normalized;
+                    Vector3 clampedPoint = planetCenter + directionToClosest * sphereRadiusWithPadding;
+                    ray.direction = (clampedPoint - ray.origin).normalized;
+                }
 
+                // Ray-sphere intersection test (should always hit now after clamping)
                 float a = Vector3.Dot(ray.direction, ray.direction);
                 float b = 2f * Vector3.Dot(ray.direction, ray.origin - planetCenter);
                 float c = (ray.origin - planetCenter).sqrMagnitude - planetRadius * planetRadius;
                 float discriminant = b * b - 4f * a * c;
-                if (discriminant < 0f) continue;
+                bool didHit = discriminant >= 0f;
 
-                float sqrtDisc = Mathf.Sqrt(discriminant);
-                float t0 = (-b - sqrtDisc) / (2f * a);
-                if (t0 < 0f) continue; // intersection behind camera
+                float t0 = -1f;
+                if (didHit)
+                {
+                    float sqrtDisc = Mathf.Sqrt(Mathf.Max(0f, discriminant));
+                    t0 = (-b - sqrtDisc) / (2f * a);
+                    if (t0 < 0f) didHit = false; // intersection behind camera
+                }
+
+                if (debugDrawRays)
+                {
+                    _dbgSampleOrigins.Add(ray.origin);
+                    _dbgSampleDirs.Add(ray.direction.normalized);
+                    _dbgSampleHit.Add(didHit);
+                    _dbgSampleTime.Add(Time.realtimeSinceStartup);
+                }
+
+                if (!didHit) continue;
 
                 Vector3 hitPoint = ray.origin + ray.direction * t0;
 
@@ -237,11 +467,13 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 int y = Mathf.Clamp(Mathf.FloorToInt((fy + 1f) / 2f * tilesPerEdge), 0, tilesPerEdge - 1);
 
                 var id = new TileId((byte)face, (byte)depth, (ushort)x, (ushort)y);
+                
                 hitTiles.Add(id);
 
-                if ((i & 63) == 0) // yield periodically (every 64 iterations)
-                    yield return null;
-            }
+                    iter++;
+                    if ((iter & 63) == 0) // yield periodically (every 64 iterations)
+                        yield return null;
+                }
 
             // Snapshot existing keys to avoid modifying collection while iterating
             var existingKeys = tileObjects.Keys.ToList();
@@ -250,7 +482,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
             foreach (var id in hitTiles)
             {
                 int resolution = ResolveResolutionForDepth(depth);
-                GetOrSpawnTile(id, resolution);
+                
+                GameObject tileGO = GetOrSpawnTile(id, resolution);
+                
                 existingKeys.Remove(id);
             }
 
