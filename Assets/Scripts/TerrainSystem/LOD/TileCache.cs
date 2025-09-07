@@ -32,10 +32,19 @@ namespace HexGlobeProject.TerrainSystem.LOD
             var tileData = new TileData { id = id, resolution = resolution, isBaked = true };
             float dummyMin = 0, dummyMax = 0;
             meshBuilder.BuildTileMesh(tileData, ref dummyMin, ref dummyMax);
-            var spawner = new PlanetTileSpawner();
-            spawner.SpawnOrUpdateTileGO(tileData, tileCache, terrainMaterial, parentTransform);
-            tileCache.TryGetValue(id, out go);
-            return go;
+            // Directly create and initialize the tile GameObject
+            var newGo = new GameObject($"Tile_{id.faceNormal}_d{id.depth}");
+            newGo.transform.position = tileData.center;
+            newGo.transform.SetParent(parentTransform, true);
+            var terrainTile = newGo.AddComponent<PlanetTerrainTile>();
+            terrainTile.Initialize(id, tileData, colliderMeshGenerator: _ => tileData.mesh);
+            
+            // Use centralized material and layer configuration
+            int tileLayer = LayerMask.NameToLayer("TerrainTiles");
+            terrainTile.ConfigureMaterialAndLayer(terrainMaterial, tileLayer);
+            
+            tileCache[id] = newGo;
+            return newGo;
         }
 
         // Optionally, add logic to remove or deactivate tiles not visible/adjacent

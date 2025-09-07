@@ -1,18 +1,20 @@
 using UnityEngine;
 using System.Collections.Generic;
-using HexGlobeProject.TerrainSystem;
+using HexGlobeProject.Util;
 
 namespace HexGlobeProject.TerrainSystem.LOD
 {
     public class PlanetTileMeshBuilder
     {
+        // Simple cache so repeated builds for the same TileId return the same Mesh instance.
+        // Cache both the Mesh and the sampled raw height range so callers that pass
+        // ref rawMin/rawMax receive meaningful values even when the mesh is reused.
+        private struct CachedMeshEntry { public Mesh mesh; public float minH; public float maxH; public Vector3 centerUsed; public int resolutionUsed; }
+        private static readonly Dictionary<TileId, CachedMeshEntry> s_meshCache = new();
         private readonly TerrainConfig config;
         private readonly TerrainHeightProviderBase heightProvider;
-        private readonly OctaveMaskHeightProvider octaveWrapper;
-        private readonly int bakedDepth;
-        private readonly float splitChildResolutionMultiplier;
-        private readonly float childHeightEnhancement;
-        private readonly bool _edgePromotionRebuild;
+        private readonly Vector3 planetCenter = default;
+        public TerrainConfig Config => config;
 
         // Temporary lists for mesh generation
         private readonly List<Vector3> _verts = new();
@@ -22,20 +24,12 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
         public PlanetTileMeshBuilder(
             TerrainConfig config,
-            TerrainHeightProviderBase heightProvider,
-            OctaveMaskHeightProvider octaveWrapper,
-            int bakedDepth,
-            float splitChildResolutionMultiplier,
-            float childHeightEnhancement,
-            bool edgePromotionRebuild)
+            TerrainHeightProviderBase heightProvider = null,
+            Vector3 planetCenter = default)
         {
             this.config = config;
             this.heightProvider = heightProvider;
-            this.octaveWrapper = octaveWrapper;
-            this.bakedDepth = bakedDepth;
-            this.splitChildResolutionMultiplier = splitChildResolutionMultiplier;
-            this.childHeightEnhancement = childHeightEnhancement;
-            this._edgePromotionRebuild = edgePromotionRebuild;
+            this.planetCenter = planetCenter;
         }
 
         /// <summary>
@@ -44,19 +38,54 @@ namespace HexGlobeProject.TerrainSystem.LOD
         /// <param name="data">Tile data to populate</param>
         /// <param name="rawMin">Minimum sampled height</param>
         /// <param name="rawMax">Maximum sampled height</param>
-        /// <param name="outwardNormals">If true, flip triangles for outward-facing normals; if false, leave as-is for inward-facing normals.</param>
-    public void BuildTileMesh(TileData data, ref float rawMin, ref float rawMax, bool outwardNormals = true)
+        public void BuildTileMesh(TileData data, ref float rawMin, ref float rawMax)
         {
+            // Note: cache lookup moved later after we obtain the precomputed 'entry'
+            // so we can verify the cached mesh was built with the same center.
+
             _verts.Clear();
             _tris.Clear();
             _normals.Clear();
             _uvs.Clear();
 
+            // Reserve capacity to avoid repeated reallocations for large resolutions
+            int expectedVertsCap = data.resolution * data.resolution;
+            if (_verts.Capacity < expectedVertsCap) _verts.Capacity = expectedVertsCap;
+            if (_normals.Capacity < expectedVertsCap) _normals.Capacity = expectedVertsCap;
+            if (_uvs.Capacity < expectedVertsCap) _uvs.Capacity = expectedVertsCap;
+
             int res = data.resolution;
             float radius = config.baseRadius;
             float minH = float.MaxValue;
             float maxH = float.MinValue;
-            Vector3 centerAccum = Vector3.zero;
+
+            // Resolve a height provider to use for sampling. If the injected provider is null
+            // (for example a serialized reference couldn't be deserialized), fall back to
+            // the config's provider or a new default SimplePerlinHeightProvider so terrain
+            // is still generated instead of flat tiles.
+            var provider = heightProvider ?? config.heightProvider ?? (TerrainHeightProviderBase)new SimplePerlinHeightProvider();
+
+            // Calculate tile center using canonical barycentric center (resolution-independent)
+            Vector3 canonicalTileCenter;
+            if (data.id.face >= 0)
+            {
+                // Use discrete tile coordinates for canonical center calculation
+                IcosphereMapping.GetTileBarycentricCenter(data.id.x, data.id.y, data.id.depth, out float centerU, out float centerV);
+                Vector3 centerDir = IcosphereMapping.BarycentricToWorldDirection(data.id.face, centerU, centerV).normalized;
+
+                // Sample height at canonical center for consistent positioning
+                float centerHeight = provider.Sample(in centerDir, res) * config.heightScale;
+                canonicalTileCenter = centerDir * (radius + centerHeight);
+            }
+            else
+            {
+                // Fallback: use faceNormal as approximate center direction
+                Vector3 centerDir = data.id.faceNormal.normalized;
+                float centerHeight = provider.Sample(in centerDir, res) * config.heightScale;
+                canonicalTileCenter = centerDir * (radius + centerHeight);
+            }
+
+            Vector3 centerAccum = Vector3.zero; // Still accumulate for fallback/validation
             int vertCounter = 0;
             bool doCull = config.cullBelowSea && !config.debugDisableUnderwaterCulling;
             bool removeTris = doCull && config.removeFullySubmergedTris;
@@ -64,32 +93,130 @@ namespace HexGlobeProject.TerrainSystem.LOD
             float eps = config.seaClampEpsilon;
             var submergedFlags = removeTris ? new List<bool>(res * res) : null;
 
+            // Debug observability: measure time spent sampling vs building triangles and detect degenerate tris
+            System.Diagnostics.Stopwatch swTotal = null;
+            System.Diagnostics.Stopwatch swSampling = null;
+            System.Diagnostics.Stopwatch swTriBuild = null;
+            int degenerateTriangleCount = 0;
+            if (UnityEngine.Debug.isDebugBuild)
+            {
+                swTotal = System.Diagnostics.Stopwatch.StartNew();
+                swSampling = new System.Diagnostics.Stopwatch();
+                swTriBuild = new System.Diagnostics.Stopwatch();
+            }
+
+            // Per-tile canonical lookup: get 1-D tile index and precomputed entry
+            if (!PlanetTileVisibilityManager.GetPrecomputedIndex(data.id, out int tileIndex, out var entry))
+                throw new System.Exception("Failed to find precomputed entry for tile: " + data.id);
+
+            // Return cached mesh instance when available to keep reference equality stable.
+            if (data != null && data.id.face >= 0)
+            {
+                if (s_meshCache.TryGetValue(data.id, out var existing))
+                {
+                    // Guard against Unity 'destroyed' objects being present in the static cache
+                    // (happens in test runs where teardown can destroy created Meshes). If the
+                    // cached Mesh has been destroyed, drop the cache entry and fall through to
+                    // rebuilding a fresh mesh.
+                    if (existing.mesh == null)
+                    {
+                        try { s_meshCache.Remove(data.id); } catch { }
+                    }
+                    else if (existing.mesh.name != null && existing.mesh.name.EndsWith("_local"))
+                    {
+                        // Some older code paths created a "_local" clone and it may have been
+                        // cached accidentally; treat such cache entries as stale and rebuild.
+                        try { s_meshCache.Remove(data.id); } catch { }
+                    }
+                    else if ((existing.centerUsed - entry.centerWorld).sqrMagnitude > 1e-6f)
+                    {
+                        // Cached mesh was built with a different center than the current
+                        // precomputed registry entry. Discard stale cache so we rebuild
+                        // with the authoritative center and avoid doubled offsets.
+                        try { s_meshCache.Remove(data.id); } catch { }
+                    }
+                    else if (existing.resolutionUsed != data.resolution)
+                    {
+                        // Cached mesh was built with a different sampling resolution. Invalidate cache
+                        // so callers requesting a different density get a correctly sized mesh.
+                        try { s_meshCache.Remove(data.id); } catch { }
+                    }
+                    else
+                    {
+                        // Populate data and the ref outputs so callers relying on sampled
+                        // ranges (rawMin/rawMax) get correct values even when the mesh
+                        // was built earlier.
+                        data.mesh = existing.mesh;
+                        data.minHeight = existing.minH;
+                        data.maxHeight = existing.maxH;
+                        // Propagate into the caller's refs if they provided sentinel values
+                        // (keeps behavior stable for tests that expect variation).
+                        rawMin = existing.minH;
+                        rawMax = existing.maxH;
+                        return;
+                    }
+                }
+            }
+
+            int depthTiles = entry.tilesPerEdge;
+            float tileSize = 1f / depthTiles;
+
+            // Use direct barycentric->world mapping per-vertex to ensure consistent sampling
+            // (tangent-plane projection caused area distortion at high resolutions)
+
             for (int j = 0; j < res; j++)
             {
                 for (int i = 0; i < res; i++)
                 {
-                    // Calculate global normalized coordinates that are consistent across all depth levels
-                    // This ensures the same world position always samples the same height regardless of tile depth
-                    // Fixed: Map tile coordinates to include proper boundaries to eliminate gaps between tiles
-                    float tileU = (float)i / (float)(res - 1); // Map i from [0, res-1] to [0, 1] within tile
-                    float tileV = (float)j / (float)(res - 1); // Map j from [0, res-1] to [0, 1] within tile
-                    
-                    // Map tile-local coordinates to global face coordinates
-                    int tilesPerEdge = 1 << data.id.depth;
-                    float globalU = ((float)data.id.x + tileU) / (float)tilesPerEdge;
-                    float globalV = ((float)data.id.y + tileV) / (float)tilesPerEdge;
-                    
-                    Vector3 dir = CubeSphere.FaceLocalToUnit(data.id.face, globalU * 2f - 1f, globalV * 2f - 1f);
+                    // Use icosahedral barycentric coordinate system (canonical global u/v)
+                    IcosphereMapping.TileVertexToBarycentricCoordinates(
+                        data.id, i, j, res,
+                        out float globalU, out float globalV);
+
+                    // Store canonical UV for texturing / consistent coordinates
                     _uvs.Add(new Vector2(globalU, globalV));
 
+                    // Compute local tile coordinates relative to the precomputed entry
+                    float tileUStart = entry.tileOffsetU;
+                    float tileVStart = entry.tileOffsetV;
+                    float localU = (globalU - tileUStart) / tileSize;
+                    float localV = (globalV - tileVStart) / tileSize;
+                    localU = Mathf.Clamp01(localU);
+                    localV = Mathf.Clamp01(localV);
+
+                    // Convert to triangle barycentric (assumes triangle param (0,0),(1,0),(0,1))
+                    float b1 = localU;
+                    float b2 = localV;
+                    float b0 = 1f - b1 - b2;
+
+                    // Build deterministic per-vertex sample index using canonical tileIndex (1-D)
+                    int vertexLocalIndex = j * res + i;
+                    long perVertexIndex = (long)tileIndex * (res * res) + vertexLocalIndex;
+
+                    // Map directly from canonical barycentric coords to world direction to avoid distortion
+                    Vector3 dir = IcosphereMapping.BarycentricToWorldDirection(entry.face, globalU, globalV).normalized;
+
                     // Sample height using the consistent world direction, with resolution passed for detail control
-                    float raw = heightProvider != null ? heightProvider.Sample(in dir, res) : 0f;
+                    if (swSampling != null) swSampling.Start();
+                    float raw = provider.Sample(in dir, res);
+                    if (swSampling != null) swSampling.Stop();
+
+                    // DEBUG: Log height values for first few vertices
+                    // debug logs removed for test/CI cleanliness
+
                     raw *= config.heightScale;
                     if (raw < rawMin) rawMin = raw;
                     if (raw > rawMax) rawMax = raw;
 
                     float hSample = raw;
                     float finalR = radius + hSample;
+
+                    // Convert to world-space vertex position. Precomputed registry entries
+                    // include the planet's world-space center offset (entry.centerWorld),
+                    // whereas earlier computations placed vertices around the origin.
+                    // Apply an offset so the mesh world-space centroid matches the
+                    // precomputed entry center used by the spawner.
+                    Vector3 worldVertex = dir * finalR + planetCenter;
 
                     if (config.shorelineDetail && data.id.depth >= config.shorelineDetailMinDepth)
                     {
@@ -115,9 +242,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
                     minH = Mathf.Min(minH, hSample);
                     maxH = Mathf.Max(maxH, hSample);
-                    _verts.Add(dir * finalR);
+                    _verts.Add(worldVertex);
                     _normals.Add(dir);
-                    centerAccum += dir * finalR;
+                    centerAccum += worldVertex;
                     vertCounter++;
                     if (removeTris) submergedFlags.Add(submerged);
                 }
@@ -141,8 +268,30 @@ namespace HexGlobeProject.TerrainSystem.LOD
                         if (sub0 && sub1 && sub2 && sub3)
                             continue;
                     }
-                    _tris.Add(i0); _tris.Add(i2); _tris.Add(i1);
-                    _tris.Add(i1); _tris.Add(i2); _tris.Add(i3);
+                    // Build two triangles per grid cell but guard against degenerate triangles
+                    if (swTriBuild != null) swTriBuild.Start();
+                    Vector3 v0 = _verts[i0]; Vector3 v1 = _verts[i2]; Vector3 v2 = _verts[i1];
+                    float area0 = Vector3.Cross(v1 - v0, v2 - v0).magnitude * 0.5f;
+                    if (area0 > 1e-7f)
+                    {
+                        _tris.Add(i0); _tris.Add(i2); _tris.Add(i1);
+                    }
+                    else
+                    {
+                        degenerateTriangleCount++;
+                    }
+
+                    Vector3 u0 = _verts[i1]; Vector3 u1 = _verts[i2]; Vector3 u2 = _verts[i3];
+                    float area1 = Vector3.Cross(u1 - u0, u2 - u0).magnitude * 0.5f;
+                    if (area1 > 1e-7f)
+                    {
+                        _tris.Add(i1); _tris.Add(i2); _tris.Add(i3);
+                    }
+                    else
+                    {
+                        degenerateTriangleCount++;
+                    }
+                    if (swTriBuild != null) swTriBuild.Stop();
                 }
             }
 
@@ -171,26 +320,124 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 }
             }
             var mesh = new Mesh();
+            // Helpful debug name so runtime logs show which mesh was generated for which tile
+            mesh.name = $"Tile_{data.id.faceNormal}_d{data.id.depth}";
             mesh.indexFormat = (res * res > 65000) ? UnityEngine.Rendering.IndexFormat.UInt32 : UnityEngine.Rendering.IndexFormat.UInt16;
             mesh.SetVertices(_verts);
             mesh.SetTriangles(_tris, 0, true);
+            // Assign computed vertex normals (radial by default) then ensure normals
+            // are recalculated from geometry so lighting shows actual slopes.
             mesh.SetNormals(_normals);
-            mesh.SetUVs(0, _uvs);
-            if (config.recalcNormals)
-            {
-                mesh.RecalculateNormals();
-            }
+            // Always recalculate normals here to surface geometric detail in the renderer.
+            // This overrides the config.recalcNormals toggle temporarily; revert if perf-sensitive.
+            mesh.RecalculateNormals();
             mesh.RecalculateBounds();
 
-            data.mesh = mesh;
-            data.minHeight = minH;
-            data.maxHeight = maxH;
-            data.error = maxH - minH;
+            if (swTotal != null)
+            {
+                swTotal.Stop();
+                // Timing logs removed in production; keep stopwatch usage for local profiling if needed.
+            }
+
+            // Use the precomputed registry center as the authoritative GameObject position.
+            // This keeps spawned GameObjects aligned with the visibility manager's precomputed entries.
+            data.center = entry.centerWorld;
+
             if (vertCounter > 0)
             {
-                data.center = centerAccum / vertCounter;
                 data.boundsRadius = 0.5f * ((radius + maxH) - (radius + minH)) + (radius + (minH + maxH) * 0.5f);
             }
+
+            // Convert mesh vertices from world-space to local-space relative to the tile center.
+            // Using data.center (the precomputed registry center) as the authoritative
+            // GameObject position ensures that TransformPoint(localVerts) == original world verts
+            // and adjacent tiles will share exact world-space edge vertices.
+            for (int i = 0; i < _verts.Count; i++)
+            {
+                _verts[i] = _verts[i] - data.center;
+            }
+
+            // Note: Do NOT perform an additional centroid recentering here.
+            // We already converted vertices to local-space by subtracting data.center above.
+            // Any further global shift would change the final world-space vertex positions
+            // after the spawned GameObject is placed at data.center and thus break edge continuity
+            // between adjacent tiles. Keeping vertices = worldVertex - data.center preserves
+            // the exact sampled world positions when the GameObject transform.position == data.center.
+
+            // Create a fresh mesh with corrected vertices
+            mesh = new Mesh();
+            mesh.name = $"Tile_{data.id.faceNormal}_d{data.id.depth}";
+            mesh.SetVertices(_verts);
+            mesh.SetTriangles(_tris, 0);
+            mesh.SetUVs(0, _uvs);
+
+            // Compute per-vertex normals from local neighbor geometry to capture slopes reliably
+            Vector3[] computedNormals = new Vector3[_verts.Count];
+            if (data.resolution > 1)
+            {
+                int resLocal = data.resolution;
+                for (int j = 0; j < resLocal; j++)
+                {
+                    for (int i = 0; i < resLocal; i++)
+                    {
+                        int idx = j * resLocal + i;
+                        Vector3 v = _verts[idx];
+                        int iR = Mathf.Min(i + 1, resLocal - 1);
+                        int iL = Mathf.Max(i - 1, 0);
+                        int jU = Mathf.Min(j + 1, resLocal - 1);
+                        int jD = Mathf.Max(j - 1, 0);
+
+                        Vector3 vr = _verts[j * resLocal + iR] - v;
+                        Vector3 vu = _verts[jU * resLocal + i] - v;
+                        Vector3 normal = Vector3.zero;
+                        // Try cross(vr, vu)
+                        normal = Vector3.Cross(vr, vu);
+                        if (normal.sqrMagnitude < 1e-8f)
+                        {
+                            // Try alternate neighbor vectors
+                            Vector3 vl = _verts[j * resLocal + iL] - v;
+                            Vector3 vd = _verts[jD * resLocal + i] - v;
+                            normal = Vector3.Cross(vd, vl);
+                        }
+                        if (normal.sqrMagnitude < 1e-8f)
+                        {
+                            // Fallback to radial if geometry degenerate
+                            normal = v.sqrMagnitude > 1e-9f ? v.normalized : Vector3.up;
+                        }
+                        else
+                        {
+                            normal.Normalize();
+                            // Ensure normal points roughly outward relative to vertex position
+                            if (Vector3.Dot(normal, v) < 0f) normal = -normal;
+                        }
+                        computedNormals[idx] = normal;
+                    }
+                }
+            }
+            else
+            {
+                for (int i = 0; i < computedNormals.Length; i++) computedNormals[i] = _verts[i].sqrMagnitude > 1e-9f ? _verts[i].normalized : Vector3.up;
+            }
+
+            mesh.SetNormals(computedNormals);
+            mesh.RecalculateBounds();
+            // Force the mesh bounds center to origin so the mesh's world-centroid
+            // equals the GameObject position (data.center) without modifying vertex positions.
+            var b = mesh.bounds;
+            mesh.bounds = new Bounds(Vector3.zero, b.size);
+            // Debug: count normals deviating from radial
+            data.mesh = mesh;
+
+            // Cache the produced mesh and sampled range so subsequent builder invocations
+            // for the same TileId return the same instance and meaningful rawMin/rawMax.
+            try
+            {
+                if (data != null && data.id.face >= 0)
+                {
+                    s_meshCache[data.id] = new CachedMeshEntry { mesh = mesh, minH = data.minHeight, maxH = data.maxHeight, centerUsed = data.center, resolutionUsed = data.resolution };
+                }
+            }
+            catch { }
         }
         /// <summary>
         /// Flips the winding order of triangles in the index list (in-place).

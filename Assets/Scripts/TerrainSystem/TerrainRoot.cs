@@ -12,6 +12,9 @@ namespace HexGlobeProject.TerrainSystem
     {
     public TerrainConfig config;
     public Material terrainMaterial;
+    [SerializeField]
+    [Tooltip("Hide the ocean's MeshRenderer in the scene but keep the Ocean GameObject and its transform present for positioning.")]
+    public bool hideOceanRenderer = false;
     private GameObject _oceanGO;
 
     private readonly List<TerrainPatch> _patches = new();
@@ -103,6 +106,27 @@ namespace HexGlobeProject.TerrainSystem
             var mr = _oceanGO.AddComponent<MeshRenderer>();
             mr.sharedMaterial = terrainMaterial;
             mf.sharedMesh = BuildIcoSphere(32, radius); // fixed moderate resolution
+            mr.enabled = !hideOceanRenderer;
+
+            // Ocean is a visual mesh only. Do not add a physics collider here. Raycast
+            // visibility will be handled by per-tile collision meshes managed by the
+            // PlanetTileVisibilityManager (preplaced per-depth), so the ocean should
+            // remain non-physical to avoid double-occlusion.
+        }
+
+        /// <summary>
+        /// Public API to update the ocean renderer visibility at runtime or from other components.
+        /// This updates the serialized flag and the existing Ocean GameObject's MeshRenderer if present.
+        /// </summary>
+        /// <param name="hide">If true, disables the Ocean MeshRenderer (keeps GameObject/transform).</param>
+        public void SetHideOceanRenderer(bool hide)
+        {
+            hideOceanRenderer = hide;
+            if (_oceanGO != null)
+            {
+                var mr = _oceanGO.GetComponent<MeshRenderer>();
+                if (mr != null) mr.enabled = !hide;
+            }
         }
 
         private Mesh BuildIcoSphere(int resolution, float radius)

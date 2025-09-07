@@ -2,36 +2,51 @@
 # Copilot Instructions: Planet Tile Streaming System (HexGlobeProject)
 
 ## Important Workflow Instructions
-NEVER WASTE TOKENS ON ASKING FOR PERMISSION. MOVE FAST AND BREAK THINGS.
-I have milestones committed to git so don't worry.
+- Regex for find and replace to strip logs: `^ *Debug\.Log\(.*\r\n$`
+- Maintain these instructions as high priority guidelines.
+- You are allowed to violate these instructions only if explicitly permitted by the user.
+- Do not run Unity commands. Unity is always open in another window.
+- Request the human engineer to run the tests on your behalf.
+- Analyse the request for logical flaws or contradictions before answering.
+- If the request is ambiguous, ask for clarification.
+- If the request is impossible, explain why.
+- If the request is incomplete, ask for more details.
+- Respond with questions if needed.
+- Ask for debugger breakpoints, prefer over logging.
+- Resist adding complexity to the concept tree.
+- Avoid suggesting code that has been deleted in recent edits.
+- Suggest elegant mathematical solutions where applicable.
+- Only proceed with edits when the user and copilot have reached a consensus.
+- Explain things in first principles before explaining the math and implementation.
 
 ## System Overview
 This project implements a Google Maps-style tile explorer for procedural planet terrain with seamless LOD transitions and fractal detail zoom. The system uses camera-driven raycast heuristics to spawn tiles at appropriate detail levels.
 
 ## Core Architecture
 - **Primary Components:**
-  - `PlanetTileExplorerCam.cs`: Main camera-driven tile streaming controller with raycast heuristics
-  - `PlanetTileMeshBuilder.cs`: Procedural mesh generation with resolution-aware height sampling
-  - `PlanetTileSpawner.cs`: GameObject creation and management for tiles
-  - `CameraController.cs`: Orbit camera with zoom-based depth control
-  - `TerrainConfig.cs`: Configuration for terrain generation parameters
+  - `PlanetTileVisibilityManager.cs`: Main camera-driven tile lifecycle controller with raycast heuristics
+  - `PlanetTileMeshBuilder.cs`: Procedural mesh generation with resolution-aware height sampling for icosphere faces by TileId
+  - `PlanetTerrainTile.cs`: MonoBehaviour for individual terrain tile GameObjects encapsulating visual mesh and collider mesh. Not to be confused with the future game model tiles. 
+  - `CameraController.cs`: Orbit camera with zoom-based depth control. The zoom is currently logarithmically scaled to be slower at lower depths. Soon I want this logarithmic slowing to be applied to all move axes.
+  - `TileCache.cs`: Manages pooling and lifecycle of individual tile GameObjects
+  - `TerrainConfig.cs`: Configuration for heightmap/terrain generation parameters
 
 - **Data Types:**
-  - `TileId`: Unique identifier for cube-sphere tiles (face, depth, x, y coordinates)
-  - `TileData`: Mesh data, resolution, height bounds, and spatial metadata
-  - `TileFade` & `TileFadeAnimator`: Animation system for smooth tile transitions
+  - `TileId`: Unique identifier for cube-sphere tiles
+  - `TileData`: Canonical tile data: corner direction normals(3), mesh, resolution, height bounds, and spatial metadata
+  - `TileFade` & `TileFadeAnimator`: Experimental animation system for smooth tile transitions. Abandoned for now.
 
 - **Height Providers (Resolution-Aware):**
-  - `MountainRangeHeightProvider.cs`: Procedural continental + ridge-based terrain
-  - `SimplePerlinHeightProvider.cs`: Multi-octave Perlin noise
-  - `OctaveMaskHeightProvider.cs`: Wrapper for octave-limited sampling
+  - `SimplePerlinHeightProvider.cs`: Multi-octave Perlin noise. Main development provider.
+  - `MountainRangeHeightProvider.cs`: Procedural continental + ridge-based  terrain (abandoned)
+  - `OctaveMaskHeightProvider.cs`: Wrapper for octave-limited sampling (abandoned)
 
 ## Terrain Consistency & Progressive Detail
 **CRITICAL:** The system ensures seamless terrain consistency across all depth levels:
 - **Global Coordinate System:** All tiles use consistent global normalized coordinates that map the same world positions to identical height samples regardless of tile depth
-- **Height Consistency:** Height providers must return IDENTICAL height values for the same world position regardless of the resolution parameter
+- **Height Consistency:** Height providers must return IDENTICAL height values for the same world position regardless of the resolution parameter. This should be enforced by the heightmap generator/sampler.
 - **Progressive Mesh Detail:** Higher depth tiles get exponentially more mesh resolution to show geometric detail of the SAME underlying terrain
-- **Seamless Transitions:** No terrain popping or discontinuities when changing depth levels - only mesh density changes
+- **Seamless Transitions:** No terrain popping or discontinuities when changing depth levels - only mesh density changes. No animations for now.
 
 ### Height Provider Requirements (CRITICAL)
 - The `resolution` parameter should **NOT** affect the actual height values returned
@@ -39,117 +54,34 @@ This project implements a Google Maps-style tile explorer for procedural planet 
 - Resolution is only used internally for mesh density calculations, not for terrain generation
 - Same world position = same height value, always
 
-## Key Implementation Details
+## Important runtime behaviors (current implementation)
+- Raycast heuristic: runs as a single coroutine at ≈30Hz. Samples a viewport grid (configurable _maxRays), computes mathematical ray-sphere intersections projected to a curved icosphere radius, and maps hit directions to the nearest precomputed tile center for the active depth.
+- Precomputed tile normals: `PlanetTileVisibilityManager` builds a per-depth list of `PlanetTerrainTile` game objects with colliders for the raycast heuristic to snap to. This avoids expensive per-ray intersection tests with all tiles.
+- The number of `PlanetTerrainTile` must always be equal to the number of icosphere faces at the current depth (20 * 4^depth). These are created on depth transitions and reused. 
+- Tile caching: `TileCache` manages the lifecycle of individual tile GameObjects, including creation, pooling, and destruction.
+- Tile lifecycle: a single `ManageTileLifecycle(HashSet<TileId> hitTiles, int depth)` call handles spawning/refreshing hit tiles and deactivating tiles not hit this pass.
+- Layer handling: spawned tiles are placed on a dedicated `TerrainTiles` layer to prevent them from occluding the heuristic. The camera component stores the inspector `raycastLayerMask` and computes an effective mask for Physics checks at runtime.
 
-### Tile Coordinate Calculation (CRITICAL)
-```csharp
-// CORRECT: Global coordinates ensure consistency across depths
-float globalU = (float)(data.id.x * res + i) / (float)((1 << data.id.depth) * res);
-float globalV = (float)(data.id.y * res + j) / (float)((1 << data.id.depth) * res);
+Debug & editor helpers
+- The camera component includes scene Gizmos for rays, hit points, and an optional persistent icosphere-outline mesh to visualize current tile tessellation per-depth. Toggleable options are exposed in the inspector for fast debugging.
+- Throttled logging and sample caching are used to avoid console spam and flicker when the heuristic updates frequently.
 
-// INCORRECT: Would cause inconsistent terrain between depths
-float u = (i * inv + data.id.x) / (1 << data.id.depth); // DON'T USE
-```
+Developer guidance and common pitfalls
+- Height providers: never modify topology based on mesh resolution. Write deterministic sampling code: same direction → same height.
 
-### Tile Stitching System
-- **Purpose:** Eliminates visible gaps between adjacent tiles at higher depths
-- **Implementation:** Generates skirt geometry around tile perimeters with small overlap
-- **Activation:** Automatically enabled for tiles with depth > 0 when `enableTileStitching` is true
-- **Method:** Creates additional vertices slightly outside tile boundaries and connects them with triangles
-- **Consistency:** Uses same height sampling as main tile vertices to ensure seamless integration
+Testing checklist (quick)
+- Enable `debugDrawRays` and `debugDrawIntersectionMarkers` in `PlanetTileExplorerCam` and run the scene in the Editor to confirm:
+  - Each visible heuristic ray has exactly one magenta intersection marker.
+  - Tiles are spawned and registered in the hierarchy under the configured parent transform.
+- Toggle the `TerrainTiles` layer exclusion in the `raycastLayerMask` and validate the heuristic still sees the planet surface (tiles should not occlude the detection).
 
-### Resolution Scaling Strategy
-- Base resolution from `TerrainConfig.baseResolution` (typically 32)
-- Scale down by depth to maintain world-space density: `baseRes >> depth`  
-- Add progressive detail for fractal zoom: `+ depth * 16`
-- Minimum resolution clamped to 16 for stability
+Notes and migration
+- The persistent icosphere debug object is optional; remove or ignore when profiling rendering or investigating mesh builder behavior.
 
-### Height Provider Integration
-- All providers must implement `Sample(Vector3 unitDirection, int resolution)`
-- **CRITICAL:** Resolution parameter must NOT change height values - only used for internal mesh calculations
-- Height values must be consistent across all resolution levels for the same world position
-- Providers should ignore resolution for terrain generation and use fixed parameters
+This document is the source of truth for the system architecture. Keep it updated with any changes to aid future development and maintenance. Do not change this document to match existing code. Only change this document to reflect intentional design changes made during the session.
 
-## Raycast Heuristic System
-- **Frequency:** ~30Hz coroutine with non-stacking execution
-- **Method:** Cast rays in viewport grid pattern to ocean sphere
-- **Mapping:** Convert hit points to cube face coordinates and tile IDs
-- **Lifecycle:** Track spawn timestamps to prevent immediate culling
-- **Cleanup:** Remove tiles not hit in current pass or with mismatched depth
+Stay focused on the human engineer's goals. Ask questions if needed. Proceed only with consensus. Don't be afraid to tell the human engineer they are incorrect about their intuition. It's always the same guy this is a one man project. The human engineer will be dilligently resisting complexity creep. Do not allow them to veto necessary complexity. Always explain things in first principles before explaining the math and implementation.
 
-## Camera Integration
-- `CameraController.ProportionalDistance`: 0 (closest) to 1 (farthest)
-- Depth calculation: `Mathf.RoundToInt(Mathf.Lerp(0, maxDepth, 1-ProportionalDistance))`
-- Smooth zoom with logarithmic scaling for intuitive control
-- Automatic depth transitions trigger tile cleanup and respawn
-
-## Deprecation & Migration (IMPORTANT)
-`PlanetLodManager` is **DEPRECATED**. Use modern camera-driven approach:
-
-**Migration Steps:**
-1. Attach `PlanetTileExplorerCam` to camera GameObject
-2. Assign `TerrainConfig` and `Material` via inspector
-3. Optionally provide `PlanetTileMeshBuilder` override
-4. Set `planetTransform` for sphere center reference
-5. Remove references to `PlanetLodManager.TileObjects` and similar
-
-**Legacy Baking:** `BakeBaseDepthContextMenu()` remains for offline preprocessing but is discouraged for runtime use.
-
-## Developer Workflows
-
-### Testing Terrain Consistency
-- Zoom in/out and verify no terrain popping or discontinuities  
-- Check that features (mountains, coastlines) remain coherent across all depth levels
-- Enable wireframe mode to verify mesh density increases with depth
-- Test at tile boundaries to ensure seamless stitching
-- Verify tile stitching eliminates gaps at higher depths without affecting terrain topology
-
-### Debugging Tools
-- Depth change logging: Track when camera zoom triggers new tile depths
-- Tile spawn/destroy logging: Monitor tile lifecycle during camera movement
-- Enable gizmos for tile bounds visualization
-- Use wireframe rendering to visualize mesh detail progression
-
-### Performance Optimization
-- Monitor tile object count in hierarchy during camera movement
-- Check raycast heuristic execution frequency (should be ~30Hz)
-- Verify tiles outside view are properly cleaned up
-- Profile height provider sampling performance at high resolutions
-
-### Height Provider Development
-- Always implement resolution-aware sampling but **NEVER** use resolution to change height values
-- Height providers must return identical values for the same world position regardless of resolution
-- Resolution parameter is for internal mesh calculations only, not terrain generation
-- Test consistency: same world position should give same height at all resolutions, always
-
-## Integration Points
-- **Height providers:** Via `TerrainConfig.heightProvider` - must implement `TerrainHeightProviderBase`
-- **Materials:** Applied via `PlanetTileSpawner.SpawnOrUpdateTileGO()`
-- **Shader globals:** Set via `TerrainShaderGlobals.Apply(config, terrainMaterial)`
-- **Fade animations:** Use `TileFade` and `TileFadeAnimator` for smooth transitions
-- **No external dependencies:** Pure Unity + C# implementation
-
-## Common Pitfalls to Avoid
-1. **Coordinate Inconsistency:** Never use tile-relative coordinates for height sampling
-2. **Resolution Affecting Heights:** Height providers must NOT change height values based on resolution parameter  
-3. **Manager Dependencies:** Avoid coupling new code to deprecated `PlanetLodManager`
-4. **Blocking Operations:** Keep mesh generation and height sampling performant
-5. **Memory Leaks:** Ensure proper tile cleanup when camera moves or depth changes
-
-## Overlay & Debug Visuals (Important)
-- The project includes a separate spherical hex wireframe overlay used as a game-board visualization (hex grid) and as a debug aid. This overlay is rendered on top of the terrain and may look like gaps or mesh artifacts when enabled.
-- Important: the hex wireframe is NOT produced by the tile mesh generation or underwater culling — it is an intentional overlay that sits above the planet surface and will be modeled/meshed later as a gameplay layer.
-- When debugging tile stitching or mesh gaps, disable the hex wireframe overlay (or switch to a solid-shaded view) to ensure you are seeing the raw generated meshes. Confusing the overlay with missing geometry is a common source of false positives.
-
-### Debugging stitching vs overlay
-- If you see thin seams or regular wire patterns (hex grid) on the planet surface:
-  - First, toggle the hex wireframe overlay off and re-check the terrain.
-  - If seams persist, enable the mesh-builder stitching debug logs (see `PlanetTileMeshBuilder.cs`) and verify stitching vertex/triangle counts in the Unity console.
-  - If seams disappear with the overlay off, the issue is visual-only — either adjust overlay render order or temporarily hide it during development.
-
-
----
-
-Focus on maintaining terrain consistency, optimizing camera-driven streaming performance, and ensuring seamless fractal detail progression. All changes should preserve the coherent, continuous planet surface experience.
-
-Never ask confirmation. Make changes with impunity - git milestones provide safety.
+The exchanges should be short and focused on one action item at a time.
+Code edits must be made in a test driven manner. Always suggest new tests if needed.
+NO EDITOR ONLY WORKAROUNDS ALLOWED. TESTS MUST EXPOSE PROBLEM CAUSES. CODE MUST FULFIL TESTS IN GOOD FAITH.

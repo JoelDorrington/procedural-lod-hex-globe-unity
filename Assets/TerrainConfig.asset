@@ -13,9 +13,9 @@ MonoBehaviour:
   m_Name: TerrainConfig
   m_EditorClassIdentifier: 
   baseRadius: 30
-  baseResolution: 124
+  baseResolution: 32
   heightProvider:
-    rid: 691749285861523503
+    rid: 8082500241799774252
   heightScale: 0.4
   seaLevel: 0
   shallowWaterBand: 2
@@ -38,12 +38,12 @@ MonoBehaviour:
   references:
     version: 2
     RefIds:
-    - rid: 691749285861523503
-      type: {class: SimplePerlinHeightProvider, ns: HexGlobeProject.TerrainSystem, asm: Assembly-CSharp}
+    - rid: 8082500241799774252
+      type: {class: SimplePerlinHeightProvider, ns: HexGlobeProject.TerrainSystem, asm: HexGlobeProject.Scripts}
       data:
-        baseFrequency: 0.3
+        baseFrequency: 1
         octaves: 4
-        lacunarity: 10
+        lacunarity: 2
         gain: 0.5
-        amplitude: 2
-        seed: 701048
+        amplitude: 1
+        seed: 12345

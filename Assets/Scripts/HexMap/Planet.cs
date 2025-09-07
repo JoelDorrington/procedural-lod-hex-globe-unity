@@ -1,6 +1,5 @@
 using UnityEngine;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine.Rendering;
 
 namespace HexGlobeProject.HexMap
@@ -8,18 +7,19 @@ namespace HexGlobeProject.HexMap
     /// <summary>
     /// Planet is a container class that holds the CellGraph instance representing the grid of the globe,
     /// and manages rendering components like MeshFilter and MeshRenderer.
+    /// This will be the game state controller, coordinating the UI with model changes.
     /// </summary>
     public class Planet : MonoBehaviour
     {
         // The graph representing the cells and their neighbor relationships
-        public CellGraph cellGraph;
+        private CellGraph cellGraph;
 
         // Rendering related components
         private MeshFilter meshFilter;
         private MeshRenderer meshRenderer;
 
-        // Public parameters for sphere settings (no external base sphere needed)
-        public float sphereRadius = 30f; // Radius used to generate the procedural icosphere
+        private float sphereRadius = 30f; // Radius used to generate the procedural icosphere
+        private Color sphereColor = new Color(0.2f, 0.4f, 1f);
 
         // Public settings for wireframe
         public Color wireframeColor = Color.black;
@@ -36,12 +36,12 @@ namespace HexGlobeProject.HexMap
         [HideInInspector] public float dualProjectionBlend = 1f;
         [HideInInspector] public float wireOffsetFraction = 0.01f;
         [HideInInspector] public bool projectEachSmoothingPass = true;
-        [HideInInspector] public bool generateOnStart = true;
 
-        // Icosphere settings
-        public int subdivisions = 6;
-
-        // No hot-regeneration fields needed
+        public int subdivisions = 6; // Determines hex cell size
+        [Header("Scene helpers")]
+        [SerializeField]
+        [Tooltip("Hide the ocean renderer (keeps Ocean GameObject/transform). Mirrors TerrainRoot.hideOceanRenderer when a TerrainRoot exists in the scene.")]
+        public bool hideOceanRenderer = false;
 
         // Initialization
         private void Awake()
@@ -49,6 +49,30 @@ namespace HexGlobeProject.HexMap
             ApplyHardcodedSettings();
             // Initialize the cell graph
             cellGraph = new CellGraph();
+            // Mirror setting to TerrainRoot if present
+            ApplyHideOceanToTerrainRoot();
+        }
+
+        /// <summary>
+        /// Generates the planet by creating an icosphere and building its dual-wireframe overlay.
+        /// </summary>
+        public void GeneratePlanet()
+        {
+            ApplyHardcodedSettings();
+            // Determine the sphere's radius directly from configuration (prefer TerrainRoot.config.baseRadius when available)
+            float sphereR = sphereRadius;
+            try
+            {
+                var terrainRoot = UnityEngine.Object.FindAnyObjectByType<HexGlobeProject.TerrainSystem.TerrainRoot>();
+                if (terrainRoot != null && terrainRoot.config != null && terrainRoot.config.baseRadius > 0f)
+                {
+                        // Prefer the tile-center radius used by the visibility system so the visual sphere aligns with spawned tiles.
+                        // PlanetTileVisibilityManager uses a small curved multiplier (~1.01) when computing tile center world positions;
+                        // match that here so the helper icosphere and the tile precomputed centers coincide visually.
+                        sphereR = terrainRoot.config.baseRadius * 1.01f;
+                }
+            }
+            catch { /* robust fallback: keep designer-set sphereRadius */ }
 
             // Ensure the GameObject has a MeshFilter
             meshFilter = GetComponent<MeshFilter>();
@@ -66,26 +90,18 @@ namespace HexGlobeProject.HexMap
             if (meshRenderer.sharedMaterial == null)
             {
                 var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-                meshRenderer.sharedMaterial = new Material(shader) { color = new Color(0.2f, 0.4f, 1f) };
+                meshRenderer.sharedMaterial = new Material(shader) { color = sphereColor };
             }
-
-            // No external sphere dependency; radius is taken from sphereRadius
-
-            // No change tracking
-        }
-
-        /// <summary>
-        /// Generates the planet by creating an icosphere and building its dual-wireframe overlay.
-        /// </summary>
-        public void GeneratePlanet()
-        {
-            ApplyHardcodedSettings();
-            // Determine the sphere's radius directly from configuration
-            float sphereR = sphereRadius;
 
             // Build solid icosphere using the provided generator
             Mesh sphereMesh = IcosphereGenerator.GenerateIcosphere(radius: sphereR, subdivisions: Mathf.Max(0, subdivisions));
             meshFilter.sharedMesh = sphereMesh;
+            // Respect the hideOceanRenderer flag: keep the mesh assigned for transform/selection
+            // but disable the MeshRenderer so the visual sphere is invisible when requested.
+            if (meshRenderer != null)
+            {
+                meshRenderer.enabled = !hideOceanRenderer;
+            }
 
             // Optionally build dual-mesh wireframe from triangle duals; projection to sphere is optional
             // Guarded by `enableWireframe` so wireframe can be disabled during LOD development.
@@ -94,7 +110,6 @@ namespace HexGlobeProject.HexMap
                 BuildDualWireframe(sphereMesh, sphereR);
             }
 
-            Debug.Log($"Icosphere: Subdiv={subdivisions}, Vertices={sphereMesh.vertexCount}, Triangles={sphereMesh.triangles.Length / 3}");
         }
 
         private void ApplyHardcodedSettings()
@@ -106,7 +121,6 @@ namespace HexGlobeProject.HexMap
             dualProjectionBlend = 1f;
             wireOffsetFraction = 0.01f;
             projectEachSmoothingPass = true;
-            generateOnStart = true;
         }
 
         private void BuildDualWireframe(Mesh baseMesh, float baseRadius)
@@ -289,7 +303,6 @@ namespace HexGlobeProject.HexMap
                 double var = sumSq / m - mean * mean;
                 double std = var > 0 ? System.Math.Sqrt(var) : 0;
                 double cv = mean > 1e-9 ? std / mean : 0;
-                Debug.Log($"Dual edges: mean={mean:F4}, std={std:F4}, CV={cv:P1}; smoothingMode={dualSmoothingMode}, iters={dualSmoothingIterations}, projEachPass={(projectEachSmoothingPass ? 1 : 0)}, projBlend={dualProjectionBlend:F2}");
             }
 
             // No solid mesh deformation
@@ -297,9 +310,32 @@ namespace HexGlobeProject.HexMap
 
         private void Start()
         {
-            // Generate only if opted-in, to avoid heavy work on load.
-            if (generateOnStart)
-                GeneratePlanet();
+            GeneratePlanet();
+            ApplyHideOceanToTerrainRoot();
+        }
+
+        private void ApplyHideOceanToTerrainRoot()
+        {
+            try
+            {
+                // Find TerrainRoot in scene and apply the hide flag if available
+                var terrainRoot = FindAnyObjectByType<TerrainSystem.TerrainRoot>();
+                if (terrainRoot != null)
+                {
+                    terrainRoot.SetHideOceanRenderer(hideOceanRenderer);
+                }
+                else
+                {
+                    // Fallback: find any GameObject named "Ocean" and toggle its MeshRenderer directly.
+                    var oceanGO = GameObject.Find("Ocean");
+                    if (oceanGO != null)
+                    {
+                        var mr = oceanGO.GetComponent<MeshRenderer>();
+                        if (mr != null) mr.enabled = !hideOceanRenderer;
+                    }
+                }
+            }
+            catch { /* no-op: keep robust in editor */ }
         }
 
     }
