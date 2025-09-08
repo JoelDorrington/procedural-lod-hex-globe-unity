@@ -28,7 +28,7 @@ MonoBehaviour:
   maxOctaveSplit: -1
   debugElevationMultiplier: 1
   debugDisableUnderwaterCulling: 1
-  recalcNormals: 1
+  recalcNormals: 0
   shorelineDetail: 1
   shorelineDetailMinDepth: 4
   shorelineBand: 3
@@ -41,9 +41,9 @@ MonoBehaviour:
     - rid: 8082500241799774252
       type: {class: SimplePerlinHeightProvider, ns: HexGlobeProject.TerrainSystem, asm: HexGlobeProject.Scripts}
       data:
-        baseFrequency: 1
+        baseFrequency: 3
         octaves: 4
-        lacunarity: 2
+        lacunarity: 10
         gain: 0.5
         amplitude: 1
         seed: 12345

@@ -24,8 +24,6 @@ Shader "HexGlobe/PlanetTerrain"
         LOD 200
     Pass
         {
-            // No alpha blending needed for opaque terrain
-            Blend Off
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
@@ -67,7 +65,11 @@ Shader "HexGlobe/PlanetTerrain"
                 v2f o;
                 o.pos = UnityObjectToClipPos(v.vertex);
                 o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
-                o.n = UnityObjectToWorldNormal(v.normal);
+                
+                // Transform normal to world space but normalize afterward for consistency
+                float3 worldNormal = mul((float3x3)unity_ObjectToWorld, v.normal);
+                o.n = normalize(worldNormal);
+                
                 o.uv = v.uv;
                 return o;
             }
@@ -78,9 +80,14 @@ Shader "HexGlobe/PlanetTerrain"
                 float3 planetToVertex = i.worldPos - _PlanetCenter.xyz;
                 float worldR = length(planetToVertex);
                 float height = worldR - _SeaLevel;
+                
+                // Use geometric normal derived from world position for consistent lighting
+                // This eliminates transform-based inconsistencies between tiles
+                float3 geometricNormal = normalize(planetToVertex);
+                
                 float mountainT = saturate((height - _MountainStart) / max(0.0001, (_MountainFull - _MountainStart)));
-                // Slope factor: steeper (normal more horizontal) -> higher slopeFactor
-                float slope = 1 - saturate(abs(i.n.y)); // 0 at flat top/bottom, 1 at vertical cliff
+                // Slope factor: use geometric normal for consistency
+                float slope = 1 - saturate(abs(geometricNormal.y)); // 0 at flat top/bottom, 1 at vertical cliff
                 float slopeInfluence = slope * _SlopeBoost;
                 mountainT = saturate(mountainT + slopeInfluence);
                 // Base biome gradient between low/high using normalized height within sea->mountain range
@@ -100,8 +107,8 @@ Shader "HexGlobe/PlanetTerrain"
                 // Snow layer - use distance from planet center
                 float snowRange = max(0.0001, _SnowFull - _SnowStart);
                 float snowT = saturate((worldR - _SnowStart) / snowRange);
-                // Flatter surfaces (higher normal.y) accumulate more snow
-                float flatFactor = saturate(i.n.y);
+                // Flatter surfaces (higher normal.y) accumulate more snow - use geometric normal
+                float flatFactor = saturate(geometricNormal.y);
                 snowT = saturate(snowT + flatFactor * _SnowSlopeBoost * (1 - snowT));
                 finalCol = lerp(finalCol, _SnowColor, snowT);
 

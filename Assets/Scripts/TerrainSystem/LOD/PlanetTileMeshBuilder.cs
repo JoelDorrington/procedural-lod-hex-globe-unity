@@ -243,7 +243,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     minH = Mathf.Min(minH, hSample);
                     maxH = Mathf.Max(maxH, hSample);
                     _verts.Add(worldVertex);
-                    _normals.Add(dir);
+                    _normals.Add(dir); // Simple radial normal - shader calculates lighting from world position
                     centerAccum += worldVertex;
                     vertCounter++;
                     if (removeTris) submergedFlags.Add(submerged);
@@ -325,12 +325,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
             mesh.indexFormat = (res * res > 65000) ? UnityEngine.Rendering.IndexFormat.UInt32 : UnityEngine.Rendering.IndexFormat.UInt16;
             mesh.SetVertices(_verts);
             mesh.SetTriangles(_tris, 0, true);
-            // Assign computed vertex normals (radial by default) then ensure normals
-            // are recalculated from geometry so lighting shows actual slopes.
+            // Use radial normals - shader calculates lighting from world position for perfect continuity
             mesh.SetNormals(_normals);
-            // Always recalculate normals here to surface geometric detail in the renderer.
-            // This overrides the config.recalcNormals toggle temporarily; revert if perf-sensitive.
-            mesh.RecalculateNormals();
             mesh.RecalculateBounds();
 
             if (swTotal != null)

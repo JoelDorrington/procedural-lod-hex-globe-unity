@@ -113,73 +113,56 @@ namespace HexGlobeProject.TerrainSystem.LOD
             out float u,
             out float v)
         {
-            // Try to find a precomputed tile entry for this exact TileId (prefer discrete match)
-            PlanetTileVisibilityManager.PrecomputedTileEntry entry;
-            if (!PlanetTileVisibilityManager.GetPrecomputedIndex(tileId, out int _idx, out entry))
+            // Use a unified canonical global-integer grid mapping so adjacent tiles
+            // always compute identical barycentric coordinates for shared vertices.
+            // This avoids asymmetry between precomputed registry lookups and the
+            // fallback path which previously produced inconsistent results.
+            int tilesPerEdge = 1 << tileId.depth;
+
+            // If a precomputed entry is available prefer its tilesPerEdge and indices
+            // for robustness, but fall back to tileId.x/tileId.y when not present.
+            if (PlanetTileVisibilityManager.GetPrecomputedIndex(tileId, out int _idx, out var entry))
             {
-                // Fallback to face-normal based lookup if discrete index not available
-                if (!PlanetTileVisibilityManager.GetPrecomputedEntry(tileId, out entry))
+                tilesPerEdge = entry.tilesPerEdge > 0 ? entry.tilesPerEdge : tilesPerEdge;
+            }
+
+            int resMinusOne = Mathf.Max(1, resolution - 1);
+            int globalPerEdge = tilesPerEdge * resMinusOne; // number of segments across the face
+
+            // Use tile indices from precompute when available, otherwise tileId values
+            int tileX = (entry.x >= 0) ? entry.x : tileId.x;
+            int tileY = (entry.y >= 0) ? entry.y : tileId.y;
+
+            // Clamp vertex indices to valid range [0, resMinusOne]
+            int localI = Mathf.Clamp(vertexI, 0, resMinusOne);
+            int localJ = Mathf.Clamp(vertexJ, 0, resMinusOne);
+
+            int globalI = tileX * resMinusOne + localI;
+            int globalJ = tileY * resMinusOne + localJ;
+
+            u = globalI / (float)globalPerEdge;
+            v = globalJ / (float)globalPerEdge;
+
+            // Reflect across diagonal for points that lie in the mirrored half so
+            // that the integer grid remains consistent across the triangle seam.
+            const float edgeEpsilon = 1e-6f;
+            if (u + v >= 1f - edgeEpsilon)
+            {
+                if (Mathf.Abs(u + v - 1f) < edgeEpsilon)
                 {
-                    // No precomputed entry available - fall through to fallback mapping below
-                    entry = default;
+                    // tiny inward nudge to keep face selection stable
+                    u -= edgeEpsilon * 0.5f;
+                    v -= edgeEpsilon * 0.5f;
+                }
+                else
+                {
+                    globalI = globalPerEdge - globalI;
+                    globalJ = globalPerEdge - globalJ;
+                    u = globalI / (float)globalPerEdge;
+                    v = globalJ / (float)globalPerEdge;
                 }
             }
-            else
-            {
-                int tilesPerEdge = entry.tilesPerEdge;
 
-                // Compute global integer grid coordinates across the whole face so adjacent tiles align exactly.
-                // This uses a (tilesPerEdge * (resolution-1)) grid per edge.
-                int resMinusOne = Mathf.Max(1, resolution - 1);
-                int globalPerEdge = tilesPerEdge * resMinusOne;
-
-                int globalI = entry.x * resMinusOne + vertexI;
-                int globalJ = entry.y * resMinusOne + vertexJ;
-
-                u = globalI / (float)globalPerEdge;
-                v = globalJ / (float)globalPerEdge;
-
-                // Clamp to valid triangular region. When the point lies in the mirrored
-                // half (u+v>=1) we must reflect the integer grid indices across the
-                // diagonal so adjacent tiles compute identical integer coordinates.
-                const float edgeEpsilon = 1e-6f;
-                if (u + v >= 1f - edgeEpsilon)
-                {
-                    // Nudge slightly inward for exact boundary cases to avoid numerical flips
-                    if (Mathf.Abs(u + v - 1f) < edgeEpsilon)
-                    {
-                        u -= edgeEpsilon * 0.5f;
-                        v -= edgeEpsilon * 0.5f;
-                    }
-                    else
-                    {
-                        // Reflect integer coordinates across the diagonal so global grid
-                        // alignment is preserved. Recompute u/v from the reflected integers.
-                        globalI = globalPerEdge - globalI;
-                        globalJ = globalPerEdge - globalJ;
-                        u = globalI / (float)globalPerEdge;
-                        v = globalJ / (float)globalPerEdge;
-                    }
-                }
-
-                u = Mathf.Clamp01(u);
-                v = Mathf.Clamp01(v);
-                return;
-            }
-
-            // Fallback: approximate mapping by selecting face index from faceNormal and assuming origin at 0
-            WorldDirectionToTileFaceIndex(tileId.faceNormal, out int faceIndex);
-            int fallbackTilesPerEdge = 1 << tileId.depth;
-            float localUF = vertexI / (float)(resolution - 1);
-            float localVF = vertexJ / (float)(resolution - 1);
-            u = localUF / fallbackTilesPerEdge;
-            v = localVF / fallbackTilesPerEdge;
-            if (u + v > 1f)
-            {
-                float excess = (u + v) - 1f;
-                u -= excess * 0.5f;
-                v -= excess * 0.5f;
-            }
             u = Mathf.Clamp01(u);
             v = Mathf.Clamp01(v);
         }
