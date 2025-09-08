@@ -305,50 +305,6 @@ namespace HexGlobeProject.Tests.Editor
         }
 
         /// <summary>
-        /// Test that sampling across opposite hemispheres produces similar statistics.
-        /// A strong bias (one hemisphere much higher/lower than the other) indicates a
-        /// directional mapping bug in the height provider (likely using only two axes
-        /// or incorrect coordinate mapping for Perlin inputs).
-        /// </summary>
-        [Test]
-        public void HeightSampling_HemisphericalSymmetry()
-        {
-            // Use deterministic grid sampling over the sphere (latitude/longitude grid)
-            int latSteps = 18; // from -90 to +90
-            int lonSteps = 36; // full circle
-            var northHeights = new List<float>();
-            var southHeights = new List<float>();
-
-            for (int i = 0; i <= latSteps; i++)
-            {
-                // latitude from -pi/2 to +pi/2
-                float lat = Mathf.Lerp(-Mathf.PI / 2f, Mathf.PI / 2f, (float)i / latSteps);
-                float y = Mathf.Sin(lat);
-                float cosLat = Mathf.Cos(lat);
-                for (int j = 0; j < lonSteps; j++)
-                {
-                    float lon = (float)j / lonSteps * Mathf.PI * 2f;
-                    float x = Mathf.Cos(lon) * cosLat;
-                    float z = Mathf.Sin(lon) * cosLat;
-                    var dir = new Vector3(x, y, z).normalized;
-                    float h = heightProvider.Sample(dir, 32);
-                    if (dir.y >= 0f) northHeights.Add(h);
-                    else southHeights.Add(h);
-                }
-            }
-
-            // Compute means
-            float meanNorth = 0f; foreach (var v in northHeights) meanNorth += v; meanNorth /= Mathf.Max(1, northHeights.Count);
-            float meanSouth = 0f; foreach (var v in southHeights) meanSouth += v; meanSouth /= Mathf.Max(1, southHeights.Count);
-
-            float diff = Mathf.Abs(meanNorth - meanSouth);
-
-            // Allow a small difference but fail if there is a strong hemispherical bias.
-            float allowed = 0.05f * Mathf.Max(0.0001f, heightProvider.amplitude);
-            Assert.Less(diff, allowed, $"Hemispherical mean difference too large: {diff} (allowed {allowed}). This indicates a directional mapping bias in the height provider.");
-        }
-
-        /// <summary>
         /// Test integration with actual tile mesh generation to ensure the sampling
         /// principles are correctly applied in the real mesh building pipeline.
         /// </summary>

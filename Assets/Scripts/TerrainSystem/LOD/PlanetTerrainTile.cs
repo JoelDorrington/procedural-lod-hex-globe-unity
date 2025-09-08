@@ -192,7 +192,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
         /// <summary>
         /// Setup material and layer configuration for the tile.
         /// </summary>
-        public void ConfigureMaterialAndLayer(Material terrainMaterial, int targetLayer)
+        public void ConfigureMaterialAndLayer(Material terrainMaterial, int targetLayer, Vector3 planetCenter = default)
         {
             baseMaterial = terrainMaterial;
             
@@ -203,11 +203,21 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 materialInstance.name = terrainMaterial.name + " (Tile Instance)";
                 meshRenderer.material = materialInstance;
                 
+                // Set planet center for proper shader calculations
+                if (materialInstance.HasProperty("_PlanetCenter"))
+                {
+                    materialInstance.SetVector("_PlanetCenter", new Vector4(planetCenter.x, planetCenter.y, planetCenter.z, 0));
+                }
+                
                 // Set default color
                 if (materialInstance.HasProperty("_Color"))
                 {
                     materialInstance.SetColor("_Color", Color.white);
                 }
+            }
+            else
+            {
+                // no-op when meshRenderer or terrainMaterial is missing
             }
 
             // Configure layers recursively

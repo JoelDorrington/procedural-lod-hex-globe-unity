@@ -382,8 +382,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			// Initialize the tile (this sets transform.position to data.center internally)
 			tile.Initialize(tileId, data, ColliderMeshGenerator);
 
-			// Configure material and layer
-			tile.ConfigureMaterialAndLayer(terrainMaterial, terrainTileLayer);
+			// Configure material and layer with planet center for shader
+			Vector3 tilePlanetCenter = planetTransform != null ? planetTransform.position : this.transform.position;
+			tile.ConfigureMaterialAndLayer(terrainMaterial, terrainTileLayer, tilePlanetCenter);
 
 			// Ensure the GameObject world position matches the center produced during mesh build.
 			// The builder now computes a sampled world-space centroid (data.center) which
@@ -458,6 +459,26 @@ namespace HexGlobeProject.TerrainSystem.LOD
 						TrySpawnTile(id, (config != null && config.baseResolution > 0) ? config.baseResolution : 8);
 					}
 					catch (Exception) { }
+				}
+			}
+
+			// If the visibility manager's terrain material was assigned after some tiles
+			// were created (tests or runtime wiring), ensure spawned tiles receive the
+			// correct material instance and planet-center parameter now that it exists.
+			if (terrainMaterial != null)
+			{
+				Vector3 currentPlanetCenter = planetTransform != null ? planetTransform.position : this.transform.position;
+				foreach (var kv in _spawnedTiles)
+				{
+					var go = kv.Value;
+					if (go == null) continue;
+					var tile = go.GetComponent<PlanetTerrainTile>();
+					if (tile == null) continue;
+					try
+					{
+						tile.ConfigureMaterialAndLayer(terrainMaterial, terrainTileLayer, currentPlanetCenter);
+					}
+					catch { }
 				}
 			}
 		}

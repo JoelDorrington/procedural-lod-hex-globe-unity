@@ -16,6 +16,7 @@ Shader "HexGlobe/PlanetTerrain"
         _SnowColor ("Snow Color", Color) = (0.9,0.9,0.95,1)
         _ShallowBand ("Shallow Water Band Height", Float) = 2
         _ShallowColor ("Shallow Water Color", Color) = (0.12,0.25,0.55,1)
+        _PlanetCenter ("Planet Center (World Position)", Vector) = (0,0,0,0)
     }
     SubShader
     {
@@ -59,6 +60,7 @@ Shader "HexGlobe/PlanetTerrain"
             float _SnowStart; float _SnowFull; float _SnowSlopeBoost; float4 _SnowColor;
             float _ShallowBand; float4 _ShallowColor;
             float _FadeDirection; // 1 for child (fade in), -1 for parent (fade out)
+            float4 _PlanetCenter; // Planet center in world coordinates
 
             v2f vert(appdata v)
             {
@@ -72,8 +74,9 @@ Shader "HexGlobe/PlanetTerrain"
 
             float4 frag(v2f i) : SV_Target
             {
-                // Approximate height: distance from world origin minus sea level
-                float worldR = length(i.worldPos);
+                // Calculate height relative to planet center, not world origin
+                float3 planetToVertex = i.worldPos - _PlanetCenter.xyz;
+                float worldR = length(planetToVertex);
                 float height = worldR - _SeaLevel;
                 float mountainT = saturate((height - _MountainStart) / max(0.0001, (_MountainFull - _MountainStart)));
                 // Slope factor: steeper (normal more horizontal) -> higher slopeFactor
@@ -94,7 +97,7 @@ Shader "HexGlobe/PlanetTerrain"
                 }
                 baseCol = lerp(baseCol, _ShallowColor, shallowT);
                 float4 finalCol = lerp(baseCol, _ColorMountain, mountainT);
-                // Snow layer
+                // Snow layer - use distance from planet center
                 float snowRange = max(0.0001, _SnowFull - _SnowStart);
                 float snowT = saturate((worldR - _SnowStart) / snowRange);
                 // Flatter surfaces (higher normal.y) accumulate more snow

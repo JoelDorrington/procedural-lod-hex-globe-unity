@@ -170,7 +170,7 @@ Transform:
   m_GameObject: {fileID: 53093756}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 12.37734, y: 5.356741, z: -6.6948647}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -192,9 +192,6 @@ MonoBehaviour:
   GameCamera: {fileID: 977176986}
   planetTransform: {fileID: 53093758}
   terrainTileLayer: 3
-  raycastLayerMask:
-    serializedVersion: 2
-    m_Bits: 8
   curvedIcosphereRadiusMultiplier: 1.01
   terrainMaterial: {fileID: 2100000, guid: 0df5d813211e9c6428c2aec838d9605d, type: 2}
   heuristicTickCount: 0
