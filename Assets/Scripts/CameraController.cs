@@ -28,6 +28,10 @@ public class CameraController : MonoBehaviour
     [Tooltip("Smoothing time for zoom interpolation")] public float zoomSmoothTime = 0.15f;
     private float _targetDistance;
     private float _zoomVelocity;
+    // Track last observed external assignment to distance so we can detect
+    // when other code sets the public field directly and propagate it to
+    // the internal target distance used by smoothing logic.
+    private float _lastObservedDistance;
 
     [Header("Rotation Settings")]
     public float rotationSpeed = 50f; // Degrees per second
@@ -49,6 +53,7 @@ public class CameraController : MonoBehaviour
     void Start()
     {
         _targetDistance = distance;
+    _lastObservedDistance = distance;
     }
 
     void Update()
@@ -104,6 +109,13 @@ public class CameraController : MonoBehaviour
         // Mouse scroll zoom
         float scroll = Input.GetAxis("Mouse ScrollWheel");
         _proportionalDistance = Mathf.InverseLerp(minDistance, maxDistance, distance);
+        // If external code assigned to `distance` directly since last frame,
+        // treat that as the new requested target distance so external tests
+        // and scripts see immediate effect.
+        if (!Mathf.Approximately(distance, _lastObservedDistance))
+        {
+            _targetDistance = distance;
+        }
         // scroll is usually between -0.3 and 0.3
         float absScroll = Mathf.Abs(scroll);
         if (absScroll > 0.0001f)
@@ -125,6 +137,9 @@ public class CameraController : MonoBehaviour
 
         // Smooth zoom
         distance = Mathf.SmoothDamp(distance, _targetDistance, ref _zoomVelocity, zoomSmoothTime);
+
+    // Update last observed distance for external-assignment detection
+    _lastObservedDistance = distance;
 
         // Convert spherical coordinates to Cartesian coordinates
         // Use possibly updated (clamped) direction for final position

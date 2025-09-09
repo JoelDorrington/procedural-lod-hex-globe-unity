@@ -194,6 +194,9 @@ MonoBehaviour:
   terrainTileLayer: 3
   curvedIcosphereRadiusMultiplier: 1.01
   terrainMaterial: {fileID: 2100000, guid: 0df5d813211e9c6428c2aec838d9605d, type: 2}
+  maxDepth: 2
+  binBias: 1.2
+  depthLevelMaxDistance: 50
   heuristicTickCount: 0
 --- !u!1 &95784711
 GameObject:
@@ -379,7 +382,7 @@ Transform:
   m_GameObject: {fileID: 977176982}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1, z: -10}
+  m_LocalPosition: {x: 0, y: 1, z: -14.64}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -400,7 +403,7 @@ MonoBehaviour:
   target: {fileID: 53093758}
   latitude: 0
   longitude: 0
-  distance: 60
+  distance: 80
   minDistance: 31
   maxDistance: 90
   zoomSpeedMin: 2

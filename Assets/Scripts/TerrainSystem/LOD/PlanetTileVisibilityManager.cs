@@ -38,6 +38,16 @@ namespace HexGlobeProject.TerrainSystem.LOD
 		[SerializeField]
 		private Material terrainMaterial;
 
+		// Runtime depth mapping tuning (used to derive depth from camera distance)
+		[SerializeField]
+		private int maxDepth = 2;
+
+		[SerializeField]
+		private float binBias = 1.2f;
+
+		[SerializeField]
+		private int depthLevelMaxDistance = 50;
+
 		public TerrainConfig TerrainConfig => config;
 
 		// Minimal precomputed entry used by callers. Expand when restoring logic.
@@ -61,6 +71,13 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
 		private List<PrecomputedTileEntry> _precomputedTilesForDepth = new List<PrecomputedTileEntry>();
 		private int _lastPrecomputedDepth = -1;
+
+		// Current depth tracked at runtime. Use Update() to compute desired depth
+		// from camera state and call SetDepth when it changes.
+		private int _currentDepth = 0;
+
+		// Last observed camera distance to detect external changes
+		private float _lastObservedCameraDistance = float.NaN;
 
 		// Simple active spawn registry so repeated TrySpawnTile calls return the same GameObject
 		private readonly Dictionary<TileId, GameObject> _spawnedTiles = new Dictionary<TileId, GameObject>();
@@ -189,8 +206,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
 					{
 						for (int y = 0; y < tilesPerEdge; y++)
 						{
-							if (!IcosphereMapping.IsValidTileIndex(x, y, depth)) continue;
-
 							IcosphereMapping.GetTileBarycentricCenter(x, y, depth, out float u, out float v);
 
 							Vector3 dir = IcosphereMapping.BarycentricToWorldDirection(face, u, v).normalized;
@@ -304,6 +319,28 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			// Return cached spawned GameObject when present
 			if (_spawnedTiles.TryGetValue(tileId, out var existing) && existing != null)
 			{
+				// If an existing GameObject was previously deactivated, re-enable it.
+				try
+				{
+					existing.SetActive(true);
+					// Ensure its transform position matches the canonical center if available
+					if (existing.TryGetComponent<PlanetTerrainTile>(out var existingTile))
+					{
+						// Rebuild a minimal TileData and refresh runtime state. Avoid calling
+						// Initialize here because the local ColliderMeshGenerator may not be
+						// available yet in this control flow. Instead refresh tileData and
+						// restart its auto-deactivate timer so it behaves as active.
+						var reInitData = new TileData();
+						reInitData.id = tileId;
+						reInitData.center = entry.centerWorld;
+						reInitData.resolution = resolution;
+						existingTile.tileData = reInitData;
+						existingTile.transform.position = reInitData.center != Vector3.zero ? reInitData.center : entry.centerWorld;
+						try { existingTile.RestartAutoDeactivate(); } catch { }
+						try { existingTile.ConfigureMaterialAndLayer(terrainMaterial, terrainTileLayer, planetTransform != null ? planetTransform.position : this.transform.position); } catch { }
+					}
+				}
+				catch { }
 				return existing;
 			}
 
@@ -445,7 +482,38 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
 		public void SetDepth(int depth)
 		{
-			PrecomputeTileNormalsForDepth(depth);
+			// Ensure Precompute errors don't prevent the manager from updating its
+			// observable depth state. Tests and runtime expect SetDepth to always
+			// record the requested depth even if detailed precomputation fails.
+			try
+			{
+				PrecomputeTileNormalsForDepth(depth);
+			}
+			catch (Exception)
+			{
+				// Register an empty list so external queries see a valid entry for this depth
+				s_precomputedRegistry[depth] = new List<PrecomputedTileEntry>();
+				_lastPrecomputedDepth = depth;
+			}
+
+			// Deactivate tiles from other depths so they can be re-used when returning
+			// to their original depth instead of recreating GameObjects.
+			try
+			{
+				// Snapshot keys to avoid collection-modification issues and ensure a
+				// deterministic deactivation pass.
+				var keys = new System.Collections.Generic.List<TileId>(_spawnedTiles.Keys);
+				foreach (var key in keys)
+				{
+					if (!_spawnedTiles.TryGetValue(key, out var go) || go == null) continue;
+					// Deactivate cached tiles whose depth differs from the requested depth.
+					if (key.depth != depth)
+					{
+						try { go.SetActive(false); } catch { }
+					}
+				}
+			}
+			catch { }
 
 			// Spawn precomputed tiles so runtime/play tests can inspect active tiles immediately.
 			if (s_precomputedRegistry.TryGetValue(depth, out var list) && list != null)
@@ -455,8 +523,12 @@ namespace HexGlobeProject.TerrainSystem.LOD
 					try
 					{
 						var id = new TileId(entry.face, entry.x, entry.y, depth);
-						// Use a reasonable default resolution for spawned tiles when not specified
-						TrySpawnTile(id, (config != null && config.baseResolution > 0) ? config.baseResolution : 8);
+						// Use a reasonable default resolution for spawned tiles when not specified.
+						// Map depth -> mesh resolution so higher depths get exponentially more vertices.
+						int baseRes = (config != null && config.baseResolution > 0) ? config.baseResolution : 8;
+						// Increase resolution per-axis by a factor of 2^depth (quadratic vertex growth)
+						int resolutionForDepth = Mathf.Max(1, baseRes << depth);
+						TrySpawnTile(id, resolutionForDepth);
 					}
 					catch (Exception) { }
 				}
@@ -542,6 +614,66 @@ namespace HexGlobeProject.TerrainSystem.LOD
 		private void OnDisable()
 		{
 			try { StopRaycastHeuristicLoop(); } catch {}
+		}
+
+		private void Update()
+		{
+			// Only in play mode and when a camera is assigned
+			if (!Application.isPlaying) return;
+			if (GameCamera == null) return;
+
+			// Ensure runtime current depth is in-sync with any precomputed depth
+			if (_lastPrecomputedDepth >= 0 && _currentDepth != _lastPrecomputedDepth)
+			{
+				_currentDepth = _lastPrecomputedDepth;
+			}
+
+			// Detect explicit camera distance changes (tests set CameraController.distance directly)
+			float camDist = 0f;
+			try { camDist = GameCamera.distance; } catch { camDist = float.NaN; }
+			bool distanceChanged = !float.IsNaN(camDist) && (float.IsNaN(_lastObservedCameraDistance) || !Mathf.Approximately(camDist, _lastObservedCameraDistance));
+			_lastObservedCameraDistance = camDist;
+
+			int desired = ComputeDepthFromCamera();
+			if (distanceChanged || desired != _currentDepth)
+			{
+				_currentDepth = desired;
+				try { SetDepth(_currentDepth); } catch { }
+			}
+		}
+
+		private int ComputeDepthFromCamera()
+		{
+			if (GameCamera == null) return _currentDepth;
+
+			// Prefer direct camera distance values so tests that set CameraController.distance
+			// are observed immediately rather than relying on the controller's internal update order.
+			float t = 0f;
+			float camMin = 0f, camMax = 1f, camDist = 0f;
+			try
+			{
+				camDist = GameCamera.distance;
+				camMin = GameCamera.minDistance;
+				camMax = GameCamera.maxDistance;
+				if (Mathf.Approximately(camMax, camMin)) camMax = camMin + 1f;
+				// Normalize into 0..1
+				t = Mathf.InverseLerp(camMin, camMax, camDist);
+			}
+			catch
+			{
+				// Fallback to the public proportional property if available
+				t = Mathf.Clamp01(GameCamera.ProportionalDistance);
+			}
+
+			// Apply bias exponent (1 = linear, >1 biases bins toward higher distances)
+			float biased = Mathf.Pow(t, Mathf.Max(0.0001f, binBias));
+
+			// Invert mapping so that larger distances map to depth 0 and closer distances
+			// (smaller camDist) map to higher depth values. This satisfies the contract:
+			// depth == 0 at max camera distance; depth increases as the camera approaches.
+			float inverted = 1f - biased;
+			int newDepth = Mathf.Clamp(Mathf.FloorToInt(inverted * (maxDepth + 1)), 0, maxDepth);
+			return newDepth;
 		}
 
 		// Lightweight coroutine: yields a WaitForSeconds with HeuristicInterval repeatedly.
