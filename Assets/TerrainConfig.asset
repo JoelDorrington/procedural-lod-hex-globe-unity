@@ -45,5 +45,5 @@ MonoBehaviour:
         octaves: 4
         lacunarity: 10
         gain: 0.5
-        amplitude: 1
+        amplitude: 1.4
         seed: 12345

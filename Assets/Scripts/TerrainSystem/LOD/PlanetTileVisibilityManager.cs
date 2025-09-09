@@ -82,6 +82,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
 		// Simple active spawn registry so repeated TrySpawnTile calls return the same GameObject
 		private readonly Dictionary<TileId, GameObject> _spawnedTiles = new Dictionary<TileId, GameObject>();
 
+		// Lazy mesh builder used to construct visual meshes on-demand when a tile is hit
+		private PlanetTileMeshBuilder _meshBuilder = null;
+
 	// Heuristic coroutine handle and interval used by tests to verify the manager
 	// starts a raycast heuristic running at ~30Hz. In EditMode Unity does not
 	// reliably create Coroutine objects, so we store this as an object and use
@@ -365,36 +368,12 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			data.mesh = null;
 			data.resolution = resolution;
 
-			// Use the authoritative PlanetTileMeshBuilder to build the visual mesh and collider
-			try
-			{
-				// Resolve a TerrainConfig to pass to the builder (use serialized config or project asset)
-				TerrainConfig builderConf = config;
-#if PLAYMODE_TESTS || UNITY_EDITOR
-				if (builderConf == null)
-				{
-					var maybe = UnityEditor.AssetDatabase.LoadAssetAtPath<TerrainConfig>("Assets/TerrainConfig.asset");
-					if (maybe != null) builderConf = maybe;
-				}
-#endif
-				// Create a lightweight builder using manager's config
-				Vector3 planetCenter = planetTransform != null ? planetTransform.position : this.transform.position;
-				var builder = new PlanetTileMeshBuilder(builderConf, null, planetCenter);
-				float rawMin = float.MaxValue, rawMax = float.MinValue;
-				// Populate data.mesh, data.center, and other metadata
-				builder.BuildTileMesh(data, ref rawMin, ref rawMax);
-
-				// If the builder produced a mesh, convert its vertex positions from
-				// the builder's world-relative local offsets into the tile GameObject's
-				// local-space so ancestor transforms (scale/rotation) are correctly applied.
-				// If the builder produced a mesh, keep the mesh instance as-is (it is
-				// already local-centered relative to data.center). Do not clone here so
-				// callers and tests that rely on instance equality see the original cached mesh.
-			}
-			catch (Exception)
-			{
-				// If builder fails for any reason, fall back to the simple collider below
-			}
+			// Delay expensive visual mesh building until the raycast heuristic actually hits
+			// the tile. Keep data.mesh null for now so the tile's visual builder can
+			// generate the mesh on-demand. We still set data.center so the tile can be
+			// positioned correctly and its collider can be produced from lightweight
+			// corner positions.
+			// Note: the lazy mesh builder instance is created on first use by the heuristic.
 
 			// Collider generator that uses the builder-produced mesh when available
 			Mesh ColliderMeshGenerator(TileId id)
@@ -468,6 +447,133 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			return go;
 		}
 
+		/// <summary>
+		/// Build the visual mesh for a tile on demand. This method is safe to call
+		/// repeatedly; it no-ops if the tile already has a mesh.
+		/// </summary>
+		private void BuildVisualForTile(TileId id, PlanetTerrainTile tile)
+		{
+			if (tile == null) return;
+			if (tile.tileData != null && tile.tileData.mesh != null) return; // already built
+
+			// Lazily create the mesh builder with the manager's config and planet center
+			if (_meshBuilder == null)
+			{
+				TerrainConfig builderConf = config;
+#if UNITY_EDITOR || PLAYMODE_TESTS
+				if (builderConf == null)
+				{
+					var maybe = UnityEditor.AssetDatabase.LoadAssetAtPath<TerrainConfig>("Assets/TerrainConfig.asset");
+					if (maybe != null) builderConf = maybe;
+				}
+#endif
+				Vector3 planetCenter = planetTransform != null ? planetTransform.position : this.transform.position;
+				_meshBuilder = new PlanetTileMeshBuilder(builderConf, null, planetCenter);
+			}
+
+			// Build mesh into a fresh TileData if necessary
+			try
+			{
+				var data = tile.tileData ?? new TileData { id = id, resolution = resolutionForBuilder(id) };
+				float rawMin = float.MaxValue, rawMax = float.MinValue;
+				_meshBuilder.BuildTileMesh(data, ref rawMin, ref rawMax);
+				// Assign into tile and meshFilter
+				tile.tileData = data;
+				if (tile.meshFilter != null && data.mesh != null) tile.meshFilter.sharedMesh = data.mesh;
+			}
+			catch { }
+		}
+
+		// Helper: decide resolution used by builder for a TileId (uses manager config)
+		private int resolutionForBuilder(TileId id)
+		{
+			int baseRes = (config != null && config.baseResolution > 0) ? config.baseResolution : 8;
+			int depth = id.depth;
+			return Mathf.Max(1, baseRes << depth);
+		}
+
+		// --- Spawn queue / worker to limit concurrency and keep main thread responsive ---
+		[SerializeField]
+		private int maxSpawnsPerFrame = 4; // how many tiles we allow to spawn per frame
+
+		private struct SpawnRequest { public TileId id; public int resolution; public SpawnRequest(TileId i, int r) { id = i; resolution = r; } }
+		private readonly Queue<SpawnRequest> _spawnQueue = new Queue<SpawnRequest>();
+		private Coroutine _spawnWorkerCoroutine = null;
+
+		private void StartSpawnWorkerIfNeeded()
+		{
+			if (_spawnWorkerCoroutine == null && _spawnQueue.Count > 0 && Application.isPlaying)
+			{
+				_spawnWorkerCoroutine = StartCoroutine(SpawnWorkerCoroutine());
+			}
+		}
+
+		private void StopSpawnWorker()
+		{
+			if (_spawnWorkerCoroutine != null)
+			{
+				try { StopCoroutine(_spawnWorkerCoroutine); } catch { }
+				_spawnWorkerCoroutine = null;
+			}
+		}
+
+		private IEnumerator SpawnWorkerCoroutine()
+		{
+			// Process the queue in small bursts per frame to avoid jank.
+			while (_spawnQueue.Count > 0)
+			{
+				int budget = Math.Max(1, maxSpawnsPerFrame);
+		for (int i = 0; i < budget && _spawnQueue.Count > 0; i++)
+				{
+					var req = _spawnQueue.Dequeue();
+					try
+					{
+			// If the request is stale (depth changed since it was enqueued), skip it
+			if (req.id.depth != _currentDepth) continue;
+
+			// If the tile was created meanwhile, ensure it's active and continue
+						if (_spawnedTiles.TryGetValue(req.id, out var existing) && existing != null)
+						{
+							try { existing.SetActive(true); } catch { }
+							continue;
+						}
+
+						// Execute spawn synchronously but limited per-frame
+						TrySpawnTile(req.id, req.resolution);
+					}
+					catch { }
+				}
+
+				// Yield one frame to keep main thread responsive
+				yield return null;
+			}
+
+			_spawnWorkerCoroutine = null;
+		}
+
+		/// <summary>
+		/// Return all TileIds at depth sorted by distance to worldPos (nearest first).
+		/// Used to prioritize spawn ordering.
+		/// </summary>
+		private List<TileId> GetAllTileIdsSortedByDistance(Vector3 worldPos, int depth)
+		{
+			if (!s_precomputedRegistry.TryGetValue(depth, out var entries) || entries == null || entries.Count == 0)
+				return new List<TileId>();
+
+			var list = new List<(float d, TileId id)>(entries.Count);
+			for (int i = 0; i < entries.Count; i++)
+			{
+				var e = entries[i];
+				var id = new TileId(e.face, e.x, e.y, depth);
+				float d = (e.centerWorld - worldPos).sqrMagnitude;
+				list.Add((d, id));
+			}
+			list.Sort((a, b) => a.d.CompareTo(b.d));
+			var outIds = new List<TileId>(list.Count);
+			for (int i = 0; i < list.Count; i++) outIds.Add(list[i].id);
+			return outIds;
+		}
+
 		public List<PlanetTerrainTile> GetActiveTiles()
 		{
 			var list = new List<PlanetTerrainTile>();
@@ -496,6 +602,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
 				_lastPrecomputedDepth = depth;
 			}
 
+			// Ensure manager's current depth is set immediately so the spawn worker can
+			// ignore stale requests if depth changes while the worker is running.
+			_currentDepth = depth;
+
 			// Deactivate tiles from other depths so they can be re-used when returning
 			// to their original depth instead of recreating GameObjects.
 			try
@@ -515,23 +625,43 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			}
 			catch { }
 
-			// Spawn precomputed tiles so runtime/play tests can inspect active tiles immediately.
+			// Clear any pending spawn requests for previous depths to avoid creating
+			// stale tiles when the player quickly changes depth (zoom in/out).
+			try { _spawnQueue.Clear(); } catch { }
+			StopSpawnWorker();
+
+			// Spawn (enqueue) precomputed tiles so runtime/play tests can inspect active tiles immediately.
 			if (s_precomputedRegistry.TryGetValue(depth, out var list) && list != null)
 			{
-				foreach (var entry in list)
+				// Instead of spawning everything synchronously, enqueue prioritized spawn
+				// requests ordered by distance to the camera so nearest tiles are created first
+				// while the worker keeps the main thread responsive.
+				Vector3 camPos = GameCamera != null ? GameCamera.transform.position : (Camera.main != null ? Camera.main.transform.position : Vector3.zero);
+				var ordered = GetAllTileIdsSortedByDistance(camPos, depth);
+
+				int baseRes = (config != null && config.baseResolution > 0) ? config.baseResolution : 8;
+				foreach (var id in ordered)
 				{
 					try
 					{
-						var id = new TileId(entry.face, entry.x, entry.y, depth);
-						// Use a reasonable default resolution for spawned tiles when not specified.
-						// Map depth -> mesh resolution so higher depths get exponentially more vertices.
-						int baseRes = (config != null && config.baseResolution > 0) ? config.baseResolution : 8;
-						// Increase resolution per-axis by a factor of 2^depth (quadratic vertex growth)
+						// Skip if already spawned
+						if (_spawnedTiles.ContainsKey(id))
+						{
+							// Ensure it's active
+							if (_spawnedTiles.TryGetValue(id, out var go) && go != null)
+							{
+								try { go.SetActive(true); } catch { }
+							}
+							continue;
+						}
+
 						int resolutionForDepth = Mathf.Max(1, baseRes << depth);
-						TrySpawnTile(id, resolutionForDepth);
+						_spawnQueue.Enqueue(new SpawnRequest(id, resolutionForDepth));
 					}
-					catch (Exception) { }
+					catch { }
 				}
+
+				StartSpawnWorkerIfNeeded();
 			}
 
 			// If the visibility manager's terrain material was assigned after some tiles
@@ -627,19 +757,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			{
 				_currentDepth = _lastPrecomputedDepth;
 			}
-
-			// Detect explicit camera distance changes (tests set CameraController.distance directly)
-			float camDist = 0f;
-			try { camDist = GameCamera.distance; } catch { camDist = float.NaN; }
-			bool distanceChanged = !float.IsNaN(camDist) && (float.IsNaN(_lastObservedCameraDistance) || !Mathf.Approximately(camDist, _lastObservedCameraDistance));
-			_lastObservedCameraDistance = camDist;
-
-			int desired = ComputeDepthFromCamera();
-			if (distanceChanged || desired != _currentDepth)
-			{
-				_currentDepth = desired;
-				try { SetDepth(_currentDepth); } catch { }
-			}
 		}
 
 		private int ComputeDepthFromCamera()
@@ -689,6 +806,18 @@ namespace HexGlobeProject.TerrainSystem.LOD
 				heuristicTickCount++;
 #endif
 
+				// Depth check: compute desired depth from camera at the same frequency as the raycast heuristic
+				try
+				{
+					int desiredDepth = ComputeDepthFromCamera();
+					if (desiredDepth != _currentDepth)
+					{
+						_currentDepth = desiredDepth;
+						try { SetDepth(_currentDepth); } catch { }
+					}
+				}
+				catch { }
+
 				// Enhanced raycast pass: iterate over ALL spawned tiles (including visually deactivated ones)
 				// so that deactivated tiles can be reactivated when they come back into view
 				try
@@ -704,7 +833,12 @@ namespace HexGlobeProject.TerrainSystem.LOD
 							Vector3 origin = cam.transform.position;
 							Vector3 dir = (tile.transform.position - origin).normalized;
 							Ray ray = new Ray(origin, dir);
-							tile.ActivateIfHit(ray);
+							bool hit = tile.ActivateIfHit(ray);
+							if (hit)
+							{
+								// Lazily build the visual mesh for this tile on first hit.
+								try { BuildVisualForTile(tile.tileId, tile); } catch { }
+							}
 						}
 					}
 				}
