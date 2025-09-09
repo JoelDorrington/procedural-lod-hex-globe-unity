@@ -48,6 +48,12 @@ namespace HexGlobeProject.TerrainSystem.LOD
 		[SerializeField]
 		private int depthLevelMaxDistance = 50;
 
+		// Debug toggle: when true the manager will not compute or apply depth changes
+		// from the camera. Tests can enable this to manually control depth via SetDepth
+		// without the manager overriding the value from CameraController.
+		[SerializeField]
+		public bool debugDisableCameraDepthSync = false;
+
 		public TerrainConfig TerrainConfig => config;
 
 		// Minimal precomputed entry used by callers. Expand when restoring logic.
@@ -81,6 +87,16 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
 		// Simple active spawn registry so repeated TrySpawnTile calls return the same GameObject
 		private readonly Dictionary<TileId, GameObject> _spawnedTiles = new Dictionary<TileId, GameObject>();
+
+		// Track tiles that are either already spawned or queued to spawn using a packed key
+		// so we can defensively prevent duplicate enqueues across rapid depth transitions.
+		private readonly HashSet<ulong> _activeOrQueued = new HashSet<ulong>();
+
+		// Pack depth/face/x/y into a 64-bit key for fast set membership tests.
+		private static ulong PackTileKey(TileId id)
+		{
+			return ((ulong)(uint)id.depth << 48) | ((ulong)(uint)id.face << 32) | ((ulong)(uint)id.x << 16) | (ulong)(uint)id.y;
+		}
 
 		// Lazy mesh builder used to construct visual meshes on-demand when a tile is hit
 		private PlanetTileMeshBuilder _meshBuilder = null;
@@ -316,6 +332,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
 		// Spawn if not already spawned, otherwise return existing
 		public GameObject TrySpawnTile(TileId tileId, int resolution)
 		{
+			// Pack the id for quick membership checks
+			ulong packed = PackTileKey(tileId);
+
 			// Try to find precomputed entry
 			if (!GetPrecomputedIndex(tileId, out int idx, out var entry)) return null;
 
@@ -339,7 +358,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
 						reInitData.resolution = resolution;
 						existingTile.tileData = reInitData;
 						existingTile.transform.position = reInitData.center != Vector3.zero ? reInitData.center : entry.centerWorld;
-						try { existingTile.RestartAutoDeactivate(); } catch { }
+						try { existingTile.RefreshActivity(); } catch { }
 						try { existingTile.ConfigureMaterialAndLayer(terrainMaterial, terrainTileLayer, planetTransform != null ? planetTransform.position : this.transform.position); } catch { }
 					}
 				}
@@ -348,7 +367,15 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			}
 
 			// Create a new GameObject for the tile
-			var go = new GameObject($"Tile_F{entry.face}_{entry.x}_{entry.y}_D{tileId.depth}");
+			// Mark as active/queued before creation to avoid races where another caller
+			// enqueues/creates the same tile concurrently.
+			try { _activeOrQueued.Add(packed); } catch { }
+
+			bool spawnSucceeded = false;
+			GameObject go = null;
+			try
+			{
+				go = new GameObject($"Tile_F{entry.face}_{entry.x}_{entry.y}_D{tileId.depth}");
 			// Parent to the planet transform if available so tiles group under the planet in hierarchy
 			if (planetTransform != null)
 			{
@@ -408,9 +435,15 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			// was not produced for any reason.
 			go.transform.position = (data != null && data.center != Vector3.zero) ? data.center : entry.centerWorld;
 
-			// Generate a minimal visual mesh and center it locally so MeshFilter.sharedMesh is non-null
+			// Use PlanetTileMeshBuilder to generate the visual mesh immediately for integration tests
+			// This ensures the mesh is built using the proper builder system
 			try
 			{
+				BuildVisualForTile(tileId, tile);
+			}
+			catch (Exception)
+			{
+				// Fallback: if mesh builder fails, create a minimal placeholder mesh
 				if (tile.meshFilter != null && tile.meshFilter.sharedMesh == null)
 				{
 					var m = new Mesh();
@@ -437,14 +470,20 @@ namespace HexGlobeProject.TerrainSystem.LOD
 					if (tile.tileData != null) tile.tileData.mesh = m;
 				}
 			}
-			catch (Exception)
-			{
-				// Best-effort: if mesh creation fails, continue without breaking tests
-			}
 
 			// Cache and return
 			_spawnedTiles[tileId] = go;
+			try { _activeOrQueued.Add(packed); } catch { }
+			spawnSucceeded = true;
 			return go;
+			}
+			finally
+			{
+				if (!spawnSucceeded)
+				{
+					try { _activeOrQueued.Remove(packed); } catch { }
+				}
+			}
 		}
 
 		/// <summary>
@@ -523,15 +562,19 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			while (_spawnQueue.Count > 0)
 			{
 				int budget = Math.Max(1, maxSpawnsPerFrame);
-		for (int i = 0; i < budget && _spawnQueue.Count > 0; i++)
+				for (int i = 0; i < budget && _spawnQueue.Count > 0; i++)
 				{
 					var req = _spawnQueue.Dequeue();
 					try
 					{
-			// If the request is stale (depth changed since it was enqueued), skip it
-			if (req.id.depth != _currentDepth) continue;
+						// If the request is stale (depth changed since it was enqueued), remove its queued marker and skip it
+						if (req.id.depth != _currentDepth)
+						{
+							try { _activeOrQueued.Remove(PackTileKey(req.id)); } catch { }
+							continue;
+						}
 
-			// If the tile was created meanwhile, ensure it's active and continue
+						// If the tile was created meanwhile, ensure it's active and continue
 						if (_spawnedTiles.TryGetValue(req.id, out var existing) && existing != null)
 						{
 							try { existing.SetActive(true); } catch { }
@@ -581,13 +624,42 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			{
 				if (kv.Value == null) continue;
 				var t = kv.Value.GetComponent<PlanetTerrainTile>();
-				if (t != null && kv.Value.activeInHierarchy) list.Add(t);
+				// Only include tiles that are both active and belong to the manager's current depth.
+				if (t != null && kv.Value.activeInHierarchy)
+				{
+					if (t.tileData != null && t.tileData.id.depth == _currentDepth)
+					{
+						list.Add(t);
+					}
+				}
 			}
 			return list;
 		}
 
 		public void SetDepth(int depth)
 		{
+			// If requested depth is already current, usually nothing to do. However during
+			// initialization the manager may have _currentDepth set but no tiles have been
+			// actually spawned yet; in that case we must continue to enqueue spawns.
+			if (depth == _currentDepth)
+			{
+				// Fast check: if we already have a spawned tile for this depth, skip work.
+				foreach (var kv in _spawnedTiles)
+				{
+					if (kv.Key.depth == depth && kv.Value != null)
+					{
+						return;
+					}
+				}
+
+				// If any queued/active marker exists for this depth, skip as well.
+				foreach (var key in _activeOrQueued)
+				{
+					int d = (int)(key >> 48);
+					if (d == depth) return;
+				}
+				// Otherwise fall through and perform SetDepth work (bootstrap case).
+			}
 			// Ensure Precompute errors don't prevent the manager from updating its
 			// observable depth state. Tests and runtime expect SetDepth to always
 			// record the requested depth even if detailed precomputation fails.
@@ -627,7 +699,21 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
 			// Clear any pending spawn requests for previous depths to avoid creating
 			// stale tiles when the player quickly changes depth (zoom in/out).
-			try { _spawnQueue.Clear(); } catch { }
+			try
+			{
+				// Remove queued markers so they don't permanently block re-enqueueing later.
+				try
+				{
+					var arr = _spawnQueue.ToArray();
+					for (int __i = 0; __i < arr.Length; __i++)
+					{
+						try { _activeOrQueued.Remove(PackTileKey(arr[__i].id)); } catch { }
+					}
+				}
+				catch { }
+				_spawnQueue.Clear();
+			}
+			catch { }
 			StopSpawnWorker();
 
 			// Spawn (enqueue) precomputed tiles so runtime/play tests can inspect active tiles immediately.
@@ -644,8 +730,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
 				{
 					try
 					{
-						// Skip if already spawned
-						if (_spawnedTiles.ContainsKey(id))
+						// Skip if already spawned or queued
+						ulong k = PackTileKey(id);
+						if (_activeOrQueued.Contains(k))
 						{
 							// Ensure it's active
 							if (_spawnedTiles.TryGetValue(id, out var go) && go != null)
@@ -657,6 +744,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
 						int resolutionForDepth = Mathf.Max(1, baseRes << depth);
 						_spawnQueue.Enqueue(new SpawnRequest(id, resolutionForDepth));
+						try { _activeOrQueued.Add(k); } catch { }
 					}
 					catch { }
 				}
@@ -752,10 +840,22 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			if (!Application.isPlaying) return;
 			if (GameCamera == null) return;
 
-			// Ensure runtime current depth is in-sync with any precomputed depth
-			if (_lastPrecomputedDepth >= 0 && _currentDepth != _lastPrecomputedDepth)
+			// Detect explicit camera distance changes (tests set CameraController.distance directly)
+			float camDist = 0f;
+			try { camDist = GameCamera.distance; } catch { camDist = float.NaN; }
+			bool distanceChanged = !float.IsNaN(camDist) && (float.IsNaN(_lastObservedCameraDistance) || !Mathf.Approximately(camDist, _lastObservedCameraDistance));
+			_lastObservedCameraDistance = camDist;
+
+			// If the camera distance was directly modified (test or external system), respond immediately
+			// rather than waiting for the heuristic tick so tests can observe the update quickly.
+			if (distanceChanged && !debugDisableCameraDepthSync)
 			{
-				_currentDepth = _lastPrecomputedDepth;
+				int desired = ComputeDepthFromCamera();
+				if (desired != _currentDepth)
+				{
+					_currentDepth = desired;
+					try { SetDepth(_currentDepth); } catch { }
+				}
 			}
 		}
 
@@ -809,11 +909,14 @@ namespace HexGlobeProject.TerrainSystem.LOD
 				// Depth check: compute desired depth from camera at the same frequency as the raycast heuristic
 				try
 				{
-					int desiredDepth = ComputeDepthFromCamera();
-					if (desiredDepth != _currentDepth)
+					if (!debugDisableCameraDepthSync)
 					{
-						_currentDepth = desiredDepth;
-						try { SetDepth(_currentDepth); } catch { }
+						int desiredDepth = ComputeDepthFromCamera();
+						if (desiredDepth != _currentDepth)
+						{
+							_currentDepth = desiredDepth;
+							try { SetDepth(_currentDepth); } catch { }
+						}
 					}
 				}
 				catch { }
@@ -838,6 +941,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
 							{
 								// Lazily build the visual mesh for this tile on first hit.
 								try { BuildVisualForTile(tile.tileId, tile); } catch { }
+								
+								// Restart the auto-deactivate timer to keep the tile visible while raycasts hit it
+								try { tile.RefreshActivity(); } catch { }
 							}
 						}
 					}

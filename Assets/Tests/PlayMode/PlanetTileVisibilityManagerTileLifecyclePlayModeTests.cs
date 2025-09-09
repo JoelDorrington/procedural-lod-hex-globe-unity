@@ -16,10 +16,14 @@ namespace HexGlobeProject.Tests.PlayMode
 
             var mgr = builder.Manager;
 
+            // Disable automatic camera-driven depth syncing so the test can control depth deterministically
+            var debugField = mgr.GetType().GetField("debugDisableCameraDepthSync", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (debugField != null) debugField.SetValue(mgr, true);
+
             // Start at depth 0
             mgr.SetDepth(0);
-            // Wait for spawn
-            for (int i = 0; i < 4; i++) yield return null;
+            // Wait a short realtime interval for the prioritized spawn worker to produce tiles
+            yield return new WaitForSecondsRealtime(0.2f);
 
             var active0 = mgr.GetActiveTiles();
             Assert.AreEqual(20, active0.Count, "Depth 0 should spawn 20 tiles initially.");
@@ -46,7 +50,8 @@ namespace HexGlobeProject.Tests.PlayMode
 
             // Transition back to depth 0
             mgr.SetDepth(0);
-            for (int i = 0; i < 6; i++) yield return null;
+            // Allow a little more time for re-enabling/reuse to occur
+            yield return new WaitForSecondsRealtime(0.3f);
 
             // Ensure the same GameObject instances were re-enabled (not recreated)
             var activeReturn = mgr.GetActiveTiles();

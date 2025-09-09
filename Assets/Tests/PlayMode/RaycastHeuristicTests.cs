@@ -153,7 +153,11 @@ namespace HexGlobeProject.Tests.PlayMode
             var activeTiles = mgr.GetActiveTiles();
             Assert.IsTrue(activeTiles.Count > 0, "No active tiles spawned");
 
-
+            // Enable debug logging to see what's happening
+            foreach (var t in activeTiles)
+            {
+                t.debug = true;
+            }
 
             foreach (var t in activeTiles)
             {
@@ -163,14 +167,17 @@ namespace HexGlobeProject.Tests.PlayMode
             }
             yield return null; // startcoroutine
 
+            Debug.Log($"Waiting 1 second for debounce test. Raycast heuristic should keep tiles visible.");
             yield return new WaitForSecondsRealtime(1f); // Test debounce
 
             bool anyVisible = false;
             foreach (var tile in activeTiles)
             {
+                Debug.Log($"Tile {tile.name}: gameObject.activeInHierarchy={tile.gameObject.activeInHierarchy}, isVisible={tile.isVisible}, meshRenderer.enabled={tile.meshRenderer?.enabled}");
                 Assert.IsTrue(tile.gameObject.activeInHierarchy, "Tile must be in scene");
                 anyVisible |= tile.isVisible && tile.meshRenderer != null && tile.meshRenderer.enabled;
             }
+            Debug.Log($"Any visible tiles: {anyVisible}");
             Assert.IsTrue(anyVisible, "Tiles must be kept visible while raycasts are running");
 
 

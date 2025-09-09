@@ -332,9 +332,15 @@ namespace HexGlobeProject.TerrainSystem.LOD
         /// <summary>
         /// Public method to refresh tile activity from external systems (for example the raycast heuristic).
         /// This restarts the auto-deactivate timer so the tile remains active while being observed/hit.
+        /// If the tile is hidden, it will be shown again.
         /// </summary>
         public void RefreshActivity()
         {
+            // If tile is hidden, show it again when refreshed
+            if (!isVisible)
+            {
+                ShowVisualMesh();
+            }
             try { RestartAutoDeactivate(); } catch { }
         }
 
