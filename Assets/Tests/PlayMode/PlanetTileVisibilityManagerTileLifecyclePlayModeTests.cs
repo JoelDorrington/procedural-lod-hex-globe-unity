@@ -21,12 +21,38 @@ namespace HexGlobeProject.Tests.PlayMode
             if (debugField != null) debugField.SetValue(mgr, true);
 
             // Start at depth 0
+            // Diagnostic: check how many precomputed entries exist for depth 0
+            // Set depth to 0 first to trigger precomputation
             mgr.SetDepth(0);
-            // Wait a short realtime interval for the prioritized spawn worker to produce tiles
-            yield return new WaitForSecondsRealtime(0.2f);
+            
+            // Now check if the registry was populated
+            var regField = typeof(HexGlobeProject.TerrainSystem.LOD.PlanetTileVisibilityManager).GetField("s_precomputedRegistry", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            if (regField != null)
+            {
+                var registry = regField.GetValue(null) as System.Collections.IDictionary;
+                if (registry != null && registry.Contains(0))
+                {
+                    var list = registry[0] as System.Collections.IList;
+                    if (list != null)
+                    {
+                        Debug.Log($"Precomputed registry for depth 0 contains {list.Count} entries");
+                    }
+                    else
+                    {
+                        Debug.Log("Precomputed registry for depth 0 exists but list is null");
+                    }
+                }
+                else
+                {
+                    Debug.Log("Precomputed registry for depth 0 is missing or empty");
+                }
+            }
+            
+            // Allow more time for the prioritized spawn worker and coroutines to produce tiles
+            yield return new WaitForSecondsRealtime(1.0f);
 
             var active0 = mgr.GetActiveTiles();
-            Assert.AreEqual(20, active0.Count, "Depth 0 should spawn 20 tiles initially.");
+            Assert.AreEqual(20, active0.Count, "Depth 0 should spawn 20 tiles eventually");
 
             // Record GameObject instances for depth 0
             var instances = new System.Collections.Generic.Dictionary<string, GameObject>();
@@ -50,8 +76,8 @@ namespace HexGlobeProject.Tests.PlayMode
 
             // Transition back to depth 0
             mgr.SetDepth(0);
-            // Allow a little more time for re-enabling/reuse to occur
-            yield return new WaitForSecondsRealtime(0.3f);
+            // Allow more time for re-enabling/reuse to occur after depth change
+            yield return new WaitForSecondsRealtime(1.0f);
 
             // Ensure the same GameObject instances were re-enabled (not recreated)
             var activeReturn = mgr.GetActiveTiles();

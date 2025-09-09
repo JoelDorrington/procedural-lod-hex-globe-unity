@@ -4,6 +4,7 @@ using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
 using System;
+using System.Linq;
 
 namespace HexGlobeProject.TerrainSystem.LOD
 {
@@ -45,8 +46,23 @@ namespace HexGlobeProject.TerrainSystem.LOD
 		[SerializeField]
 		private float binBias = 1.2f;
 
+		// NOTE: depth-level max distance configuration was removed — ComputeDepthFromCamera
+		// now derives depth solely from CameraController distance and `maxDepth`.
+
+		// Adaptive raycast distribution settings
 		[SerializeField]
-		private int depthLevelMaxDistance = 50;
+		[Tooltip("Approximate number of rays to cast; actual cast uses a square sampling grid <= this value")]
+		private int _maxRays = 25;
+
+		[SerializeField]
+		[Tooltip("Exponent for radial bias smoothing function. Higher values concentrate rays more toward sphere edges.")]
+		private float radialBiasExponent = 2.0f;
+
+		// Runtime state for adaptive distribution
+		private float _sphereViewportRadius;
+		private Vector2[] _baseSamples;
+		private int _baseSampleGrid = 0; // sqrtRays
+		private int _sampleCapacity = 0;
 
 		// Debug toggle: when true the manager will not compute or apply depth changes
 		// from the camera. Tests can enable this to manually control depth via SetDepth
@@ -55,6 +71,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
 		public bool debugDisableCameraDepthSync = false;
 
 		public TerrainConfig TerrainConfig => config;
+
+		// Planet properties
+		private Vector3 _planetCenter;
+		private float _planetRadius => config != null ? config.baseRadius : 1f;
+		private Camera cam => GameCamera != null ? GameCamera.GetComponent<Camera>() : null;
 
 		// Minimal precomputed entry used by callers. Expand when restoring logic.
 		public struct PrecomputedTileEntry
@@ -176,7 +197,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
 					entry.centerWorld = entry.normal * (planetRadius) + planetCenter; // fallback
 					if (localConf != null)
 					{
-						var provider = localConf.heightProvider ?? (TerrainHeightProviderBase)new SimplePerlinHeightProvider();
+						var provider = localConf.heightProvider ?? (TerrainHeightProviderBase)new HexGlobeProject.TerrainSystem.SimplePerlinHeightProvider();
 						int sampleRes = localConf.baseResolution > 0 ? localConf.baseResolution : 16;
 						// Accumulate world-space vertex positions matching the builder's sampling
 						Vector3 centerAccum = Vector3.zero;
@@ -242,7 +263,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
 							float centerHeight = 0f;
 							if (localConf != null)
 							{
-								var provider = localConf.heightProvider ?? (TerrainHeightProviderBase)new SimplePerlinHeightProvider();
+								var provider = localConf.heightProvider ?? (TerrainHeightProviderBase)new HexGlobeProject.TerrainSystem.SimplePerlinHeightProvider();
 								int sampleRes = localConf.baseResolution > 0 ? localConf.baseResolution : 16;
 								centerHeight = provider.Sample(in dir, sampleRes) * localConf.heightScale;
 							}
@@ -336,7 +357,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			ulong packed = PackTileKey(tileId);
 
 			// Try to find precomputed entry
-			if (!GetPrecomputedIndex(tileId, out int idx, out var entry)) return null;
+			if (!GetPrecomputedIndex(tileId, out int idx, out var entry)) 
+			{
+				return null;
+			}
 
 			// Return cached spawned GameObject when present
 			if (_spawnedTiles.TryGetValue(tileId, out var existing) && existing != null)
@@ -402,24 +426,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			// corner positions.
 			// Note: the lazy mesh builder instance is created on first use by the heuristic.
 
-			// Collider generator that uses the builder-produced mesh when available
+			// Collider generator that creates a subdivided sphere mesh projected to planet radius
 			Mesh ColliderMeshGenerator(TileId id)
 			{
-				if (data != null && data.mesh != null) return data.mesh;
-
-				var m = new Mesh();
-				m.name = $"Collider_F{entry.face}_{entry.x}_{entry.y}_D{tileId.depth}";
-				Vector3 c0 = entry.cornerWorldPositions != null && entry.cornerWorldPositions.Length > 0 ? entry.cornerWorldPositions[0] : entry.centerWorld + Vector3.right * 0.5f;
-				Vector3 c1 = entry.cornerWorldPositions != null && entry.cornerWorldPositions.Length > 1 ? entry.cornerWorldPositions[1] : entry.centerWorld + Vector3.up * 0.5f;
-				Vector3 c2 = entry.cornerWorldPositions != null && entry.cornerWorldPositions.Length > 2 ? entry.cornerWorldPositions[2] : entry.centerWorld + Vector3.left * 0.5f;
-				Vector3 local0 = go.transform.InverseTransformPoint(c0);
-				Vector3 local1 = go.transform.InverseTransformPoint(c1);
-				Vector3 local2 = go.transform.InverseTransformPoint(c2);
-				m.vertices = new Vector3[] { local0, local1, local2 };
-				m.triangles = new int[] { 0, 1, 2 };
-				m.RecalculateNormals();
-				m.RecalculateBounds();
-				return m;
+				// Create a subdivided collision mesh for reliable raycast detection
+				return CreateSubdividedSphereColliderMesh(id, entry, _planetRadius);
 			}
 
 			// Initialize the tile (this sets transform.position to data.center internally)
@@ -601,8 +612,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
 		private List<TileId> GetAllTileIdsSortedByDistance(Vector3 worldPos, int depth)
 		{
 			if (!s_precomputedRegistry.TryGetValue(depth, out var entries) || entries == null || entries.Count == 0)
+			{
 				return new List<TileId>();
-
+			}
+			
 			var list = new List<(float d, TileId id)>(entries.Count);
 			for (int i = 0; i < entries.Count; i++)
 			{
@@ -614,6 +627,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			list.Sort((a, b) => a.d.CompareTo(b.d));
 			var outIds = new List<TileId>(list.Count);
 			for (int i = 0; i < list.Count; i++) outIds.Add(list[i].id);
+			
 			return outIds;
 		}
 
@@ -638,40 +652,60 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
 		public void SetDepth(int depth)
 		{
+			// Guard: avoid redundant calls when depth hasn't changed and registry is populated
+			if (depth == _currentDepth && _lastPrecomputedDepth == depth)
+			{
+				return;
+			}
+
+			// Ensure precomputed registry is populated for this depth before any checks
+			// that depend on registry contents (like spawn queue enumeration)
+			try
+			{
+				PrecomputeTileNormalsForDepth(depth);
+			}
+			catch
+			{
+				// Register an empty list so external queries see a valid entry for this depth
+				s_precomputedRegistry[depth] = new List<PrecomputedTileEntry>();
+				_lastPrecomputedDepth = depth;
+			}
+
 			// If requested depth is already current, usually nothing to do. However during
 			// initialization the manager may have _currentDepth set but no tiles have been
 			// actually spawned yet; in that case we must continue to enqueue spawns.
 			if (depth == _currentDepth)
 			{
-				// Fast check: if we already have a spawned tile for this depth, skip work.
+				// If a spawn worker is already running for this depth, don't interfere
+				if (_spawnWorkerCoroutine != null)
+				{
+					return;
+				}
+				
+				// Calculate expected tile count for this depth
+				int expectedTileCount = 20; // depth 0 = 20 faces
+				if (depth > 0)
+				{
+					int tilesPerEdge = 1 << depth;
+					expectedTileCount = 20 * tilesPerEdge * tilesPerEdge;
+				}
+				
+				// Fast check: if we already have ALL expected spawned tiles for this depth, skip work.
+				int existingTileCount = 0;
 				foreach (var kv in _spawnedTiles)
 				{
 					if (kv.Key.depth == depth && kv.Value != null)
 					{
-						return;
+						existingTileCount++;
 					}
 				}
-
-				// If any queued/active marker exists for this depth, skip as well.
-				foreach (var key in _activeOrQueued)
+				
+				if (existingTileCount >= expectedTileCount)
 				{
-					int d = (int)(key >> 48);
-					if (d == depth) return;
+					return;
 				}
-				// Otherwise fall through and perform SetDepth work (bootstrap case).
-			}
-			// Ensure Precompute errors don't prevent the manager from updating its
-			// observable depth state. Tests and runtime expect SetDepth to always
-			// record the requested depth even if detailed precomputation fails.
-			try
-			{
-				PrecomputeTileNormalsForDepth(depth);
-			}
-			catch (Exception)
-			{
-				// Register an empty list so external queries see a valid entry for this depth
-				s_precomputedRegistry[depth] = new List<PrecomputedTileEntry>();
-				_lastPrecomputedDepth = depth;
+
+				// Continue with SetDepth work to spawn remaining tiles
 			}
 
 			// Ensure manager's current depth is set immediately so the spawn worker can
@@ -699,26 +733,36 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
 			// Clear any pending spawn requests for previous depths to avoid creating
 			// stale tiles when the player quickly changes depth (zoom in/out).
-			try
+			// However, if we're setting the same depth, don't interrupt ongoing spawn work.
+			bool sameDepth = (depth == _currentDepth);
+			if (!sameDepth)
 			{
-				// Remove queued markers so they don't permanently block re-enqueueing later.
 				try
 				{
-					var arr = _spawnQueue.ToArray();
-					for (int __i = 0; __i < arr.Length; __i++)
+					// Remove queued markers so they don't permanently block re-enqueueing later.
+					try
 					{
-						try { _activeOrQueued.Remove(PackTileKey(arr[__i].id)); } catch { }
+						var arr = _spawnQueue.ToArray();
+						for (int __i = 0; __i < arr.Length; __i++)
+						{
+							try { _activeOrQueued.Remove(PackTileKey(arr[__i].id)); } catch { }
+						}
 					}
+					catch { }
+					_spawnQueue.Clear();
 				}
 				catch { }
-				_spawnQueue.Clear();
+				StopSpawnWorker();
 			}
-			catch { }
-			StopSpawnWorker();
+			else
+			{
+				// Same depth, not stopping spawn worker to avoid interrupting ongoing work
+			}
 
 			// Spawn (enqueue) precomputed tiles so runtime/play tests can inspect active tiles immediately.
 			if (s_precomputedRegistry.TryGetValue(depth, out var list) && list != null)
 			{
+				
 				// Instead of spawning everything synchronously, enqueue prioritized spawn
 				// requests ordered by distance to the camera so nearest tiles are created first
 				// while the worker keeps the main thread responsive.
@@ -726,6 +770,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
 				var ordered = GetAllTileIdsSortedByDistance(camPos, depth);
 
 				int baseRes = (config != null && config.baseResolution > 0) ? config.baseResolution : 8;
+				int enqueuedCount = 0;
+				int skippedCount = 0;
+				
 				foreach (var id in ordered)
 				{
 					try
@@ -734,6 +781,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
 						ulong k = PackTileKey(id);
 						if (_activeOrQueued.Contains(k))
 						{
+							skippedCount++;
 							// Ensure it's active
 							if (_spawnedTiles.TryGetValue(id, out var go) && go != null)
 							{
@@ -745,10 +793,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
 						int resolutionForDepth = Mathf.Max(1, baseRes << depth);
 						_spawnQueue.Enqueue(new SpawnRequest(id, resolutionForDepth));
 						try { _activeOrQueued.Add(k); } catch { }
+						enqueuedCount++;
 					}
 					catch { }
 				}
-
+				
 				StartSpawnWorkerIfNeeded();
 			}
 
@@ -795,6 +844,264 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			_heuristicCoroutine = null;
 		}
 
+		// Auto-expand sampling array to the given sqrtRays size (for sqrtRays x sqrtRays grid)
+		private void EnsureBaseSamples(int sqrtRays)
+		{
+			if (_baseSamples != null && _baseSampleGrid == sqrtRays) return;
+			_baseSampleGrid = sqrtRays;
+			_sampleCapacity = sqrtRays * sqrtRays;
+			_baseSamples = new Vector2[_sampleCapacity];
+			int idx = 0;
+			for (int y = 0; y < sqrtRays; y++)
+			{
+				for (int x = 0; x < sqrtRays; x++)
+				{
+					_baseSamples[idx++] = new Vector2((x + 0.5f) / sqrtRays, (y + 0.5f) / sqrtRays);
+				}
+			}
+		}
+
+		private Ray GetRayForSample(int sampleIndex, Camera cam)
+		{
+			float biasStrength = GameCamera != null ? GameCamera.ProportionalDistance : 0f;
+
+			float su = _baseSamples[sampleIndex].x;
+			float sv = _baseSamples[sampleIndex].y;
+
+			// Apply adaptive radial bias based on camera distance
+			if (biasStrength > 0f && _sphereViewportRadius > 0f)
+			{
+				// Convert to centered coordinates [-0.5, 0.5]
+				float centeredU = su - 0.5f;
+				float centeredV = sv - 0.5f;
+				float currentRadius = Mathf.Sqrt(centeredU * centeredU + centeredV * centeredV);
+
+				if (currentRadius > 0f)
+				{
+					// Normalize the sample radius to [0,1] using the true maximum possible
+					// radius for the centered square (corner magnitude = 0.5*sqrt(2)).
+					float maxSampleRadius = 0.5f * Mathf.Sqrt(2f);
+					float normalizedRadius = Mathf.Clamp01(currentRadius / maxSampleRadius);
+
+					// Compute a biased normalized radius in [0,1]
+					float biasedNormalized = Mathf.Pow(normalizedRadius, radialBiasExponent);
+
+					// Blend between original and biased radii according to bias strength
+					float blendedNormalized = Mathf.Lerp(normalizedRadius, biasedNormalized, biasStrength);
+
+					// Map blended normalized radius into viewport-space using the visible sphere viewport radius
+					float targetViewportRadius = blendedNormalized * _sphereViewportRadius;
+
+					// Convert back to centered viewport coordinates by scaling the current vector
+					float scale = targetViewportRadius / currentRadius;
+					scale = float.IsFinite(scale) ? scale : 0f;
+					centeredU *= scale;
+					centeredV *= scale;
+
+					su = centeredU + 0.5f;
+					sv = centeredV + 0.5f;
+
+					// Clamp to valid viewport range
+					su = Mathf.Clamp01(su);
+					sv = Mathf.Clamp01(sv);
+				}
+			}
+
+			return cam.ViewportPointToRay(new Vector3(su, sv, 0f));
+		}
+
+		// Find the precomputed tile entry whose normal is closest to the given direction
+		private PrecomputedTileEntry GetClosestPrecomputedTile(Vector3 direction)
+		{
+			PrecomputedTileEntry best = default;
+			float bestDot = -1f;
+			Vector3 d = direction.normalized;
+			for (int i = 0; i < _precomputedTilesForDepth.Count; i++)
+			{
+				var e = _precomputedTilesForDepth[i];
+				float dot = Vector3.Dot(d, e.normal);
+				if (dot > bestDot)
+				{
+					bestDot = dot;
+					best = e;
+				}
+			}
+			return best;
+		}
+
+		// Centralized tile lifecycle management: spawn or refresh tiles in hitTiles,
+		// destroy tiles that were not hit this pass, and remove tiles with mismatched depth.
+		private void ManageTileLifecycle(HashSet<TileId> hitTiles, int depth)
+		{
+			// Snapshot existing keys to avoid modifying collection while iterating
+			var existingKeys = new List<TileId>(_spawnedTiles.Keys);
+
+			// Spawn/refresh tiles that were hit
+			foreach (var id in hitTiles)
+			{
+				int resolution = ResolveResolutionForDepth(depth);
+				GameObject tileGO = TrySpawnTile(id, resolution);
+				existingKeys.Remove(id);
+			}
+
+			// Deactivate any tiles that were not hit this pass (but don't destroy them)
+			foreach (var id in existingKeys)
+			{
+				if (_spawnedTiles.TryGetValue(id, out var go) && go != null)
+				{
+					var tile = go.GetComponent<PlanetTerrainTile>();
+					if (tile != null)
+					{
+						// Hide visuals but keep GameObject active so MeshCollider remains raycastable.
+						// Tests and heuristics rely on colliders remaining enabled so they can
+						// re-activate visuals later when a raycast hits the tile.
+						tile.HideVisualMesh();
+					}
+				}
+			}
+
+			// Additionally deactivate any tiles with mismatched depth
+			var mismatched = _spawnedTiles.Keys.Where(k => k.depth != depth).ToList();
+			foreach (var id in mismatched)
+			{
+				if (_spawnedTiles.TryGetValue(id, out var go) && go != null)
+				{
+					var tile = go.GetComponent<PlanetTerrainTile>();
+					if (tile != null)
+					{
+						// Hide visuals but retain GameObject and collider for future raycasts.
+						tile.HideVisualMesh();
+					}
+				}
+			}
+		}
+
+		// Resolve mesh resolution for a given depth to create progressive mesh detail
+		private int ResolveResolutionForDepth(int depth)
+		{
+			if (config != null)
+			{
+				// Use base resolution from config and scale with depth for more mesh detail
+				int baseRes = config.baseResolution > 0 ? config.baseResolution : 32;
+				
+				// Scale resolution with depth to maintain consistent world-space detail density
+				int scaledRes = Mathf.Max(8, baseRes >> depth);
+				
+				// Add extra mesh detail for deeper levels (more vertices, same terrain)
+				int extraDetail = depth * 16; // Add 16 verts per edge per depth level
+				
+				return Mathf.Max(16, scaledRes + extraDetail);
+			}
+			
+			// Conservative fallback with progressive mesh resolution scaling
+			return Mathf.Max(16, 32 + depth * 16);
+		}
+
+		// Create a subdivided sphere collision mesh with vertices projected to sphere radius
+		private Mesh CreateSubdividedSphereColliderMesh(TileId id, PrecomputedTileEntry entry, float sphereRadius)
+		{
+			var mesh = new Mesh();
+			mesh.name = $"SubdividedCollider_F{entry.face}_{entry.x}_{entry.y}_D{id.depth}";
+
+			// Get the tile's world position (where the GameObject will be placed)
+			Vector3 tileWorldCenter = entry.centerWorld;
+			
+			// Create collision mesh vertices in LOCAL space relative to the tile's transform
+			// The tile GameObject is positioned at tileWorldCenter on the sphere surface
+			
+			// Start with the tile's corner positions as base points
+			Vector3[] corners = entry.cornerWorldPositions;
+
+			// If corners aren't available, create a basic triangle around the center
+			if (corners == null || corners.Length < 3)
+			{
+				// Create corners that are already projected to the sphere surface
+				Vector3 centerNormal = entry.normal.normalized;
+				Vector3 tangent = Vector3.Cross(centerNormal, Vector3.up).normalized;
+				if (tangent.magnitude < 0.1f) tangent = Vector3.Cross(centerNormal, Vector3.right).normalized;
+				Vector3 binormal = Vector3.Cross(centerNormal, tangent).normalized;
+				
+				float tileSize = sphereRadius * 0.1f; // Angular offset for triangle corners
+				corners = new Vector3[]
+				{
+					(tileWorldCenter + tangent * tileSize).normalized * sphereRadius,
+					(tileWorldCenter + binormal * tileSize).normalized * sphereRadius,
+					(tileWorldCenter - tangent * tileSize).normalized * sphereRadius
+				};
+			}
+
+			// Convert corner positions from world space to local space relative to tile center
+			Vector3[] localCorners = new Vector3[corners.Length];
+			for (int i = 0; i < corners.Length; i++)
+			{
+				localCorners[i] = corners[i] - tileWorldCenter;
+			}
+
+			// Subdivision level for reliable collision (creates 16+ vertices)
+			int subdivisionLevel = 2;
+			
+			// Generate subdivided triangle mesh in local space
+			var vertices = new System.Collections.Generic.List<Vector3>();
+			var triangles = new System.Collections.Generic.List<int>();
+
+			// Create subdivided triangles from the base triangle formed by local corners
+			SubdivideTriangleLocal(localCorners[0], localCorners[1], localCorners[2], 
+				subdivisionLevel, sphereRadius, tileWorldCenter, vertices, triangles);
+
+			// Convert to arrays and create mesh
+			mesh.vertices = vertices.ToArray();
+			mesh.triangles = triangles.ToArray();
+			mesh.RecalculateNormals();
+			mesh.RecalculateBounds();
+
+			return mesh;
+		}
+
+		// Recursively subdivide a triangle and project vertices to sphere surface (local space version)
+		private void SubdivideTriangleLocal(Vector3 v0, Vector3 v1, Vector3 v2, int level, float sphereRadius, Vector3 tileWorldCenter,
+			System.Collections.Generic.List<Vector3> vertices, System.Collections.Generic.List<int> triangles)
+		{
+			if (level <= 0)
+			{
+				// Base case: add triangle vertices (projected to sphere in local space)
+				int startIndex = vertices.Count;
+				vertices.Add(ProjectToSphereLocal(v0, sphereRadius, tileWorldCenter));
+				vertices.Add(ProjectToSphereLocal(v1, sphereRadius, tileWorldCenter));
+				vertices.Add(ProjectToSphereLocal(v2, sphereRadius, tileWorldCenter));
+				
+				triangles.Add(startIndex);
+				triangles.Add(startIndex + 1);
+				triangles.Add(startIndex + 2);
+			}
+			else
+			{
+				// Recursive case: subdivide into 4 smaller triangles
+				// Create midpoints and project them to sphere surface for proper curvature
+				Vector3 m01 = ProjectToSphereLocal((v0 + v1) * 0.5f, sphereRadius, tileWorldCenter);
+				Vector3 m12 = ProjectToSphereLocal((v1 + v2) * 0.5f, sphereRadius, tileWorldCenter);
+				Vector3 m20 = ProjectToSphereLocal((v2 + v0) * 0.5f, sphereRadius, tileWorldCenter);
+
+				SubdivideTriangleLocal(v0, m01, m20, level - 1, sphereRadius, tileWorldCenter, vertices, triangles);
+				SubdivideTriangleLocal(v1, m12, m01, level - 1, sphereRadius, tileWorldCenter, vertices, triangles);
+				SubdivideTriangleLocal(v2, m20, m12, level - 1, sphereRadius, tileWorldCenter, vertices, triangles);
+				SubdivideTriangleLocal(m01, m12, m20, level - 1, sphereRadius, tileWorldCenter, vertices, triangles);
+			}
+		}
+
+		// Project a local space point to the sphere surface, returning local coordinates
+		private Vector3 ProjectToSphereLocal(Vector3 localPoint, float sphereRadius, Vector3 tileWorldCenter)
+		{
+			// Convert local point to world space
+			Vector3 worldPoint = localPoint + tileWorldCenter;
+			
+			// Project to sphere surface: normalize direction from world origin and scale to sphere radius
+			Vector3 direction = worldPoint.normalized;
+			Vector3 projectedWorldPoint = direction * sphereRadius;
+			
+			// Convert back to local space relative to tile center
+			return projectedWorldPoint - tileWorldCenter;
+		}
+
 		private void OnEnable()
 		{
 			// Start the lightweight heuristic coroutine used by tests to assert
@@ -807,6 +1114,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
 		private void Awake()
 		{
+			// Initialize planet center
+			_planetCenter = planetTransform != null ? planetTransform.position : this.transform.position;
+
 			// Ensure the heuristic sentinel/coroutine is created as early as possible
 			// so Editor tests that activate the GameObject can observe a non-null value.
 			if (Application.isPlaying)
@@ -823,7 +1133,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			// In Play mode, if depth hasn't been precomputed yet, initialize to depth 0 so
 			// runtime playtests and manual Play sessions see tiles without requiring an
 			// explicit SetDepth call from other systems.
-			if (Application.isPlaying && _lastPrecomputedDepth < 0)
+			if (Application.isPlaying && _lastPrecomputedDepth < 0 && _currentDepth < 0)
 			{
 				try { SetDepth(0); } catch { }
 			}
@@ -893,8 +1203,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			return newDepth;
 		}
 
-		// Lightweight coroutine: yields a WaitForSeconds with HeuristicInterval repeatedly.
-		// The real heuristic implementation will replace this loop and perform raycasts.
+		// Raycast-based heuristic that samples the camera viewport and spawns tiles for hit locations.
+		// Single-running coroutine; yields periodically for responsiveness.
 		public IEnumerator RunTileRaycastHeuristicCoroutine()
 		{
 			// Use real-time waiting to avoid frame/timeScale dependent drift during tests.
@@ -921,34 +1231,115 @@ namespace HexGlobeProject.TerrainSystem.LOD
 				}
 				catch { }
 
-				// Enhanced raycast pass: iterate over ALL spawned tiles (including visually deactivated ones)
-				// so that deactivated tiles can be reactivated when they come back into view
-				try
+				// Validate required references
+				if (GameCamera == null || cam == null)
 				{
-					Camera cam = GameCamera != null ? GameCamera.GetComponent<Camera>() : Camera.main;
-					if (cam != null && _spawnedTiles != null && _spawnedTiles.Count > 0)
+					yield return new WaitForSecondsRealtime(HeuristicInterval);
+					continue;
+				}
+
+				// Adaptive raycast distribution implementation
+				int raysToCast = Mathf.Max(1, _maxRays);
+				int depth = _currentDepth;
+				
+				int sqrtRays = Mathf.CeilToInt(Mathf.Sqrt(raysToCast));
+				EnsureBaseSamples(sqrtRays);
+				
+				// Calculate sphere's angular radius and viewport bounds for adaptive ray distribution
+				float cameraDistance = (cam.transform.position - _planetCenter).magnitude;
+				
+				// Calculate angular radius of sphere as seen from camera
+				_sphereViewportRadius = 0f;
+				if (cameraDistance > _planetRadius && _planetRadius > 0f)
+				{
+					float angularRadius = Mathf.Asin(_planetRadius / cameraDistance);
+					// Convert angular radius to viewport radius using camera's field of view
+					float vFovHalf = cam.fieldOfView * Mathf.Deg2Rad * 0.5f;
+					_sphereViewportRadius = Mathf.Tan(angularRadius) / Mathf.Tan(vFovHalf);
+					_sphereViewportRadius = Mathf.Clamp(_sphereViewportRadius, 0f, 1.0f);
+				}
+				
+				// Deterministic sampling over the precomputed grid
+				HashSet<TileId> hitTiles = new HashSet<TileId>();
+				
+				// Ensure precomputed normals and colliders exist for this depth
+				if (_lastPrecomputedDepth != depth)
+				{
+					PrecomputeTileNormalsForDepth(depth);
+					_lastPrecomputedDepth = depth;
+				}
+
+				// Optimization: For depth 0, skip expensive raycasting since we always seed all tiles anyway
+				if (depth > 0)
+				{
+					// Cast rays using adaptive distribution (only for depths > 0)
+					int rayCountIter = sqrtRays * sqrtRays;
+					for (int s = 0; s < rayCountIter; s++)
 					{
+						var ray = GetRayForSample(s, cam);
+
+						// Test for hits against existing spawned tiles first
+						bool foundExistingTile = false;
+						if (_spawnedTiles != null && _spawnedTiles.Count > 0)
+						{
 						foreach (var kv in _spawnedTiles)
 						{
 							var tile = kv.Value?.GetComponent<PlanetTerrainTile>();
 							if (tile == null) continue;
 
-							Vector3 origin = cam.transform.position;
-							Vector3 dir = (tile.transform.position - origin).normalized;
-							Ray ray = new Ray(origin, dir);
 							bool hit = tile.ActivateIfHit(ray);
 							if (hit)
 							{
+								hitTiles.Add(tile.tileId);
+								foundExistingTile = true;
+								
 								// Lazily build the visual mesh for this tile on first hit.
 								try { BuildVisualForTile(tile.tileId, tile); } catch { }
 								
 								// Restart the auto-deactivate timer to keep the tile visible while raycasts hit it
 								try { tile.RefreshActivity(); } catch { }
+								break; // Found a hit, move to next ray
+							}
+						}
+					}
+
+					// If no existing tile was hit, use mathematical sphere intersection for fallback
+					if (!foundExistingTile)
+					{
+						var sphereHitPoint = PlanetTerrainTile.GetSphereHitPoint(ray, _planetCenter, _planetRadius, curvedIcosphereRadiusMultiplier);
+						if (sphereHitPoint != Vector3.zero)
+						{
+							var hitDirection = (sphereHitPoint - _planetCenter).normalized;
+							var closest = GetClosestPrecomputedTile(hitDirection);
+							if (closest.face >= 0) // valid precomputed entry
+							{
+								int entryIdx = _precomputedTilesForDepth.IndexOf(closest);
+								var tileId = new TileId(closest.face, closest.x, closest.y, depth) { canonicalIndex = entryIdx };
+								hitTiles.Add(tileId);
 							}
 						}
 					}
 				}
-				catch { }
+				} // Close the if (depth > 0) block
+				// End of depth > 0 raycast optimization
+
+				// Manage tile lifecycle (spawn/update/destroy) for the set of hit tiles
+				// For depth 0, always seed the hit set with all precomputed entries to ensure
+				// all 20 icosphere face tiles remain active. This prevents the race condition
+				// where the heuristic only hits some tiles and deactivates the others.
+				if (depth == 0)
+				{
+					if (s_precomputedRegistry.TryGetValue(0, out var reg) && reg != null)
+					{
+						foreach (var e in reg)
+						{
+							var id = new TileId(e.face, e.x, e.y, 0);
+							hitTiles.Add(id);
+						}
+					}
+				}
+
+				try { ManageTileLifecycle(hitTiles, depth); } catch { }
 
 				yield return new WaitForSecondsRealtime(HeuristicInterval);
 			}

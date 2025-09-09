@@ -51,9 +51,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
         [Tooltip("Bias exponent used when mapping camera distance to discrete depth bins. 1 = linear, >1 biases bins toward higher distances.")]
         private float binBias = 1.2f;
 
-        [SerializeField]
-        [Tooltip("Maximum camera distance (units) used when computing depth levels. Values larger than this clamp the mapping.")]
-        private int depthLevelMaxDistance = 50;
+    // [SerializeField]
+    // [Tooltip("Maximum camera distance (units) used when computing depth levels. Values larger than this clamp the mapping.")]
+    // private int depthLevelMaxDistance = 50; // deprecated in favor of CameraController-driven mapping
 
         [SerializeField]
         [Tooltip("Approximate number of rays to cast; actual cast uses a square sampling grid <= this value")]

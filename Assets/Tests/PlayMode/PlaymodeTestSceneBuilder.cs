@@ -18,15 +18,16 @@ namespace HexGlobeProject.Tests.PlayMode
 
         public void Build()
         {
-            PlanetRoot = new GameObject("PM_PlanetRoot");
-
+            // Create planet root first
+            PlanetRoot = new GameObject("PM_Planet");
+            
             CameraGO = new GameObject("PM_Camera");
             var cam = CameraGO.AddComponent<Camera>();
             CameraController = CameraGO.AddComponent<CameraController>();
             CameraController.target = PlanetRoot.transform;
-            CameraController.distance = 30f;
             CameraController.minDistance = 1f;
             CameraController.maxDistance = 100f;
+            CameraController.distance = CameraController.maxDistance;
 
             var mgrGO = new GameObject("PM_Manager");
             Manager = mgrGO.AddComponent<PlanetTileVisibilityManager>();

@@ -15,9 +15,10 @@ namespace HexGlobeProject.Tests.PlayMode
         [UnityTest]
         public IEnumerator Heuristic_RunsAtApprox30Hz()
         {
-            var go = new GameObject("VisibilityManagerTest");
-            var mgr = go.AddComponent<PlanetTileVisibilityManager>();
+            var builder = new PlaymodeTestSceneBuilder();
+            builder.Build();
 
+            var mgr = builder.Manager;
             // Ensure we start playing the coroutine
             mgr.enabled = true;
 #if PLAYMODE_TESTS
@@ -37,7 +38,7 @@ namespace HexGlobeProject.Tests.PlayMode
             Assert.Less(freq, 39f, "Heuristic frequency too high");
 
 #endif
-            Object.DestroyImmediate(go);
+            builder.Teardown();
         }
 
         [Test]
