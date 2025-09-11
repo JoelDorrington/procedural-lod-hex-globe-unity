@@ -106,29 +106,6 @@ namespace HexGlobeProject.Tests.Editor
             var tileId = new TileId(0, 0, 0, 1); // face 0, coords (0,0), depth 1
             var tileData = new TileData { id = tileId, resolution = testConfig.baseResolution };
 
-            // Try to initialize precomputed entries (this might be needed for the mesh builder)
-            try
-            {
-                // Initialize precomputed entries for depth 1 - THIS IS CRITICAL
-                var precomputeMethod = typeof(PlanetTileVisibilityManager).GetMethod("PrecomputeTileNormalsForDepth",
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                if (precomputeMethod != null)
-                {
-                    precomputeMethod.Invoke(testManager, new object[] { 1 }); // depth 1
-                }
-                else
-                {
-                    Assert.Inconclusive("Could not find PrecomputeTileNormalsForDepth method");
-                    return;
-                }
-            }
-            catch (System.Exception ex)
-            {
-                // If initialization fails, we'll handle it gracefully
-                Assert.Inconclusive($"Could not initialize precomputed entries: {ex.Message}");
-                return;
-            }
-
             float rawMin = float.MaxValue;
             float rawMax = float.MinValue;
 
@@ -178,27 +155,6 @@ namespace HexGlobeProject.Tests.Editor
 
             var tile1Data = new TileData { id = tile1Id, resolution = testConfig.baseResolution };
             var tile2Data = new TileData { id = tile2Id, resolution = testConfig.baseResolution };
-
-            // Initialize precomputed entries for depth 1
-            try
-            {
-                var precomputeMethod = typeof(PlanetTileVisibilityManager).GetMethod("PrecomputeTileNormalsForDepth",
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                if (precomputeMethod != null)
-                {
-                    precomputeMethod.Invoke(testManager, new object[] { 1 });
-                }
-                else
-                {
-                    Assert.Inconclusive("Could not find PrecomputeTileNormalsForDepth method");
-                    return;
-                }
-            }
-            catch (System.Exception ex)
-            {
-                Assert.Inconclusive($"Could not initialize precomputed entries for edge matching test: {ex.Message}");
-                return;
-            }
 
             float rawMin1 = float.MaxValue, rawMax1 = float.MinValue;
             float rawMin2 = float.MaxValue, rawMax2 = float.MinValue;
@@ -297,19 +253,6 @@ namespace HexGlobeProject.Tests.Editor
 
             try 
             {
-                // Initialize for both resolutions
-                var precomputeMethod = typeof(PlanetTileVisibilityManager).GetMethod("PrecomputeTileNormalsForDepth",
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                if (precomputeMethod != null)
-                {
-                    precomputeMethod.Invoke(testManager, new object[] { 1 });
-                }
-                else
-                {
-                    Assert.Inconclusive("Could not find PrecomputeTileNormalsForDepth method");
-                    return;
-                }
-
                 var lowResTileData = new TileData { id = tileId, resolution = lowResConfig.baseResolution };
                 var highResTileData = new TileData { id = tileId, resolution = highResConfig.baseResolution };
 
@@ -359,18 +302,6 @@ namespace HexGlobeProject.Tests.Editor
 
             try
             {
-                var precomputeMethod = typeof(PlanetTileVisibilityManager).GetMethod("PrecomputeTileNormalsForDepth",
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                if (precomputeMethod != null)
-                {
-                    precomputeMethod.Invoke(testManager, new object[] { 1 });
-                }
-                else
-                {
-                    Assert.Inconclusive("Could not find PrecomputeTileNormalsForDepth method");
-                    return;
-                }
-
                 float rawMin = float.MaxValue, rawMax = float.MinValue;
                 meshBuilder.BuildTileMesh(tileData, ref rawMin, ref rawMax);
 
@@ -436,17 +367,6 @@ namespace HexGlobeProject.Tests.Editor
 
             try
             {
-                var precomputeMethod = typeof(PlanetTileVisibilityManager).GetMethod("PrecomputeTileNormalsForDepth",
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                if (precomputeMethod != null)
-                {
-                    precomputeMethod.Invoke(testManager, new object[] { 1 });
-                }
-                else
-                {
-                    Assert.Inconclusive("Could not find PrecomputeTileNormalsForDepth method");
-                    return;
-                }
 
                 float rawMin = float.MaxValue, rawMax = float.MinValue;
                 meshBuilder.BuildTileMesh(tileData, ref rawMin, ref rawMax);

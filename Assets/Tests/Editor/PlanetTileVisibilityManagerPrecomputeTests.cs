@@ -22,7 +22,7 @@ namespace HexGlobeProject.Tests.Editor
 
             // Try to spawn a canonical tile at depth 1 (face 0, x=0,y=0 should be valid)
             var tileId = new TileId(0, 0, 0, 1);
-            var spawned = mgr.TrySpawnTile(tileId, resolution: 8);
+            var spawned = mgr.TrySpawnTile(tileId);
 
             Assert.IsNotNull(spawned, "Manager should spawn a precomputed tile after SetDepth is called");
 

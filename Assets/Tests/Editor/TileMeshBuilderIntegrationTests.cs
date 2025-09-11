@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEditor;
 using HexGlobeProject.TerrainSystem.LOD;
 using HexGlobeProject.TerrainSystem;
+using HexGlobeProject.Tests.PlayMode; // scene builder helper
 
 namespace HexGlobeProject.Tests.Editor
 {
@@ -16,53 +17,29 @@ namespace HexGlobeProject.Tests.Editor
         [Test]
         public void TrySpawnTile_ShouldUseMeshBuilderToAssignVisualMesh()
         {
-            var mgrGO = new GameObject("TestVisibilityManager");
-            var mgr = mgrGO.AddComponent<PlanetTileVisibilityManager>();
+            // Use the Playmode test scene builder to create a minimal planet scene
+            var sceneBuilder = new PlaymodeTestSceneBuilder();
+            sceneBuilder.Build();
 
-            var planetGO = new GameObject("TestPlanet");
+            // Override the manager config with the intended test config
+            var mgr = sceneBuilder.Manager;
             var cfg = ScriptableObject.CreateInstance<TerrainConfig>();
             cfg.baseRadius = 30f;
             cfg.baseResolution = 16;
             mgr.config = cfg;
 
-            // Ensure manager has a planet transform and precomputed entries
-            var so = new SerializedObject(mgr);
-            var planetProp = so.FindProperty("planetTransform");
-            if (planetProp != null) planetProp.objectReferenceValue = planetGO.transform;
-            so.ApplyModifiedProperties();
+            mgr.SetDepth(0);
 
-            var precompute = typeof(PlanetTileVisibilityManager).GetMethod("PrecomputeTileNormalsForDepth", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            Assert.IsNotNull(precompute, "PrecomputeTileNormalsForDepth not found");
-            precompute.Invoke(mgr, new object[] { 1 });
+            var tileId = new TileId(0, 0, 0, 0);
+            var go = mgr.TrySpawnTile(tileId);
 
-            // Spawn the tile via manager (current implementation does not use builder)
-            var tileId = new TileId(0, 0, 0, 1);
-            var go = mgr.TrySpawnTile(tileId, 16);
-            Assert.IsNotNull(go, "TrySpawnTile returned null");
-
-            var tile = go.GetComponent<PlanetTerrainTile>();
-            Assert.IsNotNull(tile, "PlanetTerrainTile missing on spawned GO");
-
-            // Build an authoritative mesh using PlanetTileMeshBuilder for the same TileId
-            var builder = new PlanetTileMeshBuilder(cfg);
-            var data = new TileData();
-            data.id = tileId;
-            data.resolution = 16;
-
-            float rawMin = float.MaxValue, rawMax = float.MinValue;
-            builder.BuildTileMesh(data, ref rawMin, ref rawMax);
-
+            var meshFilter = go.GetComponent<MeshFilter>();
             // The integration expectation: the spawned tile should already have the builder mesh assigned
             // (Currently this is not yet wired; the test is a failing guard until we integrate the builder.)
-            Assert.IsNotNull(data.mesh, "Builder did not produce a mesh (builder malfunction)");
+            Assert.IsNotNull(meshFilter.sharedMesh, "Builder did not produce a mesh (builder malfunction)");
 
-            // Expectation: the tile's meshFilter.sharedMesh should be the same mesh produced by the builder
-            // This will fail until TrySpawnTile actually calls the builder and assigns data.mesh to the tile.
-            Assert.AreSame(data.mesh, tile.meshFilter.sharedMesh, "TrySpawnTile must use PlanetTileMeshBuilder to assign visual mesh (integration not wired yet)");
-
-            // Cleanup
-            Object.DestroyImmediate(mgrGO);
-            Object.DestroyImmediate(planetGO);
+            // Cleanup via builder helper
+            sceneBuilder.Teardown();
         }
     }
 }

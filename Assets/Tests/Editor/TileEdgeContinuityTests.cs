@@ -22,15 +22,6 @@ namespace HexGlobeProject.Tests.Editor
 
             // Choose a depth and two adjacent tiles on same face
             int depth = 2;
-
-            // Ensure the precomputed registry is populated for this depth by creating
-            // a PlanetTileVisibilityManager and calling SetDepth. The builder relies
-            // on the precomputed entries produced by the manager.
-            var managerGO = new GameObject("PTVM_Test");
-            var visibilityManager = managerGO.AddComponent<PlanetTileVisibilityManager>();
-            visibilityManager.config = config;
-            visibilityManager.SetDepth(depth);
-
             int face = 0;
             int x = 1;
             int y = 1;

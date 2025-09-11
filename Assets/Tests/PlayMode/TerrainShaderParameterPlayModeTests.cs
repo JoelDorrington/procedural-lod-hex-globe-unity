@@ -37,7 +37,7 @@ namespace HexGlobeProject.Tests.PlayMode
             
             // Configure with a specific planet center
             Vector3 expectedPlanetCenter = new Vector3(100f, 200f, 300f);
-            terrainTile.ConfigureMaterialAndLayer(testMaterial, 0, expectedPlanetCenter);
+            terrainTile.ConfigureMaterialAndLayer(testMaterial, expectedPlanetCenter);
 
             // Verify the material instance was created and has the correct planet center
             Assert.IsNotNull(terrainTile.meshRenderer, "MeshRenderer should exist");
@@ -77,11 +77,13 @@ namespace HexGlobeProject.Tests.PlayMode
             var testMaterial = new Material(shader);
             
             // Debug: Check if the base material has the property
-                Assert.IsTrue(testMaterial.HasProperty("_PlanetCenter"), "Shader must expose _PlanetCenter property");
-                Vector4 defaultValue = testMaterial.GetVector("_PlanetCenter");
+            Assert.IsTrue(testMaterial.HasProperty("_PlanetCenter"), "Shader must expose _PlanetCenter property");
+            Vector4 defaultValue = testMaterial.GetVector("_PlanetCenter");
+            Assert.AreEqual(Vector4.zero, defaultValue, "Default _PlanetCenter should be (0,0,0,0)");
 
             // Create a visibility manager at a specific position
             var managerGO = new GameObject("TestManager");
+            managerGO.SetActive(false);
             Vector3 planetCenter = new Vector3(50f, 25f, 75f);
             managerGO.transform.position = planetCenter;
             
@@ -97,12 +99,13 @@ namespace HexGlobeProject.Tests.PlayMode
             var retrievedMaterial = terrainMaterialField.GetValue(manager) as Material;
             Assert.IsNotNull(retrievedMaterial, "Terrain material should be set on visibility manager");
 
+            yield return null;
+            managerGO.SetActive(true);
             yield return null; // Let Awake run
-
             // Set depth to spawn tiles
             manager.SetDepth(0);
             
-            yield return null; // Let tiles spawn
+            yield return new WaitForSeconds(0.1f); // Let tiles spawn
 
             // Get the spawned tiles
             var activeTiles = manager.GetActiveTiles();

@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace HexGlobeProject.TerrainSystem.LOD
@@ -52,22 +53,36 @@ namespace HexGlobeProject.TerrainSystem.LOD
             out int faceIndex)
         {
             Vector3 p = worldDirection.normalized;
-            
-            // Find the closest icosahedral face by checking dot product with face normals
+
+            // Choose the face whose geometric plane normal best aligns with the direction.
             float maxDot = float.MinValue;
             faceIndex = 0;
-            
-            for (int face = 0; face < 20; face++)
+
+            for (int face = 0; face < IcosahedronFaces.GetLength(0); face++)
             {
-                // Get the three vertices of this face
                 Vector3 v0 = IcosahedronVertices[IcosahedronFaces[face, 0]];
                 Vector3 v1 = IcosahedronVertices[IcosahedronFaces[face, 1]];
                 Vector3 v2 = IcosahedronVertices[IcosahedronFaces[face, 2]];
-                
-                // Calculate face normal (centroid direction for regular icosahedron)
-                Vector3 faceNormal = (v0 + v1 + v2).normalized;
-                
-                float dot = Vector3.Dot(p, faceNormal);
+
+                // Compute geometric plane normal
+                Vector3 edgeA = v1 - v0;
+                Vector3 edgeB = v2 - v0;
+                Vector3 planeNormal = Vector3.Cross(edgeA, edgeB);
+
+                if (planeNormal.sqrMagnitude < 1e-12f)
+                {
+                    // Degenerate fallback: use centroid direction
+                    planeNormal = (v0 + v1 + v2);
+                }
+
+                planeNormal.Normalize();
+
+                // Ensure normal points outward (same hemisphere as centroid)
+                Vector3 centroid = (v0 + v1 + v2).normalized;
+                if (Vector3.Dot(planeNormal, centroid) < 0f)
+                    planeNormal = -planeNormal;
+
+                float dot = Vector3.Dot(p, planeNormal);
                 if (dot > maxDot)
                 {
                     maxDot = dot;
@@ -94,6 +109,52 @@ namespace HexGlobeProject.TerrainSystem.LOD
             
             return position.normalized;
         }
+
+        /// <summary>
+        /// Compute barycentric coordinates (u,v) inside the triangle face for a given world direction.
+        /// This inverts BarycentricToWorldDirection by projecting the direction into the triangle's
+        /// coordinate frame and solving the barycentric linear system.
+        /// </summary>
+        public static void BarycentricFromWorldDirection(int faceIndex, Vector3 worldDirection, out float u, out float v)
+        {
+            Vector3 p = worldDirection.normalized;
+            Vector3 v0 = IcosahedronVertices[IcosahedronFaces[faceIndex, 0]];
+            Vector3 v1 = IcosahedronVertices[IcosahedronFaces[faceIndex, 1]];
+            Vector3 v2 = IcosahedronVertices[IcosahedronFaces[faceIndex, 2]];
+
+            // Solve for barycentric coordinates on the plane of the triangle using standard formula
+            Vector3 v0v1 = v1 - v0;
+            Vector3 v0v2 = v2 - v0;
+            Vector3 v0p = p - v0;
+
+            float d00 = Vector3.Dot(v0v1, v0v1);
+            float d01 = Vector3.Dot(v0v1, v0v2);
+            float d11 = Vector3.Dot(v0v2, v0v2);
+            float d20 = Vector3.Dot(v0p, v0v1);
+            float d21 = Vector3.Dot(v0p, v0v2);
+
+            float denom = d00 * d11 - d01 * d01;
+            if (Mathf.Abs(denom) < 1e-8f)
+            {
+                u = v = 0.3333f;
+                return;
+            }
+
+            float a = (d11 * d20 - d01 * d21) / denom;
+            float b = (d00 * d21 - d01 * d20) / denom;
+
+            // a corresponds to weight for v1, b for v2 in our BarycentricToWorldDirection convention
+            u = Mathf.Clamp01(a);
+            v = Mathf.Clamp01(b);
+
+            // If numerically u+v > 1, push slightly inward to avoid edge ambiguity
+            if (u + v > 1f)
+            {
+                float scale = 1f / (u + v + 1e-6f);
+                u *= scale;
+                v *= scale;
+            }
+        }
         
         /// <summary>
         /// Convert tile indices back to barycentric coordinates for mesh generation.
@@ -117,21 +178,27 @@ namespace HexGlobeProject.TerrainSystem.LOD
             // always compute identical barycentric coordinates for shared vertices.
             // This avoids asymmetry between precomputed registry lookups and the
             // fallback path which previously produced inconsistent results.
-            int tilesPerEdge = 1 << tileId.depth;
 
-            // If a precomputed entry is available prefer its tilesPerEdge and indices
-            // for robustness, but fall back to tileId.x/tileId.y when not present.
-            if (PlanetTileVisibilityManager.GetPrecomputedIndex(tileId, out int _idx, out var entry))
+            // Do not construct a registry here; rely on the discrete TileId indices
+            // supplied by callers. TileId should contain canonical (face,x,y) values
+            // for deterministic mapping. If discrete indices are not present, the
+            // caller is using a non-canonical TileId which this routine does not
+            // support.
+            if (tileId.face < 0 || tileId.x < 0 || tileId.y < 0)
             {
-                tilesPerEdge = entry.tilesPerEdge > 0 ? entry.tilesPerEdge : tilesPerEdge;
+                throw new Exception("TileVertexToBarycentricCoordinates requires a TileId with discrete face/x/y indices.");
             }
+
+            int tilesPerEdge = 1 << tileId.depth;
 
             int resMinusOne = Mathf.Max(1, resolution - 1);
             int globalPerEdge = tilesPerEdge * resMinusOne; // number of segments across the face
 
-            // Use tile indices from precompute when available, otherwise tileId values
-            int tileX = (entry.x >= 0) ? entry.x : tileId.x;
-            int tileY = (entry.y >= 0) ? entry.y : tileId.y;
+            // Prefer discrete tile indices from the TileId when available. This
+            // avoids any floating-point lookup fragility and keeps the canonical
+            // integer grid arithmetic purely discrete and deterministic.
+            int tileX = tileId.x;
+            int tileY = tileId.y;
 
             // Clamp vertex indices to valid range [0, resMinusOne]
             int localI = Mathf.Clamp(vertexI, 0, resMinusOne);
@@ -203,10 +270,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
             int tilesPerEdge = 1 << depth;
             if (tileX < 0 || tileY < 0 || tileX >= tilesPerEdge || tileY >= tilesPerEdge)
                 return false;
-                
             // For depth 0, there's only one tile per face
             if (depth == 0) return true;
-            
+
             // Check if the barycentric center would be inside the triangle
             float u = (tileX + 0.5f) / tilesPerEdge;
             float v = (tileY + 0.5f) / tilesPerEdge;
@@ -221,23 +287,29 @@ namespace HexGlobeProject.TerrainSystem.LOD
         public static void GetTileBarycentricCenter(int x, int y, int depth, out float u, out float v)
         {
             int tilesPerEdge = 1 << depth;
-            if (tilesPerEdge == 1)
+            u = (x + 0.5f) / tilesPerEdge;
+            v = (y + 0.5f) / tilesPerEdge;
+
+            // If the barycentric center falls in the mirrored half (u+v > 1),
+            // reflect into the canonical triangle so the center is consistent
+            // with TileVertexToBarycentricCoordinates which mirrors grid vertices.
+            if (u + v > 1f)
             {
-                // For the whole face (depth 0) use the triangle centroid
-                u = 1f / 3f;
-                v = 1f / 3f;
+                u = 1f - u;
+                v = 1f - v;
             }
-            else
+
+            // Nudge points that lie on or extremely close to the triangle edge
+            // inward by a tiny epsilon so the face lookup is unambiguous.
+            const float edgeNudge = 1e-6f;
+            if (u + v >= 1f - edgeNudge)
             {
-                u = (x + 0.5f) / tilesPerEdge;
-                v = (y + 0.5f) / tilesPerEdge;
-                // Nudge points that lie on or extremely close to the triangle edge
-                // inward by a tiny epsilon so the face lookup is unambiguous.
-                const float edgeNudge = 1e-4f;
-                if (u + v >= 1f - 1e-6f)
+                float excess = (u + v) - (1f - edgeNudge);
+                if (excess > 0f)
                 {
-                    u -= edgeNudge * 0.5f;
-                    v -= edgeNudge * 0.5f;
+                    float shrink = excess * 0.5f;
+                    u -= shrink;
+                    v -= shrink;
                 }
             }
         }

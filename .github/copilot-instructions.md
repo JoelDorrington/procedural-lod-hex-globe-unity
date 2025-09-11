@@ -20,13 +20,13 @@
 - Explain things in first principles before explaining the math and implementation.
 
 ## System Overview
-This project implements a Google Maps-style tile explorer for procedural planet terrain with seamless LOD transitions and fractal detail zoom. The system uses camera-driven raycast heuristics to spawn tiles at appropriate detail levels.
+This project implements a Google Maps-style tile explorer for procedural planet terrain with seamless LOD transitions and fractal detail zoom. The system uses a 32hz update loop to calculate a mathematical ring of visibile tiles to build and spawn tiles at appropriate detail levels for the camera distance.
 
 ## Core Architecture
 - **Primary Components:**
-  - `PlanetTileVisibilityManager.cs`: Main camera-driven tile lifecycle controller with raycast heuristics
+  - `PlanetTileVisibilityManager.cs`: Main terrain LOD manager. Computes visible tiles using spherical geometry and manages tile lifecycle.
   - `PlanetTileMeshBuilder.cs`: Procedural mesh generation with resolution-aware height sampling for icosphere faces by TileId
-  - `PlanetTerrainTile.cs`: MonoBehaviour for individual terrain tile GameObjects encapsulating visual mesh and collider mesh. Not to be confused with the future game model tiles. 
+  - `PlanetTerrainTile.cs`: MonoBehaviour for individual terrain tile GameObjects encapsulating visual mesh. Not to be confused with the future game model tiles. 
   - `CameraController.cs`: Orbit camera with zoom-based depth control. The zoom is currently logarithmically scaled to be slower at lower depths. Soon I want this logarithmic slowing to be applied to all move axes.
   - `TileCache.cs`: Manages pooling and lifecycle of individual tile GameObjects
   - `TerrainConfig.cs`: Configuration for heightmap/terrain generation parameters
@@ -38,7 +38,8 @@ This project implements a Google Maps-style tile explorer for procedural planet 
 
 - **Height Providers (Resolution-Aware):**
   - `SimplePerlinHeightProvider.cs`: Multi-octave Perlin noise. Main development provider.
-  - `MountainRangeHeightProvider.cs`: Procedural continental + ridge-based  terrain (abandoned)
+  - `3DPerlinHeightProvider.cs`: 3D Multi-octave Perlin noise. Planned upgrade to eliminate noise distortion.
+  - `MountainRangeHeightProvider.cs`: Procedural continental + ridge-based terrain (abandoned)
   - `OctaveMaskHeightProvider.cs`: Wrapper for octave-limited sampling (abandoned)
 
 ## Terrain Consistency & Progressive Detail
@@ -55,28 +56,19 @@ This project implements a Google Maps-style tile explorer for procedural planet 
 - Same world position = same height value, always
 
 ## Important runtime behaviors (current implementation)
-- Raycast heuristic: runs as a single coroutine at ≈30Hz. Samples a viewport grid (configurable _maxRays), computes mathematical ray-sphere intersections projected to a curved icosphere radius, and maps hit directions to the nearest precomputed tile center for the active depth.
-- Precomputed tile normals: `PlanetTileVisibilityManager` builds a per-depth list of `PlanetTerrainTile` game objects with colliders for the raycast heuristic to snap to. This avoids expensive per-ray intersection tests with all tiles.
-- The number of `PlanetTerrainTile` must always be equal to the number of icosphere faces at the current depth (20 * 4^depth). These are created on depth transitions and reused. 
+- Precomputed tile normals: `PlanetTileVisibilityManager` maintains a static registry of precomputed tile normals and barycentric centers for all depths to avoid recomputation
+- The number of `PlanetTerrainTile` must always be equal to the number of icosphere faces at the current depth (20 * 4^depth). These are created on demand and reused via lifecycle management method. 
 - Tile caching: `TileCache` manages the lifecycle of individual tile GameObjects, including creation, pooling, and destruction.
 - Tile lifecycle: a single `ManageTileLifecycle(HashSet<TileId> hitTiles, int depth)` call handles spawning/refreshing hit tiles and deactivating tiles not hit this pass.
-- Layer handling: spawned tiles are placed on a dedicated `TerrainTiles` layer to prevent them from occluding the heuristic. The camera component stores the inspector `raycastLayerMask` and computes an effective mask for Physics checks at runtime.
-
-Debug & editor helpers
-- The camera component includes scene Gizmos for rays, hit points, and an optional persistent icosphere-outline mesh to visualize current tile tessellation per-depth. Toggleable options are exposed in the inspector for fast debugging.
-- Throttled logging and sample caching are used to avoid console spam and flicker when the heuristic updates frequently.
 
 Developer guidance and common pitfalls
+- SOLID principles apply.
+- Also YAGNI: avoid overengineering. Implement only what is necessary.
+- Dry code... bla bla bla all the clean code buzzwords. We're professionals here but we wont take ourselves too seriously.
+- This is not legacy code. Refactor fearlessly. Everything is under version control and automated unit and integration tests.
+- Avoid letting files get much larger than 500 lines. Split into multiple files if needed.
+- Avoid monolithic classes. Each class should have a single responsibility.
 - Height providers: never modify topology based on mesh resolution. Write deterministic sampling code: same direction → same height.
-
-Testing checklist (quick)
-- Enable `debugDrawRays` and `debugDrawIntersectionMarkers` in `PlanetTileExplorerCam` and run the scene in the Editor to confirm:
-  - Each visible heuristic ray has exactly one magenta intersection marker.
-  - Tiles are spawned and registered in the hierarchy under the configured parent transform.
-- Toggle the `TerrainTiles` layer exclusion in the `raycastLayerMask` and validate the heuristic still sees the planet surface (tiles should not occlude the detection).
-
-Notes and migration
-- The persistent icosphere debug object is optional; remove or ignore when profiling rendering or investigating mesh builder behavior.
 
 This document is the source of truth for the system architecture. Keep it updated with any changes to aid future development and maintenance. Do not change this document to match existing code. Only change this document to reflect intentional design changes made during the session.
 

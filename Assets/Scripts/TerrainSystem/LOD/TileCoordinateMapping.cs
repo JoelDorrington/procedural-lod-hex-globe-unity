@@ -3,14 +3,14 @@ using UnityEngine;
 namespace HexGlobeProject.TerrainSystem.LOD
 {
     /// <summary>
-    /// Shared coordinate mapping utilities to ensure consistency between raycast heuristic and mesh generation.
+    /// Shared coordinate mapping utilities to ensure consistency between visibility heuristic and mesh generation.
     /// This eliminates the coordinate system mismatch that was causing north pole tile issues at depth 1+.
     /// </summary>
     public static class TileCoordinateMapping
     {
         /// <summary>
         /// Convert a 3D world direction to cube face coordinates and tile indices.
-        /// This is the authoritative method used by both raycast heuristic and mesh validation.
+        /// This is the authoritative method used by both visibility heuristic and mesh validation.
         /// </summary>
         /// <param name="worldDirection">Normalized direction vector from planet center</param>
         /// <param name="depth">Tile depth (0 = 1 tile per face, 1 = 2x2 tiles per face, etc.)</param>

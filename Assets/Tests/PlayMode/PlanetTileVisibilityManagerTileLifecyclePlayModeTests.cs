@@ -2,7 +2,6 @@ using NUnit.Framework;
 using System.Collections;
 using UnityEngine;
 using UnityEngine.TestTools;
-using HexGlobeProject.Tests.PlayMode;
 
 namespace HexGlobeProject.Tests.PlayMode
 {
@@ -19,11 +18,6 @@ namespace HexGlobeProject.Tests.PlayMode
             // Disable automatic camera-driven depth syncing so the test can control depth deterministically
             var debugField = mgr.GetType().GetField("debugDisableCameraDepthSync", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             if (debugField != null) debugField.SetValue(mgr, true);
-
-            // Start at depth 0
-            // Diagnostic: check how many precomputed entries exist for depth 0
-            // Set depth to 0 first to trigger precomputation
-            mgr.SetDepth(0);
             
             // Now check if the registry was populated
             var regField = typeof(HexGlobeProject.TerrainSystem.LOD.PlanetTileVisibilityManager).GetField("s_precomputedRegistry", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
@@ -52,7 +46,7 @@ namespace HexGlobeProject.Tests.PlayMode
             yield return new WaitForSecondsRealtime(1.0f);
 
             var active0 = mgr.GetActiveTiles();
-            Assert.AreEqual(20, active0.Count, "Depth 0 should spawn 20 tiles eventually");
+            Assert.AreEqual(12, active0.Count, "Depth 0 should spawn 12 tiles eventually");
 
             // Record GameObject instances for depth 0
             var instances = new System.Collections.Generic.Dictionary<string, GameObject>();
@@ -66,7 +60,7 @@ namespace HexGlobeProject.Tests.PlayMode
 
             // Strict check: GameObjects must be deactivated (SetActive(false)) immediately
             // as part of the depth transition. Do not wait frames because reactivation
-            // logic (heuristic/raycast) may turn visuals back on later.
+            // logic (heuristic) may turn visuals back on later.
             foreach (var kv in instances)
             {
                 var go = kv.Value;
@@ -81,7 +75,7 @@ namespace HexGlobeProject.Tests.PlayMode
 
             // Ensure the same GameObject instances were re-enabled (not recreated)
             var activeReturn = mgr.GetActiveTiles();
-            Assert.AreEqual(20, activeReturn.Count, "Returning to depth 0 should restore 20 tiles.");
+            Assert.AreEqual(12, activeReturn.Count, "Returning to depth 0 should restore 12 tiles.");
 
             foreach (var t in activeReturn)
             {

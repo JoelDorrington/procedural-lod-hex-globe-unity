@@ -107,11 +107,6 @@ namespace HexGlobeProject.TerrainSystem
             mr.sharedMaterial = terrainMaterial;
             mf.sharedMesh = BuildIcoSphere(32, radius); // fixed moderate resolution
             mr.enabled = !hideOceanRenderer;
-
-            // Ocean is a visual mesh only. Do not add a physics collider here. Raycast
-            // visibility will be handled by per-tile collision meshes managed by the
-            // PlanetTileVisibilityManager (preplaced per-depth), so the ocean should
-            // remain non-physical to avoid double-occlusion.
         }
 
         /// <summary>

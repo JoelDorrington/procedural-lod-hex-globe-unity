@@ -1,0 +1,796 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="94" result="Failed(Child)" total="94" passed="89" failed="5" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2025-09-11 01:52:43Z" end-time="2025-09-11 01:52:58Z" duration="14.8630685">
+  <test-suite type="TestSuite" id="1142" name="HexGlobeProject" fullname="HexGlobeProject" runstate="Runnable" testcasecount="94" result="Failed" site="Child" start-time="2025-09-11 01:52:43Z" end-time="2025-09-11 01:52:58Z" duration="14.863069" total="94" passed="89" failed="5" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <failure>
+      <message><![CDATA[One or more child tests had errors]]></message>
+    </failure>
+    <test-suite type="Assembly" id="1134" name="HexGlobeProject.Tests.Editor.dll" fullname="C:/Users/Win10/Unity Projects/HexGlobeProject/Library/ScriptAssemblies/HexGlobeProject.Tests.Editor.dll" runstate="Runnable" testcasecount="94" result="Failed" site="Child" start-time="2025-09-11 01:52:43Z" end-time="2025-09-11 01:52:58Z" duration="14.837877" total="94" passed="89" failed="5" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="10452" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <failure>
+        <message><![CDATA[One or more child tests had errors]]></message>
+      </failure>
+      <test-suite type="TestSuite" id="1135" name="HexGlobeProject" fullname="HexGlobeProject" runstate="Runnable" testcasecount="94" result="Failed" site="Child" start-time="2025-09-11 01:52:43Z" end-time="2025-09-11 01:52:58Z" duration="14.825202" total="94" passed="89" failed="5" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <failure>
+          <message><![CDATA[One or more child tests had errors]]></message>
+        </failure>
+        <test-suite type="TestSuite" id="1136" name="Tests" fullname="HexGlobeProject.Tests" runstate="Runnable" testcasecount="94" result="Failed" site="Child" start-time="2025-09-11 01:52:43Z" end-time="2025-09-11 01:52:58Z" duration="14.815075" total="94" passed="89" failed="5" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <failure>
+            <message><![CDATA[One or more child tests had errors]]></message>
+          </failure>
+          <test-suite type="TestSuite" id="1137" name="Editor" fullname="HexGlobeProject.Tests.Editor" runstate="Runnable" testcasecount="94" result="Failed" site="Child" start-time="2025-09-11 01:52:43Z" end-time="2025-09-11 01:52:58Z" duration="14.805207" total="94" passed="89" failed="5" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <failure>
+              <message><![CDATA[One or more child tests had errors]]></message>
+            </failure>
+            <test-suite type="TestFixture" id="1001" name="DepthResolutionMappingTests" fullname="HexGlobeProject.Tests.Editor.DepthResolutionMappingTests" classname="HexGlobeProject.Tests.Editor.DepthResolutionMappingTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2025-09-11 01:52:43Z" end-time="2025-09-11 01:52:44Z" duration="0.588993" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1002" name="DeeperDepth_ShouldHaveHigherResolution" fullname="HexGlobeProject.Tests.Editor.DepthResolutionMappingTests.DeeperDepth_ShouldHaveHigherResolution" methodname="DeeperDepth_ShouldHaveHigherResolution" classname="HexGlobeProject.Tests.Editor.DepthResolutionMappingTests" runstate="Runnable" seed="38687616" result="Passed" start-time="2025-09-11 01:52:43Z" end-time="2025-09-11 01:52:44Z" duration="0.383111" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1003" name="ResolutionMapping_WithDifferentBaseResolutions_ShouldScale" fullname="HexGlobeProject.Tests.Editor.DepthResolutionMappingTests.ResolutionMapping_WithDifferentBaseResolutions_ShouldScale" methodname="ResolutionMapping_WithDifferentBaseResolutions_ShouldScale" classname="HexGlobeProject.Tests.Editor.DepthResolutionMappingTests" runstate="Runnable" seed="1502163314" result="Passed" start-time="2025-09-11 01:52:44Z" end-time="2025-09-11 01:52:44Z" duration="0.001238" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1004" name="IcosphereFaceIndexingTests" fullname="HexGlobeProject.Tests.Editor.IcosphereFaceIndexingTests" classname="HexGlobeProject.Tests.Editor.IcosphereFaceIndexingTests" runstate="Runnable" testcasecount="3" result="Passed" start-time="2025-09-11 01:52:44Z" end-time="2025-09-11 01:52:44Z" duration="0.742988" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1007" name="TileVertexToBarycentricCoordinates_MapsVertices_ToSameFace_ForInteriorVertices" fullname="HexGlobeProject.Tests.Editor.IcosphereFaceIndexingTests.TileVertexToBarycentricCoordinates_MapsVertices_ToSameFace_ForInteriorVertices" methodname="TileVertexToBarycentricCoordinates_MapsVertices_ToSameFace_ForInteriorVertices" classname="HexGlobeProject.Tests.Editor.IcosphereFaceIndexingTests" runstate="Runnable" seed="1311063450" result="Passed" start-time="2025-09-11 01:52:44Z" end-time="2025-09-11 01:52:44Z" duration="0.718209" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1005" name="WorldDirectionToTileFaceIndex_RoundTrips_ForFaceCentroids" fullname="HexGlobeProject.Tests.Editor.IcosphereFaceIndexingTests.WorldDirectionToTileFaceIndex_RoundTrips_ForFaceCentroids" methodname="WorldDirectionToTileFaceIndex_RoundTrips_ForFaceCentroids" classname="HexGlobeProject.Tests.Editor.IcosphereFaceIndexingTests" runstate="Runnable" seed="552221336" result="Passed" start-time="2025-09-11 01:52:44Z" end-time="2025-09-11 01:52:44Z" duration="0.000547" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1006" name="WorldDirectionToTileFaceIndex_RoundTrips_ForInteriorTiles_Depth2" fullname="HexGlobeProject.Tests.Editor.IcosphereFaceIndexingTests.WorldDirectionToTileFaceIndex_RoundTrips_ForInteriorTiles_Depth2" methodname="WorldDirectionToTileFaceIndex_RoundTrips_ForInteriorTiles_Depth2" classname="HexGlobeProject.Tests.Editor.IcosphereFaceIndexingTests" runstate="Runnable" seed="1501537837" result="Passed" start-time="2025-09-11 01:52:44Z" end-time="2025-09-11 01:52:44Z" duration="0.001832" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1008" name="IcosphereMappingTests" fullname="HexGlobeProject.Tests.Editor.IcosphereMappingTests" classname="HexGlobeProject.Tests.Editor.IcosphereMappingTests" runstate="Runnable" testcasecount="3" result="Passed" start-time="2025-09-11 01:52:44Z" end-time="2025-09-11 01:52:44Z" duration="0.073004" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1009" name="TileCenterWorldDirectionMapsToSameFace" fullname="HexGlobeProject.Tests.Editor.IcosphereMappingTests.TileCenterWorldDirectionMapsToSameFace" methodname="TileCenterWorldDirectionMapsToSameFace" classname="HexGlobeProject.Tests.Editor.IcosphereMappingTests" runstate="Runnable" seed="1280091661" result="Passed" start-time="2025-09-11 01:52:44Z" end-time="2025-09-11 01:52:44Z" duration="0.012601" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1011" name="TileIdFaceNormal_EqualsBarycentricCenterDirection" fullname="HexGlobeProject.Tests.Editor.IcosphereMappingTests.TileIdFaceNormal_EqualsBarycentricCenterDirection" methodname="TileIdFaceNormal_EqualsBarycentricCenterDirection" classname="HexGlobeProject.Tests.Editor.IcosphereMappingTests" runstate="Runnable" seed="1607307671" result="Passed" start-time="2025-09-11 01:52:44Z" end-time="2025-09-11 01:52:44Z" duration="0.011559" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1010" name="TileVertexToBarycentricCoordinates_ProducesValidTriangleCoords" fullname="HexGlobeProject.Tests.Editor.IcosphereMappingTests.TileVertexToBarycentricCoordinates_ProducesValidTriangleCoords" methodname="TileVertexToBarycentricCoordinates_ProducesValidTriangleCoords" classname="HexGlobeProject.Tests.Editor.IcosphereMappingTests" runstate="Runnable" seed="891243338" result="Passed" start-time="2025-09-11 01:52:44Z" end-time="2025-09-11 01:52:44Z" duration="0.031379" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1012" name="Integration_MathVisibility_FlowTests" fullname="HexGlobeProject.Tests.Editor.Integration_MathVisibility_FlowTests" classname="HexGlobeProject.Tests.Editor.Integration_MathVisibility_FlowTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2025-09-11 01:52:44Z" end-time="2025-09-11 01:52:45Z" duration="0.243257" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1013" name="Integration_MathVisibility_EndToEnd" fullname="HexGlobeProject.Tests.Editor.Integration_MathVisibility_FlowTests.Integration_MathVisibility_EndToEnd" methodname="Integration_MathVisibility_EndToEnd" classname="HexGlobeProject.Tests.Editor.Integration_MathVisibility_FlowTests" runstate="Runnable" seed="1561192589" result="Passed" start-time="2025-09-11 01:52:44Z" end-time="2025-09-11 01:52:45Z" duration="0.229039" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1014" name="Integration_TileCornerVisibilityTests" fullname="HexGlobeProject.Tests.Editor.Integration_TileCornerVisibilityTests" classname="HexGlobeProject.Tests.Editor.Integration_TileCornerVisibilityTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2025-09-11 01:52:45Z" end-time="2025-09-11 01:52:48Z" duration="2.952571" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1015" name="Tiles_With_Any_Visible_Corner_Are_Spawned" fullname="HexGlobeProject.Tests.Editor.Integration_TileCornerVisibilityTests.Tiles_With_Any_Visible_Corner_Are_Spawned" methodname="Tiles_With_Any_Visible_Corner_Are_Spawned" classname="HexGlobeProject.Tests.Editor.Integration_TileCornerVisibilityTests" runstate="Runnable" seed="1689910677" result="Passed" start-time="2025-09-11 01:52:45Z" end-time="2025-09-11 01:52:48Z" duration="2.932897" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1016" name="Integration_Visibility_SceneTests" fullname="HexGlobeProject.Tests.Editor.Integration_Visibility_SceneTests" classname="HexGlobeProject.Tests.Editor.Integration_Visibility_SceneTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2025-09-11 01:52:48Z" end-time="2025-09-11 01:52:49Z" duration="1.781088" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1017" name="Manager_MathVisibility_SpawnsVisibleTiles" fullname="HexGlobeProject.Tests.Editor.Integration_Visibility_SceneTests.Manager_MathVisibility_SpawnsVisibleTiles" methodname="Manager_MathVisibility_SpawnsVisibleTiles" classname="HexGlobeProject.Tests.Editor.Integration_Visibility_SceneTests" runstate="Runnable" seed="35361641" result="Passed" start-time="2025-09-11 01:52:48Z" end-time="2025-09-11 01:52:49Z" duration="1.759690" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1018" name="KPI_InterfaceAndResultsTests" fullname="HexGlobeProject.Tests.Editor.KPI_InterfaceAndResultsTests" classname="HexGlobeProject.Tests.Editor.KPI_InterfaceAndResultsTests" runstate="Runnable" testcasecount="3" result="Passed" start-time="2025-09-11 01:52:49Z" end-time="2025-09-11 01:52:51Z" duration="1.885575" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1019" name="MathVisibilitySelector_TileFromDirection_ReturnsValidTile_And_GetKRing_IncludesCenter" fullname="HexGlobeProject.Tests.Editor.KPI_InterfaceAndResultsTests.MathVisibilitySelector_TileFromDirection_ReturnsValidTile_And_GetKRing_IncludesCenter" methodname="MathVisibilitySelector_TileFromDirection_ReturnsValidTile_And_GetKRing_IncludesCenter" classname="HexGlobeProject.Tests.Editor.KPI_InterfaceAndResultsTests" runstate="Runnable" seed="1060531323" result="Passed" start-time="2025-09-11 01:52:49Z" end-time="2025-09-11 01:52:49Z" duration="0.087604" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1020" name="PlanetTileVisibilityManager_SetDepth_PopulatesPrecomputedRegistry_WithCornersAndNormals" fullname="HexGlobeProject.Tests.Editor.KPI_InterfaceAndResultsTests.PlanetTileVisibilityManager_SetDepth_PopulatesPrecomputedRegistry_WithCornersAndNormals" methodname="PlanetTileVisibilityManager_SetDepth_PopulatesPrecomputedRegistry_WithCornersAndNormals" classname="HexGlobeProject.Tests.Editor.KPI_InterfaceAndResultsTests" runstate="Runnable" seed="1965579345" result="Passed" start-time="2025-09-11 01:52:49Z" end-time="2025-09-11 01:52:50Z" duration="0.060453" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1021" name="PlanetTileVisibilityManager_UpdateVisibilityMathBased_Runs_WithCameraAndDoesNotThrow" fullname="HexGlobeProject.Tests.Editor.KPI_InterfaceAndResultsTests.PlanetTileVisibilityManager_UpdateVisibilityMathBased_Runs_WithCameraAndDoesNotThrow" methodname="PlanetTileVisibilityManager_UpdateVisibilityMathBased_Runs_WithCameraAndDoesNotThrow" classname="HexGlobeProject.Tests.Editor.KPI_InterfaceAndResultsTests" runstate="Runnable" seed="1655905680" result="Passed" start-time="2025-09-11 01:52:50Z" end-time="2025-09-11 01:52:51Z" duration="1.714448" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1022" name="MathSelector_CandidateGenerationTests" fullname="HexGlobeProject.Tests.Editor.MathSelector_CandidateGenerationTests" classname="HexGlobeProject.Tests.Editor.MathSelector_CandidateGenerationTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2025-09-11 01:52:51Z" end-time="2025-09-11 01:52:51Z" duration="0.024599" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1023" name="TileFromDirection_And_KRing_Basic" fullname="HexGlobeProject.Tests.Editor.MathSelector_CandidateGenerationTests.TileFromDirection_And_KRing_Basic" methodname="TileFromDirection_And_KRing_Basic" classname="HexGlobeProject.Tests.Editor.MathSelector_CandidateGenerationTests" runstate="Runnable" seed="2096620944" result="Passed" start-time="2025-09-11 01:52:51Z" end-time="2025-09-11 01:52:51Z" duration="0.001342" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1024" name="MathSelector_FaceCrossingKRingTests" fullname="HexGlobeProject.Tests.Editor.MathSelector_FaceCrossingKRingTests" classname="HexGlobeProject.Tests.Editor.MathSelector_FaceCrossingKRingTests" runstate="Runnable" testcasecount="1" result="Failed" site="Child" start-time="2025-09-11 01:52:51Z" end-time="2025-09-11 01:52:51Z" duration="0.027265" total="1" passed="0" failed="1" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <failure>
+                <message><![CDATA[One or more child tests had errors]]></message>
+              </failure>
+              <test-case id="1025" name="KRing_ShouldIncludeAdjacentFaceTiles_WhenCenterNearFaceEdge" fullname="HexGlobeProject.Tests.Editor.MathSelector_FaceCrossingKRingTests.KRing_ShouldIncludeAdjacentFaceTiles_WhenCenterNearFaceEdge" methodname="KRing_ShouldIncludeAdjacentFaceTiles_WhenCenterNearFaceEdge" classname="HexGlobeProject.Tests.Editor.MathSelector_FaceCrossingKRingTests" runstate="Runnable" seed="1803493014" result="Failed" start-time="2025-09-11 01:52:51Z" end-time="2025-09-11 01:52:51Z" duration="0.012106" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <failure>
+                  <message><![CDATA[  K-ring must include tiles from adjacent faces when center is near a face edge.
+  Expected: True
+  But was:  False
+]]></message>
+                  <stack-trace><![CDATA[at HexGlobeProject.Tests.Editor.MathSelector_FaceCrossingKRingTests.KRing_ShouldIncludeAdjacentFaceTiles_WhenCenterNearFaceEdge () [0x00095] in C:\Users\Win10\Unity Projects\HexGlobeProject\Assets\Tests\Editor\MathSelector_FaceCrossingKRingTests.cs:34
+]]></stack-trace>
+                </failure>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1026" name="MathSelector_PrecomputedRegistryTests" fullname="HexGlobeProject.Tests.Editor.MathSelector_PrecomputedRegistryTests" classname="HexGlobeProject.Tests.Editor.MathSelector_PrecomputedRegistryTests" runstate="Runnable" testcasecount="1" result="Failed" site="Child" start-time="2025-09-11 01:52:51Z" end-time="2025-09-11 01:52:51Z" duration="0.018433" total="1" passed="0" failed="1" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <failure>
+                <message><![CDATA[One or more child tests had errors]]></message>
+              </failure>
+              <test-case id="1027" name="PrecomputedRegistry_PopulatesExpectedCounts_AndNormalsAreUnit" fullname="HexGlobeProject.Tests.Editor.MathSelector_PrecomputedRegistryTests.PrecomputedRegistry_PopulatesExpectedCounts_AndNormalsAreUnit" methodname="PrecomputedRegistry_PopulatesExpectedCounts_AndNormalsAreUnit" classname="HexGlobeProject.Tests.Editor.MathSelector_PrecomputedRegistryTests" runstate="Runnable" seed="601084159" result="Failed" start-time="2025-09-11 01:52:51Z" end-time="2025-09-11 01:52:51Z" duration="0.009495" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <failure>
+                  <message><![CDATA[  Depth 2 should have 320 entries
+  Expected: 320
+  But was:  200
+]]></message>
+                  <stack-trace><![CDATA[at HexGlobeProject.Tests.Editor.MathSelector_PrecomputedRegistryTests.PrecomputedRegistry_PopulatesExpectedCounts_AndNormalsAreUnit () [0x000c8] in C:\Users\Win10\Unity Projects\HexGlobeProject\Assets\Tests\Editor\MathSelector_PrecomputedRegistryTests.cs:32
+]]></stack-trace>
+                </failure>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1028" name="MathSelector_TileMappingTests" fullname="HexGlobeProject.Tests.Editor.MathSelector_TileMappingTests" classname="HexGlobeProject.Tests.Editor.MathSelector_TileMappingTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2025-09-11 01:52:51Z" end-time="2025-09-11 01:52:51Z" duration="0.018797" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1029" name="DirectionFacingFaceCenter_MapsToThatFaceTileAtDepth0" fullname="HexGlobeProject.Tests.Editor.MathSelector_TileMappingTests.DirectionFacingFaceCenter_MapsToThatFaceTileAtDepth0" methodname="DirectionFacingFaceCenter_MapsToThatFaceTileAtDepth0" classname="HexGlobeProject.Tests.Editor.MathSelector_TileMappingTests" runstate="Runnable" seed="842714221" result="Passed" start-time="2025-09-11 01:52:51Z" end-time="2025-09-11 01:52:51Z" duration="0.000645" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1030" name="DirectionNearCorner_MapsToExpectedTileAtDepth2" fullname="HexGlobeProject.Tests.Editor.MathSelector_TileMappingTests.DirectionNearCorner_MapsToExpectedTileAtDepth2" methodname="DirectionNearCorner_MapsToExpectedTileAtDepth2" classname="HexGlobeProject.Tests.Editor.MathSelector_TileMappingTests" runstate="Runnable" seed="1408780363" result="Passed" start-time="2025-09-11 01:52:51Z" end-time="2025-09-11 01:52:51Z" duration="0.000593" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1031" name="MeshGenerationIntegrationTests" fullname="HexGlobeProject.Tests.Editor.MeshGenerationIntegrationTests" classname="HexGlobeProject.Tests.Editor.MeshGenerationIntegrationTests" runstate="Runnable" testcasecount="6" result="Passed" start-time="2025-09-11 01:52:51Z" end-time="2025-09-11 01:52:52Z" duration="0.689719" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1033" name="AdjacentTiles_ShouldHaveMatchingEdgeVertices" fullname="HexGlobeProject.Tests.Editor.MeshGenerationIntegrationTests.AdjacentTiles_ShouldHaveMatchingEdgeVertices" methodname="AdjacentTiles_ShouldHaveMatchingEdgeVertices" classname="HexGlobeProject.Tests.Editor.MeshGenerationIntegrationTests" runstate="Runnable" seed="57247724" result="Passed" start-time="2025-09-11 01:52:52Z" end-time="2025-09-11 01:52:52Z" duration="0.107822" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1034" name="DifferentResolutions_ShouldMaintainTopologyConsistency" fullname="HexGlobeProject.Tests.Editor.MeshGenerationIntegrationTests.DifferentResolutions_ShouldMaintainTopologyConsistency" methodname="DifferentResolutions_ShouldMaintainTopologyConsistency" classname="HexGlobeProject.Tests.Editor.MeshGenerationIntegrationTests" runstate="Runnable" seed="1779844875" result="Passed" start-time="2025-09-11 01:52:52Z" end-time="2025-09-11 01:52:52Z" duration="0.233779" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1037" name="FullPipeline_VisibilityManagerIntegration" fullname="HexGlobeProject.Tests.Editor.MeshGenerationIntegrationTests.FullPipeline_VisibilityManagerIntegration" methodname="FullPipeline_VisibilityManagerIntegration" classname="HexGlobeProject.Tests.Editor.MeshGenerationIntegrationTests" runstate="Runnable" seed="1953806755" result="Passed" start-time="2025-09-11 01:52:52Z" end-time="2025-09-11 01:52:52Z" duration="0.006583" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <reason>
+                  <message><![CDATA[Placeholder for full pipeline integration testing]]></message>
+                </reason>
+              </test-case>
+              <test-case id="1036" name="GeneratedMesh_ShouldHaveValidNormals" fullname="HexGlobeProject.Tests.Editor.MeshGenerationIntegrationTests.GeneratedMesh_ShouldHaveValidNormals" methodname="GeneratedMesh_ShouldHaveValidNormals" classname="HexGlobeProject.Tests.Editor.MeshGenerationIntegrationTests" runstate="Runnable" seed="585535180" result="Passed" start-time="2025-09-11 01:52:52Z" end-time="2025-09-11 01:52:52Z" duration="0.055127" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1035" name="IcosphericMapping_ShouldProduceWellDistributedVertices" fullname="HexGlobeProject.Tests.Editor.MeshGenerationIntegrationTests.IcosphericMapping_ShouldProduceWellDistributedVertices" methodname="IcosphericMapping_ShouldProduceWellDistributedVertices" classname="HexGlobeProject.Tests.Editor.MeshGenerationIntegrationTests" runstate="Runnable" seed="376245527" result="Passed" start-time="2025-09-11 01:52:52Z" end-time="2025-09-11 01:52:52Z" duration="0.035512" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1032" name="RealMeshGeneration_ShouldGenerateValidMesh" fullname="HexGlobeProject.Tests.Editor.MeshGenerationIntegrationTests.RealMeshGeneration_ShouldGenerateValidMesh" methodname="RealMeshGeneration_ShouldGenerateValidMesh" classname="HexGlobeProject.Tests.Editor.MeshGenerationIntegrationTests" runstate="Runnable" seed="814030628" result="Passed" start-time="2025-09-11 01:52:52Z" end-time="2025-09-11 01:52:52Z" duration="0.054808" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1038" name="PlanetChildTilesProbeTests" fullname="HexGlobeProject.Tests.Editor.PlanetChildTilesProbeTests" classname="HexGlobeProject.Tests.Editor.PlanetChildTilesProbeTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2025-09-11 01:52:52Z" end-time="2025-09-11 01:52:52Z" duration="0.140432" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1039" name="SpawnedTiles_AreParentedUnderPlanetTransform" fullname="HexGlobeProject.Tests.Editor.PlanetChildTilesProbeTests.SpawnedTiles_AreParentedUnderPlanetTransform" methodname="SpawnedTiles_AreParentedUnderPlanetTransform" classname="HexGlobeProject.Tests.Editor.PlanetChildTilesProbeTests" runstate="Runnable" seed="309244146" result="Passed" start-time="2025-09-11 01:52:52Z" end-time="2025-09-11 01:52:52Z" duration="0.119621" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1040" name="PlanetGenerateRadiusTests" fullname="HexGlobeProject.Tests.Editor.PlanetGenerateRadiusTests" classname="HexGlobeProject.Tests.Editor.PlanetGenerateRadiusTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2025-09-11 01:52:52Z" end-time="2025-09-11 01:52:53Z" duration="0.779021" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1041" name="GeneratePlanet_UsesTerrainRootBaseRadiusWithCurvedMultiplier" fullname="HexGlobeProject.Tests.Editor.PlanetGenerateRadiusTests.GeneratePlanet_UsesTerrainRootBaseRadiusWithCurvedMultiplier" methodname="GeneratePlanet_UsesTerrainRootBaseRadiusWithCurvedMultiplier" classname="HexGlobeProject.Tests.Editor.PlanetGenerateRadiusTests" runstate="Runnable" seed="891135075" result="Passed" start-time="2025-09-11 01:52:52Z" end-time="2025-09-11 01:52:53Z" duration="0.764581" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1042" name="PlanetHideOceanTests" fullname="HexGlobeProject.Tests.Editor.PlanetHideOceanTests" classname="HexGlobeProject.Tests.Editor.PlanetHideOceanTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.023677" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1044" name="ApplyHideOceanToTerrainRoot_Fallback_TogglesOceanGameObject" fullname="HexGlobeProject.Tests.Editor.PlanetHideOceanTests.ApplyHideOceanToTerrainRoot_Fallback_TogglesOceanGameObject" methodname="ApplyHideOceanToTerrainRoot_Fallback_TogglesOceanGameObject" classname="HexGlobeProject.Tests.Editor.PlanetHideOceanTests" runstate="Runnable" seed="169566799" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.001034" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1043" name="ApplyHideOceanToTerrainRoot_SetsTerrainRootFlag" fullname="HexGlobeProject.Tests.Editor.PlanetHideOceanTests.ApplyHideOceanToTerrainRoot_SetsTerrainRootFlag" methodname="ApplyHideOceanToTerrainRoot_SetsTerrainRootFlag" classname="HexGlobeProject.Tests.Editor.PlanetHideOceanTests" runstate="Runnable" seed="1274068061" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.000535" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1045" name="PlanetMaterialConfigurationTests" fullname="HexGlobeProject.Tests.Editor.PlanetMaterialConfigurationTests" classname="HexGlobeProject.Tests.Editor.PlanetMaterialConfigurationTests" runstate="Runnable" testcasecount="4" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.033828" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1047" name="LandMaterial_ShouldHaveGreenColors" fullname="HexGlobeProject.Tests.Editor.PlanetMaterialConfigurationTests.LandMaterial_ShouldHaveGreenColors" methodname="LandMaterial_ShouldHaveGreenColors" classname="HexGlobeProject.Tests.Editor.PlanetMaterialConfigurationTests" runstate="Runnable" seed="1552452172" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.002700" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1046" name="LandMaterial_ShouldUseCorrectShader" fullname="HexGlobeProject.Tests.Editor.PlanetMaterialConfigurationTests.LandMaterial_ShouldUseCorrectShader" methodname="LandMaterial_ShouldUseCorrectShader" classname="HexGlobeProject.Tests.Editor.PlanetMaterialConfigurationTests" runstate="Runnable" seed="1490150781" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.000444" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1049" name="TerrainShader_ShouldCalculateGreenForPositiveHeight" fullname="HexGlobeProject.Tests.Editor.PlanetMaterialConfigurationTests.TerrainShader_ShouldCalculateGreenForPositiveHeight" methodname="TerrainShader_ShouldCalculateGreenForPositiveHeight" classname="HexGlobeProject.Tests.Editor.PlanetMaterialConfigurationTests" runstate="Runnable" seed="1687315547" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.004627" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <reason>
+                  <message><![CDATA[Shader configuration validated. Sea level: 30]]></message>
+                </reason>
+              </test-case>
+              <test-case id="1048" name="VisibilityManager_ShouldHaveTerrainMaterialAssigned" fullname="HexGlobeProject.Tests.Editor.PlanetMaterialConfigurationTests.VisibilityManager_ShouldHaveTerrainMaterialAssigned" methodname="VisibilityManager_ShouldHaveTerrainMaterialAssigned" classname="HexGlobeProject.Tests.Editor.PlanetMaterialConfigurationTests" runstate="Runnable" seed="601142286" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.004095" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <reason>
+                  <message><![CDATA[Terrain material assignment check completed. Current material: null]]></message>
+                </reason>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1050" name="PlanetOceanVisibilityTests" fullname="HexGlobeProject.Tests.Editor.PlanetOceanVisibilityTests" classname="HexGlobeProject.Tests.Editor.PlanetOceanVisibilityTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.020046" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1051" name="PlanetHideOcean_TogglesPlanetAndOceanAndTerrainRoot" fullname="HexGlobeProject.Tests.Editor.PlanetOceanVisibilityTests.PlanetHideOcean_TogglesPlanetAndOceanAndTerrainRoot" methodname="PlanetHideOcean_TogglesPlanetAndOceanAndTerrainRoot" classname="HexGlobeProject.Tests.Editor.PlanetOceanVisibilityTests" runstate="Runnable" seed="1099305412" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.001115" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1052" name="PlanetTerrainTileComponentTests" fullname="HexGlobeProject.Tests.Editor.PlanetTerrainTileComponentTests" classname="HexGlobeProject.Tests.Editor.PlanetTerrainTileComponentTests" runstate="Runnable" testcasecount="6" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.029819" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1055" name="ConfigureMaterialAndLayer_ShouldAssignMaterial" fullname="HexGlobeProject.Tests.Editor.PlanetTerrainTileComponentTests.ConfigureMaterialAndLayer_ShouldAssignMaterial" methodname="ConfigureMaterialAndLayer_ShouldAssignMaterial" classname="HexGlobeProject.Tests.Editor.PlanetTerrainTileComponentTests" runstate="Runnable" seed="1224964957" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.001693" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1058" name="ConfigureMaterialAndLayer_WithNullMaterial_ShouldNotThrow" fullname="HexGlobeProject.Tests.Editor.PlanetTerrainTileComponentTests.ConfigureMaterialAndLayer_WithNullMaterial_ShouldNotThrow" methodname="ConfigureMaterialAndLayer_WithNullMaterial_ShouldNotThrow" classname="HexGlobeProject.Tests.Editor.PlanetTerrainTileComponentTests" runstate="Runnable" seed="145700013" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.000778" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1056" name="GetDiagnosticInfo_ShouldReturnCorrectMeshInfo" fullname="HexGlobeProject.Tests.Editor.PlanetTerrainTileComponentTests.GetDiagnosticInfo_ShouldReturnCorrectMeshInfo" methodname="GetDiagnosticInfo_ShouldReturnCorrectMeshInfo" classname="HexGlobeProject.Tests.Editor.PlanetTerrainTileComponentTests" runstate="Runnable" seed="1472548468" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.002403" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1053" name="Initialize_ShouldAddRequiredComponents" fullname="HexGlobeProject.Tests.Editor.PlanetTerrainTileComponentTests.Initialize_ShouldAddRequiredComponents" methodname="Initialize_ShouldAddRequiredComponents" classname="HexGlobeProject.Tests.Editor.PlanetTerrainTileComponentTests" runstate="Runnable" seed="319083854" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.000698" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1054" name="Initialize_ShouldSetTileData" fullname="HexGlobeProject.Tests.Editor.PlanetTerrainTileComponentTests.Initialize_ShouldSetTileData" methodname="Initialize_ShouldSetTileData" classname="HexGlobeProject.Tests.Editor.PlanetTerrainTileComponentTests" runstate="Runnable" seed="710306021" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.002358" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1057" name="Initialize_WithNullTileData_ShouldNotThrow" fullname="HexGlobeProject.Tests.Editor.PlanetTerrainTileComponentTests.Initialize_WithNullTileData_ShouldNotThrow" methodname="Initialize_WithNullTileData_ShouldNotThrow" classname="HexGlobeProject.Tests.Editor.PlanetTerrainTileComponentTests" runstate="Runnable" seed="330835232" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.000562" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1059" name="PlanetTerrainTileHideShowTests" fullname="HexGlobeProject.Tests.Editor.PlanetTerrainTileHideShowTests" classname="HexGlobeProject.Tests.Editor.PlanetTerrainTileHideShowTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.021322" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1060" name="HideThenShow_ShouldRestoreOriginalMeshInstanceAndVertexCount" fullname="HexGlobeProject.Tests.Editor.PlanetTerrainTileHideShowTests.HideThenShow_ShouldRestoreOriginalMeshInstanceAndVertexCount" methodname="HideThenShow_ShouldRestoreOriginalMeshInstanceAndVertexCount" classname="HexGlobeProject.Tests.Editor.PlanetTerrainTileHideShowTests" runstate="Runnable" seed="855820925" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.001425" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1061" name="PlanetTerrainTilePositionTests" fullname="HexGlobeProject.Tests.Editor.PlanetTerrainTilePositionTests" classname="HexGlobeProject.Tests.Editor.PlanetTerrainTilePositionTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.019131" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1062" name="Initialize_SetsGameObjectWorldPosition_ToTileCenter" fullname="HexGlobeProject.Tests.Editor.PlanetTerrainTilePositionTests.Initialize_SetsGameObjectWorldPosition_ToTileCenter" methodname="Initialize_SetsGameObjectWorldPosition_ToTileCenter" classname="HexGlobeProject.Tests.Editor.PlanetTerrainTilePositionTests" runstate="Runnable" seed="733399270" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.000746" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1063" name="Initialize_WithParent_PreservesWorldPosition_WhenParentMoved" fullname="HexGlobeProject.Tests.Editor.PlanetTerrainTilePositionTests.Initialize_WithParent_PreservesWorldPosition_WhenParentMoved" methodname="Initialize_WithParent_PreservesWorldPosition_WhenParentMoved" classname="HexGlobeProject.Tests.Editor.PlanetTerrainTilePositionTests" runstate="Runnable" seed="388898685" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.000506" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1064" name="PlanetTileMeshBuilderDiagnosticsTests" fullname="HexGlobeProject.Tests.Editor.PlanetTileMeshBuilderDiagnosticsTests" classname="HexGlobeProject.Tests.Editor.PlanetTileMeshBuilderDiagnosticsTests" runstate="Runnable" testcasecount="3" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.024120" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1065" name="IcosphereMapping_BarycentricToWorldDirection_ProducesDistinctDirections" fullname="HexGlobeProject.Tests.Editor.PlanetTileMeshBuilderDiagnosticsTests.IcosphereMapping_BarycentricToWorldDirection_ProducesDistinctDirections" methodname="IcosphereMapping_BarycentricToWorldDirection_ProducesDistinctDirections" classname="HexGlobeProject.Tests.Editor.PlanetTileMeshBuilderDiagnosticsTests" runstate="Runnable" seed="1679235930" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.001474" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1066" name="SimplePerlinHeightProvider_SamplesVaryAcrossDirections" fullname="HexGlobeProject.Tests.Editor.PlanetTileMeshBuilderDiagnosticsTests.SimplePerlinHeightProvider_SamplesVaryAcrossDirections" methodname="SimplePerlinHeightProvider_SamplesVaryAcrossDirections" classname="HexGlobeProject.Tests.Editor.PlanetTileMeshBuilderDiagnosticsTests" runstate="Runnable" seed="1872496472" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.000806" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1067" name="TileVertexToBarycentricCoordinates_ProducesDistinctUVsForGrid" fullname="HexGlobeProject.Tests.Editor.PlanetTileMeshBuilderDiagnosticsTests.TileVertexToBarycentricCoordinates_ProducesDistinctUVsForGrid" methodname="TileVertexToBarycentricCoordinates_ProducesDistinctUVsForGrid" classname="HexGlobeProject.Tests.Editor.PlanetTileMeshBuilderDiagnosticsTests" runstate="Runnable" seed="865950527" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.002631" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1068" name="PlanetTileMeshNormalsTests" fullname="HexGlobeProject.Tests.Editor.PlanetTileMeshNormalsTests" classname="HexGlobeProject.Tests.Editor.PlanetTileMeshNormalsTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.023118" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1069" name="BuildTileMesh_NormalsAreNotPurelyRadial_WhenGeometryHasRelief" fullname="HexGlobeProject.Tests.Editor.PlanetTileMeshNormalsTests.BuildTileMesh_NormalsAreNotPurelyRadial_WhenGeometryHasRelief" methodname="BuildTileMesh_NormalsAreNotPurelyRadial_WhenGeometryHasRelief" classname="HexGlobeProject.Tests.Editor.PlanetTileMeshNormalsTests" runstate="Runnable" seed="14715185" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.004807" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1070" name="HeightProvider_SamplesVaryAcrossDirections" fullname="HexGlobeProject.Tests.Editor.PlanetTileMeshNormalsTests.HeightProvider_SamplesVaryAcrossDirections" methodname="HeightProvider_SamplesVaryAcrossDirections" classname="HexGlobeProject.Tests.Editor.PlanetTileMeshNormalsTests" runstate="Runnable" seed="841620609" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.000428" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1071" name="PlanetTileMeshResolutionTests" fullname="HexGlobeProject.Tests.Editor.PlanetTileMeshResolutionTests" classname="HexGlobeProject.Tests.Editor.PlanetTileMeshResolutionTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.212985" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1073" name="HeightProvider_IsResolutionAgnostic" fullname="HexGlobeProject.Tests.Editor.PlanetTileMeshResolutionTests.HeightProvider_IsResolutionAgnostic" methodname="HeightProvider_IsResolutionAgnostic" classname="HexGlobeProject.Tests.Editor.PlanetTileMeshResolutionTests" runstate="Runnable" seed="429313583" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.000751" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1072" name="VertexCount_ScalesQuadraticallyWithResolution" fullname="HexGlobeProject.Tests.Editor.PlanetTileMeshResolutionTests.VertexCount_ScalesQuadraticallyWithResolution" methodname="VertexCount_ScalesQuadraticallyWithResolution" classname="HexGlobeProject.Tests.Editor.PlanetTileMeshResolutionTests" runstate="Runnable" seed="1945169717" result="Passed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.193620" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1074" name="PlanetTilePositioningTests" fullname="HexGlobeProject.Tests.Editor.PlanetTilePositioningTests" classname="HexGlobeProject.Tests.Editor.PlanetTilePositioningTests" runstate="Runnable" testcasecount="1" result="Failed" site="Child" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.082596" total="1" passed="0" failed="1" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <failure>
+                <message><![CDATA[One or more child tests had errors]]></message>
+              </failure>
+              <test-case id="1075" name="SpawnedTile_PositionMatchesPrecomputedCenter" fullname="HexGlobeProject.Tests.Editor.PlanetTilePositioningTests.SpawnedTile_PositionMatchesPrecomputedCenter" methodname="SpawnedTile_PositionMatchesPrecomputedCenter" classname="HexGlobeProject.Tests.Editor.PlanetTilePositioningTests" runstate="Runnable" seed="689186141" result="Failed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:53Z" duration="0.061894" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <failure>
+                  <message><![CDATA[  Spawn transform.position should match precomputed centerWorld (dist=0.7998709)
+  Expected: less than 0.00999999978f
+  But was:  0.799870908f
+]]></message>
+                  <stack-trace><![CDATA[at HexGlobeProject.Tests.Editor.PlanetTilePositioningTests+<SpawnedTile_PositionMatchesPrecomputedCenter>d__0.MoveNext () [0x001df] in C:\Users\Win10\Unity Projects\HexGlobeProject\Assets\Tests\Editor\PlanetTilePositioningTests.cs:48
+at UnityEngine.TestTools.TestEnumerator+<Execute>d__7.MoveNext () [0x0004e] in .\Library\PackageCache\com.unity.test-framework\UnityEngine.TestRunner\NUnitExtensions\Attributes\TestEnumerator.cs:44
+]]></stack-trace>
+                </failure>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1076" name="PlanetTilePositioningUnderParentTests" fullname="HexGlobeProject.Tests.Editor.PlanetTilePositioningUnderParentTests" classname="HexGlobeProject.Tests.Editor.PlanetTilePositioningUnderParentTests" runstate="Runnable" testcasecount="1" result="Failed" site="Child" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:54Z" duration="0.073969" total="1" passed="0" failed="1" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <failure>
+                <message><![CDATA[One or more child tests had errors]]></message>
+              </failure>
+              <test-case id="1077" name="SpawnedTile_MatchesPrecomputedCenter_WhenUnderNonIdentityParent" fullname="HexGlobeProject.Tests.Editor.PlanetTilePositioningUnderParentTests.SpawnedTile_MatchesPrecomputedCenter_WhenUnderNonIdentityParent" methodname="SpawnedTile_MatchesPrecomputedCenter_WhenUnderNonIdentityParent" classname="HexGlobeProject.Tests.Editor.PlanetTilePositioningUnderParentTests" runstate="Runnable" seed="762092122" result="Failed" start-time="2025-09-11 01:52:53Z" end-time="2025-09-11 01:52:54Z" duration="0.058162" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <failure>
+                  <message><![CDATA[  Mesh world-centroid normal should match precomputed centerWorld normal (angle = 27.16418 deg)
+  Expected: less than or equal to 1.5f
+  But was:  27.1641808f
+]]></message>
+                  <stack-trace><![CDATA[at HexGlobeProject.Tests.Editor.PlanetTilePositioningUnderParentTests+<SpawnedTile_MatchesPrecomputedCenter_WhenUnderNonIdentityParent>d__0.MoveNext () [0x00388] in C:\Users\Win10\Unity Projects\HexGlobeProject\Assets\Tests\Editor\PlanetTilePositioningUnderParentTests.cs:66
+at UnityEngine.TestTools.TestEnumerator+<Execute>d__7.MoveNext () [0x0004e] in .\Library\PackageCache\com.unity.test-framework\UnityEngine.TestRunner\NUnitExtensions\Attributes\TestEnumerator.cs:44
+]]></stack-trace>
+                </failure>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1081" name="PlanetTileVisibilityManagerPrecomputeTests" fullname="HexGlobeProject.Tests.Editor.PlanetTileVisibilityManagerPrecomputeTests" classname="HexGlobeProject.Tests.Editor.PlanetTileVisibilityManagerPrecomputeTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.510269" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1082" name="PrecomputedTiles_AreSpawned_OnDepthChange" fullname="HexGlobeProject.Tests.Editor.PlanetTileVisibilityManagerPrecomputeTests.PrecomputedTiles_AreSpawned_OnDepthChange" methodname="PrecomputedTiles_AreSpawned_OnDepthChange" classname="HexGlobeProject.Tests.Editor.PlanetTileVisibilityManagerPrecomputeTests" runstate="Runnable" seed="951425158" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.498713" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1083" name="RaycastRemovalValidationTests" fullname="HexGlobeProject.Tests.Editor.RaycastRemovalValidationTests" classname="HexGlobeProject.Tests.Editor.RaycastRemovalValidationTests" runstate="Runnable" testcasecount="4" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.018800" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1086" name="PlanetTerrainTile_ShouldNotHaveTestRayIntersectionMethod" fullname="HexGlobeProject.Tests.Editor.RaycastRemovalValidationTests.PlanetTerrainTile_ShouldNotHaveTestRayIntersectionMethod" methodname="PlanetTerrainTile_ShouldNotHaveTestRayIntersectionMethod" classname="HexGlobeProject.Tests.Editor.RaycastRemovalValidationTests" runstate="Runnable" seed="1438828172" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.000340" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1087" name="PlanetTileVisibilityManager_ShouldHaveStubForMathBasedVisibility" fullname="HexGlobeProject.Tests.Editor.RaycastRemovalValidationTests.PlanetTileVisibilityManager_ShouldHaveStubForMathBasedVisibility" methodname="PlanetTileVisibilityManager_ShouldHaveStubForMathBasedVisibility" classname="HexGlobeProject.Tests.Editor.RaycastRemovalValidationTests" runstate="Runnable" seed="1540936504" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.000176" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1085" name="PlanetTileVisibilityManager_ShouldNotHaveRaycastFields" fullname="HexGlobeProject.Tests.Editor.RaycastRemovalValidationTests.PlanetTileVisibilityManager_ShouldNotHaveRaycastFields" methodname="PlanetTileVisibilityManager_ShouldNotHaveRaycastFields" classname="HexGlobeProject.Tests.Editor.RaycastRemovalValidationTests" runstate="Runnable" seed="1412395271" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.000159" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1084" name="PlanetTileVisibilityManager_ShouldNotHaveRaycastMethods" fullname="HexGlobeProject.Tests.Editor.RaycastRemovalValidationTests.PlanetTileVisibilityManager_ShouldNotHaveRaycastMethods" methodname="PlanetTileVisibilityManager_ShouldNotHaveRaycastMethods" classname="HexGlobeProject.Tests.Editor.RaycastRemovalValidationTests" runstate="Runnable" seed="780518702" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.000200" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1088" name="TerrainHeightSamplingTests" fullname="HexGlobeProject.Tests.Editor.TerrainHeightSamplingTests" classname="HexGlobeProject.Tests.Editor.TerrainHeightSamplingTests" runstate="Runnable" testcasecount="8" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.024038" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1095" name="HeightSampling_SeedDeterminism" fullname="HexGlobeProject.Tests.Editor.TerrainHeightSamplingTests.HeightSampling_SeedDeterminism" methodname="HeightSampling_SeedDeterminism" classname="HexGlobeProject.Tests.Editor.TerrainHeightSamplingTests" runstate="Runnable" seed="1663097552" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.001585" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1089" name="HeightSampling_ShouldBeDeterministic" fullname="HexGlobeProject.Tests.Editor.TerrainHeightSamplingTests.HeightSampling_ShouldBeDeterministic" methodname="HeightSampling_ShouldBeDeterministic" classname="HexGlobeProject.Tests.Editor.TerrainHeightSamplingTests" runstate="Runnable" seed="2090289535" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.000385" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1093" name="HeightSampling_ShouldMaintainSmoothGradients" fullname="HexGlobeProject.Tests.Editor.TerrainHeightSamplingTests.HeightSampling_ShouldMaintainSmoothGradients" methodname="HeightSampling_ShouldMaintainSmoothGradients" classname="HexGlobeProject.Tests.Editor.TerrainHeightSamplingTests" runstate="Runnable" seed="1753352561" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.000606" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1094" name="HeightSampling_ShouldRespectAmplitudeBounds" fullname="HexGlobeProject.Tests.Editor.TerrainHeightSamplingTests.HeightSampling_ShouldRespectAmplitudeBounds" methodname="HeightSampling_ShouldRespectAmplitudeBounds" classname="HexGlobeProject.Tests.Editor.TerrainHeightSamplingTests" runstate="Runnable" seed="1930854750" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.000709" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1090" name="HeightSampling_TopologyConsistency_ResolutionIndependent" fullname="HexGlobeProject.Tests.Editor.TerrainHeightSamplingTests.HeightSampling_TopologyConsistency_ResolutionIndependent" methodname="HeightSampling_TopologyConsistency_ResolutionIndependent" classname="HexGlobeProject.Tests.Editor.TerrainHeightSamplingTests" runstate="Runnable" seed="1959188307" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.000380" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1096" name="IntegrationTest_MeshBuilderRespectsSamplingPrinciples" fullname="HexGlobeProject.Tests.Editor.TerrainHeightSamplingTests.IntegrationTest_MeshBuilderRespectsSamplingPrinciples" methodname="IntegrationTest_MeshBuilderRespectsSamplingPrinciples" classname="HexGlobeProject.Tests.Editor.TerrainHeightSamplingTests" runstate="Runnable" seed="399596098" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.006467" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <reason>
+                  <message><![CDATA[Height sampling principles validated - ready for mesh builder integration]]></message>
+                </reason>
+              </test-case>
+              <test-case id="1092" name="MeshSampling_ShouldCreateEvenGrid" fullname="HexGlobeProject.Tests.Editor.TerrainHeightSamplingTests.MeshSampling_ShouldCreateEvenGrid" methodname="MeshSampling_ShouldCreateEvenGrid" classname="HexGlobeProject.Tests.Editor.TerrainHeightSamplingTests" runstate="Runnable" seed="920428338" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.000968" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1091" name="TileEdgeSampling_ShouldBeDeterministicAcrossAdjacents" fullname="HexGlobeProject.Tests.Editor.TerrainHeightSamplingTests.TileEdgeSampling_ShouldBeDeterministicAcrossAdjacents" methodname="TileEdgeSampling_ShouldBeDeterministicAcrossAdjacents" classname="HexGlobeProject.Tests.Editor.TerrainHeightSamplingTests" runstate="Runnable" seed="2019186482" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.001094" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1097" name="TerrainShaderParameterTests" fullname="HexGlobeProject.Tests.Editor.TerrainShaderParameterTests" classname="HexGlobeProject.Tests.Editor.TerrainShaderParameterTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.023831" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1098" name="PlanetCenterParameter_ShouldAffectTerrainHeight" fullname="HexGlobeProject.Tests.Editor.TerrainShaderParameterTests.PlanetCenterParameter_ShouldAffectTerrainHeight" methodname="PlanetCenterParameter_ShouldAffectTerrainHeight" classname="HexGlobeProject.Tests.Editor.TerrainShaderParameterTests" runstate="Runnable" seed="224721681" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.000773" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1078" name="TerrainTileRegistryDepthTests" fullname="HexGlobeProject.Tests.Editor.TerrainTileRegistryDepthTests" classname="HexGlobeProject.Tests.Editor.TerrainTileRegistryDepthTests" runstate="Runnable" testcasecount="2" result="Failed" site="Child" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.020620" total="2" passed="1" failed="1" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <failure>
+                <message><![CDATA[One or more child tests had errors]]></message>
+              </failure>
+              <test-case id="1079" name="TerrainTileRegistry_DepthZero_Generates20TileEntries" fullname="HexGlobeProject.Tests.Editor.TerrainTileRegistryDepthTests.TerrainTileRegistry_DepthZero_Generates20TileEntries" methodname="TerrainTileRegistry_DepthZero_Generates20TileEntries" classname="HexGlobeProject.Tests.Editor.TerrainTileRegistryDepthTests" runstate="Runnable" seed="479120156" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.000868" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1080" name="TerrainTileRegistry_MultipleDepths_GeneratesExpectedTileCounts" fullname="HexGlobeProject.Tests.Editor.TerrainTileRegistryDepthTests.TerrainTileRegistry_MultipleDepths_GeneratesExpectedTileCounts" methodname="TerrainTileRegistry_MultipleDepths_GeneratesExpectedTileCounts" classname="HexGlobeProject.Tests.Editor.TerrainTileRegistryDepthTests" runstate="Runnable" seed="1942416699" result="Failed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.005573" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <failure>
+                  <message><![CDATA[  Depth 1 should generate 80 tile entries
+  Expected: 80
+  But was:  60
+]]></message>
+                  <stack-trace><![CDATA[at HexGlobeProject.Tests.Editor.TerrainTileRegistryDepthTests.TerrainTileRegistry_MultipleDepths_GeneratesExpectedTileCounts () [0x0003d] in C:\Users\Win10\Unity Projects\HexGlobeProject\Assets\Tests\Editor\PlanetTileVisibilityManagerDepthTransitionTests.cs:40
+]]></stack-trace>
+                </failure>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1099" name="TileComponentDebugTests" fullname="HexGlobeProject.Tests.Editor.TileComponentDebugTests" classname="HexGlobeProject.Tests.Editor.TileComponentDebugTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.012507" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1100" name="PlanetTerrainTile_Initialize_ShouldAddComponents" fullname="HexGlobeProject.Tests.Editor.TileComponentDebugTests.PlanetTerrainTile_Initialize_ShouldAddComponents" methodname="PlanetTerrainTile_Initialize_ShouldAddComponents" classname="HexGlobeProject.Tests.Editor.TileComponentDebugTests" runstate="Runnable" seed="18484972" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.001522" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1101" name="TileEdgeContinuityTests" fullname="HexGlobeProject.Tests.Editor.TileEdgeContinuityTests" classname="HexGlobeProject.Tests.Editor.TileEdgeContinuityTests" runstate="Runnable" testcasecount="3" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.291059" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1102" name="AdjacentTilesSharedEdgeVerticesMatch" fullname="HexGlobeProject.Tests.Editor.TileEdgeContinuityTests.AdjacentTilesSharedEdgeVerticesMatch" methodname="AdjacentTilesSharedEdgeVerticesMatch" classname="HexGlobeProject.Tests.Editor.TileEdgeContinuityTests" runstate="Runnable" seed="446738045" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.079333" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1103" name="DetectNonCoplanarQuadsAlongSeam" fullname="HexGlobeProject.Tests.Editor.TileEdgeContinuityTests.DetectNonCoplanarQuadsAlongSeam" methodname="DetectNonCoplanarQuadsAlongSeam" classname="HexGlobeProject.Tests.Editor.TileEdgeContinuityTests" runstate="Runnable" seed="1534360962" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.072713" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1104" name="MeshBuilder_NormalsShouldBeDeterministicAndReasonable" fullname="HexGlobeProject.Tests.Editor.TileEdgeContinuityTests.MeshBuilder_NormalsShouldBeDeterministicAndReasonable" methodname="MeshBuilder_NormalsShouldBeDeterministicAndReasonable" classname="HexGlobeProject.Tests.Editor.TileEdgeContinuityTests" runstate="Runnable" seed="685809198" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.101197" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1105" name="TileEdgeWrappingTests" fullname="HexGlobeProject.Tests.Editor.TileEdgeWrappingTests" classname="HexGlobeProject.Tests.Editor.TileEdgeWrappingTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.028455" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1106" name="AdjacentTiles_RightLeftEdge_GlobalCoordsAndDirections_ShouldMatch" fullname="HexGlobeProject.Tests.Editor.TileEdgeWrappingTests.AdjacentTiles_RightLeftEdge_GlobalCoordsAndDirections_ShouldMatch" methodname="AdjacentTiles_RightLeftEdge_GlobalCoordsAndDirections_ShouldMatch" classname="HexGlobeProject.Tests.Editor.TileEdgeWrappingTests" runstate="Runnable" seed="261018654" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.006526" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1107" name="TileIdEnumerationTests" fullname="HexGlobeProject.Tests.Editor.TileIdEnumerationTests" classname="HexGlobeProject.Tests.Editor.TileIdEnumerationTests" runstate="Runnable" testcasecount="4" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.031270" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1108" name="GetAllTileIdsSortedByDistance_ShouldTerminateEnumeration_ForDepth0" fullname="HexGlobeProject.Tests.Editor.TileIdEnumerationTests.GetAllTileIdsSortedByDistance_ShouldTerminateEnumeration_ForDepth0" methodname="GetAllTileIdsSortedByDistance_ShouldTerminateEnumeration_ForDepth0" classname="HexGlobeProject.Tests.Editor.TileIdEnumerationTests" runstate="Runnable" seed="317999423" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.004293" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1109" name="GetAllTileIdsSortedByDistance_ShouldTerminateEnumeration_ForDepth1" fullname="HexGlobeProject.Tests.Editor.TileIdEnumerationTests.GetAllTileIdsSortedByDistance_ShouldTerminateEnumeration_ForDepth1" methodname="GetAllTileIdsSortedByDistance_ShouldTerminateEnumeration_ForDepth1" classname="HexGlobeProject.Tests.Editor.TileIdEnumerationTests" runstate="Runnable" seed="2009402714" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.002236" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1111" name="TileCache_GetAllTileIds_ShouldTerminateEnumeration" fullname="HexGlobeProject.Tests.Editor.TileIdEnumerationTests.TileCache_GetAllTileIds_ShouldTerminateEnumeration" methodname="TileCache_GetAllTileIds_ShouldTerminateEnumeration" classname="HexGlobeProject.Tests.Editor.TileIdEnumerationTests" runstate="Runnable" seed="1638625281" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.002051" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1110" name="TileId_Equality_ShouldWorkCorrectlyForEnumerationDeduplication" fullname="HexGlobeProject.Tests.Editor.TileIdEnumerationTests.TileId_Equality_ShouldWorkCorrectlyForEnumerationDeduplication" methodname="TileId_Equality_ShouldWorkCorrectlyForEnumerationDeduplication" classname="HexGlobeProject.Tests.Editor.TileIdEnumerationTests" runstate="Runnable" seed="1691025697" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:54Z" duration="0.000721" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1112" name="TileMeshBuilderIntegrationTests" fullname="HexGlobeProject.Tests.Editor.TileMeshBuilderIntegrationTests" classname="HexGlobeProject.Tests.Editor.TileMeshBuilderIntegrationTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:55Z" duration="0.033691" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1113" name="TrySpawnTile_ShouldUseMeshBuilderToAssignVisualMesh" fullname="HexGlobeProject.Tests.Editor.TileMeshBuilderIntegrationTests.TrySpawnTile_ShouldUseMeshBuilderToAssignVisualMesh" methodname="TrySpawnTile_ShouldUseMeshBuilderToAssignVisualMesh" classname="HexGlobeProject.Tests.Editor.TileMeshBuilderIntegrationTests" runstate="Runnable" seed="759478516" result="Passed" start-time="2025-09-11 01:52:54Z" end-time="2025-09-11 01:52:55Z" duration="0.014719" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1114" name="TileMeshCache_InterfaceTests" fullname="HexGlobeProject.Tests.Editor.TileMeshCache_InterfaceTests" classname="HexGlobeProject.Tests.Editor.TileMeshCache_InterfaceTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2025-09-11 01:52:55Z" end-time="2025-09-11 01:52:55Z" duration="0.344930" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1116" name="TileMeshCache_EnsureScheduled_Add_Get_Workflow" fullname="HexGlobeProject.Tests.Editor.TileMeshCache_InterfaceTests.TileMeshCache_EnsureScheduled_Add_Get_Workflow" methodname="TileMeshCache_EnsureScheduled_Add_Get_Workflow" classname="HexGlobeProject.Tests.Editor.TileMeshCache_InterfaceTests" runstate="Runnable" seed="849001953" result="Passed" start-time="2025-09-11 01:52:55Z" end-time="2025-09-11 01:52:55Z" duration="0.283642" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1115" name="TileMeshCache_ProvidesSingletonOrConstructibleInstance" fullname="HexGlobeProject.Tests.Editor.TileMeshCache_InterfaceTests.TileMeshCache_ProvidesSingletonOrConstructibleInstance" methodname="TileMeshCache_ProvidesSingletonOrConstructibleInstance" classname="HexGlobeProject.Tests.Editor.TileMeshCache_InterfaceTests" runstate="Runnable" seed="1131644014" result="Passed" start-time="2025-09-11 01:52:55Z" end-time="2025-09-11 01:52:55Z" duration="0.038316" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1117" name="TileSeamingTests" fullname="HexGlobeProject.Tests.Editor.TileSeamingTests" classname="HexGlobeProject.Tests.Editor.TileSeamingTests" runstate="Runnable" testcasecount="5" result="Passed" start-time="2025-09-11 01:52:55Z" end-time="2025-09-11 01:52:55Z" duration="0.048539" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1119" name="BarycentricCoordinates_TriangleEdges_ShouldBeValid" fullname="HexGlobeProject.Tests.Editor.TileSeamingTests.BarycentricCoordinates_TriangleEdges_ShouldBeValid" methodname="BarycentricCoordinates_TriangleEdges_ShouldBeValid" classname="HexGlobeProject.Tests.Editor.TileSeamingTests" runstate="Runnable" seed="2057873224" result="Passed" start-time="2025-09-11 01:52:55Z" end-time="2025-09-11 01:52:55Z" duration="0.012402" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1120" name="HeightSampling_EdgeDeterminism_ActualTileCoordinates" fullname="HexGlobeProject.Tests.Editor.TileSeamingTests.HeightSampling_EdgeDeterminism_ActualTileCoordinates" methodname="HeightSampling_EdgeDeterminism_ActualTileCoordinates" classname="HexGlobeProject.Tests.Editor.TileSeamingTests" runstate="Runnable" seed="2051041960" result="Passed" start-time="2025-09-11 01:52:55Z" end-time="2025-09-11 01:52:55Z" duration="0.003068" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1118" name="IcosphericMapping_EdgeCoordinates_ShouldBeConsistent" fullname="HexGlobeProject.Tests.Editor.TileSeamingTests.IcosphericMapping_EdgeCoordinates_ShouldBeConsistent" methodname="IcosphericMapping_EdgeCoordinates_ShouldBeConsistent" classname="HexGlobeProject.Tests.Editor.TileSeamingTests" runstate="Runnable" seed="498689037" result="Passed" start-time="2025-09-11 01:52:55Z" end-time="2025-09-11 01:52:55Z" duration="0.002804" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1121" name="TileCoordinates_DepthScaling_ShouldMaintainConsistency" fullname="HexGlobeProject.Tests.Editor.TileSeamingTests.TileCoordinates_DepthScaling_ShouldMaintainConsistency" methodname="TileCoordinates_DepthScaling_ShouldMaintainConsistency" classname="HexGlobeProject.Tests.Editor.TileSeamingTests" runstate="Runnable" seed="1555132879" result="Passed" start-time="2025-09-11 01:52:55Z" end-time="2025-09-11 01:52:55Z" duration="0.000345" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1122" name="TileEdgeVertices_ShouldExistAndBeValid" fullname="HexGlobeProject.Tests.Editor.TileSeamingTests.TileEdgeVertices_ShouldExistAndBeValid" methodname="TileEdgeVertices_ShouldExistAndBeValid" classname="HexGlobeProject.Tests.Editor.TileSeamingTests" runstate="Runnable" seed="1007217080" result="Passed" start-time="2025-09-11 01:52:55Z" end-time="2025-09-11 01:52:55Z" duration="0.006050" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1123" name="TileSpawningIntegrationTests" fullname="HexGlobeProject.Tests.Editor.TileSpawningIntegrationTests" classname="HexGlobeProject.Tests.Editor.TileSpawningIntegrationTests" runstate="Runnable" testcasecount="8" result="Passed" start-time="2025-09-11 01:52:55Z" end-time="2025-09-11 01:52:56Z" duration="1.517874" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1129" name="TrySpawnTile_MultipleCalls_ShouldReturnSameObject" fullname="HexGlobeProject.Tests.Editor.TileSpawningIntegrationTests.TrySpawnTile_MultipleCalls_ShouldReturnSameObject" methodname="TrySpawnTile_MultipleCalls_ShouldReturnSameObject" classname="HexGlobeProject.Tests.Editor.TileSpawningIntegrationTests" runstate="Runnable" seed="755669521" result="Passed" start-time="2025-09-11 01:52:55Z" end-time="2025-09-11 01:52:55Z" duration="0.186327" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1126" name="TrySpawnTile_ShouldAssignCorrectLayer" fullname="HexGlobeProject.Tests.Editor.TileSpawningIntegrationTests.TrySpawnTile_ShouldAssignCorrectLayer" methodname="TrySpawnTile_ShouldAssignCorrectLayer" classname="HexGlobeProject.Tests.Editor.TileSpawningIntegrationTests" runstate="Runnable" seed="92214717" result="Passed" start-time="2025-09-11 01:52:55Z" end-time="2025-09-11 01:52:55Z" duration="0.193568" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1125" name="TrySpawnTile_ShouldAssignCorrectParent" fullname="HexGlobeProject.Tests.Editor.TileSpawningIntegrationTests.TrySpawnTile_ShouldAssignCorrectParent" methodname="TrySpawnTile_ShouldAssignCorrectParent" classname="HexGlobeProject.Tests.Editor.TileSpawningIntegrationTests" runstate="Runnable" seed="1512152598" result="Passed" start-time="2025-09-11 01:52:55Z" end-time="2025-09-11 01:52:55Z" duration="0.186588" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1127" name="TrySpawnTile_ShouldAssignMaterial" fullname="HexGlobeProject.Tests.Editor.TileSpawningIntegrationTests.TrySpawnTile_ShouldAssignMaterial" methodname="TrySpawnTile_ShouldAssignMaterial" classname="HexGlobeProject.Tests.Editor.TileSpawningIntegrationTests" runstate="Runnable" seed="1379600594" result="Passed" start-time="2025-09-11 01:52:55Z" end-time="2025-09-11 01:52:56Z" duration="0.176190" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1124" name="TrySpawnTile_ShouldCreateTileWithComponents" fullname="HexGlobeProject.Tests.Editor.TileSpawningIntegrationTests.TrySpawnTile_ShouldCreateTileWithComponents" methodname="TrySpawnTile_ShouldCreateTileWithComponents" classname="HexGlobeProject.Tests.Editor.TileSpawningIntegrationTests" runstate="Runnable" seed="134286325" result="Passed" start-time="2025-09-11 01:52:56Z" end-time="2025-09-11 01:52:56Z" duration="0.187801" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1128" name="TrySpawnTile_ShouldGenerateMesh" fullname="HexGlobeProject.Tests.Editor.TileSpawningIntegrationTests.TrySpawnTile_ShouldGenerateMesh" methodname="TrySpawnTile_ShouldGenerateMesh" classname="HexGlobeProject.Tests.Editor.TileSpawningIntegrationTests" runstate="Runnable" seed="1408039760" result="Passed" start-time="2025-09-11 01:52:56Z" end-time="2025-09-11 01:52:56Z" duration="0.215000" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1131" name="TrySpawnTile_ShouldPositionGameObjectAtPrecomputedCenter" fullname="HexGlobeProject.Tests.Editor.TileSpawningIntegrationTests.TrySpawnTile_ShouldPositionGameObjectAtPrecomputedCenter" methodname="TrySpawnTile_ShouldPositionGameObjectAtPrecomputedCenter" classname="HexGlobeProject.Tests.Editor.TileSpawningIntegrationTests" runstate="Runnable" seed="1900353653" result="Passed" start-time="2025-09-11 01:52:56Z" end-time="2025-09-11 01:52:56Z" duration="0.175210" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1130" name="TrySpawnTile_ShouldSetCorrectTileId" fullname="HexGlobeProject.Tests.Editor.TileSpawningIntegrationTests.TrySpawnTile_ShouldSetCorrectTileId" methodname="TrySpawnTile_ShouldSetCorrectTileId" classname="HexGlobeProject.Tests.Editor.TileSpawningIntegrationTests" runstate="Runnable" seed="1367266616" result="Passed" start-time="2025-09-11 01:52:56Z" end-time="2025-09-11 01:52:56Z" duration="0.172548" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1132" name="TileVertexBarycentricDiagnosticsTests" fullname="HexGlobeProject.Tests.Editor.TileVertexBarycentricDiagnosticsTests" classname="HexGlobeProject.Tests.Editor.TileVertexBarycentricDiagnosticsTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2025-09-11 01:52:56Z" end-time="2025-09-11 01:52:58Z" duration="1.339073" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1133" name="SweepAdjacentTiles_FindBarycentricMappingMismatches" fullname="HexGlobeProject.Tests.Editor.TileVertexBarycentricDiagnosticsTests.SweepAdjacentTiles_FindBarycentricMappingMismatches" methodname="SweepAdjacentTiles_FindBarycentricMappingMismatches" classname="HexGlobeProject.Tests.Editor.TileVertexBarycentricDiagnosticsTests" runstate="Runnable" seed="859354022" result="Passed" start-time="2025-09-11 01:52:56Z" end-time="2025-09-11 01:52:58Z" duration="1.313703" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[Saving results to: C:/Users/Win10/AppData/LocalLow/DefaultCompany/HexGlobeProject\TestResults.xml
+]]></output>
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

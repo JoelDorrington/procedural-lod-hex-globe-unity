@@ -47,16 +47,6 @@ namespace HexGlobeProject.Tests.Editor
 
             // Ensure precomputed entries exist (visibility manager required by builder)
             var managerObj = new GameObject("PrecomputeManager");
-            var manager = managerObj.AddComponent<PlanetTileVisibilityManager>();
-            var precomputeMethod = typeof(PlanetTileVisibilityManager).GetMethod("PrecomputeTileNormalsForDepth",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            if (precomputeMethod == null)
-            {
-                Object.DestroyImmediate(managerObj);
-                Assert.Inconclusive("Could not find PrecomputeTileNormalsForDepth method");
-                return;
-            }
-            precomputeMethod.Invoke(manager, new object[] { 1 });
 
             try
             {
@@ -109,62 +99,28 @@ namespace HexGlobeProject.Tests.Editor
                 seed = 42
             };
 
-            var lowConfig = ScriptableObject.CreateInstance<TerrainConfig>();
-            lowConfig.baseRadius = 100f;
-            lowConfig.heightScale = 10f;
-            lowConfig.baseResolution = lowRes;
+            // Instead of comparing mesh extrema (which depend on sampling density),
+            // verify that the height provider returns the same value for the same
+            // world directions regardless of the 'resolution' parameter.
 
-            var highConfig = ScriptableObject.CreateInstance<TerrainConfig>();
-            highConfig.baseRadius = 100f;
-            highConfig.heightScale = 10f;
-            highConfig.baseResolution = highRes;
+            // Obtain the canonical barycentric center used by the mesh builder
+            IcosphereMapping.GetTileBarycentricCenter(tileId.x, tileId.y, tileId.depth, out float centerU, out float centerV);
 
-            var lowBuilder = new PlanetTileMeshBuilder(lowConfig, heightProvider);
-            var highBuilder = new PlanetTileMeshBuilder(highConfig, heightProvider);
-
-            var managerObj = new GameObject("PrecomputeManager2");
-            var manager = managerObj.AddComponent<PlanetTileVisibilityManager>();
-            var precomputeMethod = typeof(PlanetTileVisibilityManager).GetMethod("PrecomputeTileNormalsForDepth",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            if (precomputeMethod == null)
+            var samplePoints = new List<(float u, float v)>
             {
-                Object.DestroyImmediate(managerObj);
-                Assert.Inconclusive("Could not find PrecomputeTileNormalsForDepth method");
-                return;
-            }
-            precomputeMethod.Invoke(manager, new object[] { 1 });
+                (centerU, centerV),
+                (0.25f, 0.25f),
+                (0.5f, 0.1f),
+                (0.1f, 0.7f),
+            };
 
-            try
+            float sampleTolerance = 1e-6f; // very small tolerance since provider shouldn't depend on resolution
+            foreach (var (u, v) in samplePoints)
             {
-                // Instead of comparing mesh extrema (which depend on sampling density),
-                // verify that the height provider returns the same value for the same
-                // world directions regardless of the 'resolution' parameter.
-
-                // Obtain the canonical barycentric center used by the mesh builder
-                IcosphereMapping.GetTileBarycentricCenter(tileId.x, tileId.y, tileId.depth, out float centerU, out float centerV);
-
-                var samplePoints = new List<(float u, float v)>
-                {
-                    (centerU, centerV),
-                    (0.25f, 0.25f),
-                    (0.5f, 0.1f),
-                    (0.1f, 0.7f),
-                };
-
-                float sampleTolerance = 1e-6f; // very small tolerance since provider shouldn't depend on resolution
-                foreach (var (u, v) in samplePoints)
-                {
-                    Vector3 dir = IcosphereMapping.BarycentricToWorldDirection(tileId.face, u, v).normalized;
-                    float valLow = heightProvider.Sample(in dir, lowRes);
-                    float valHigh = heightProvider.Sample(in dir, highRes);
-                    Assert.AreEqual(valLow, valHigh, sampleTolerance, $"Height provider must return same value for identical world position (u={u},v={v})");
-                }
-            }
-            finally
-            {
-                Object.DestroyImmediate(lowConfig);
-                Object.DestroyImmediate(highConfig);
-                Object.DestroyImmediate(managerObj);
+                Vector3 dir = IcosphereMapping.BarycentricToWorldDirection(tileId.face, u, v).normalized;
+                float valLow = heightProvider.Sample(in dir, lowRes);
+                float valHigh = heightProvider.Sample(in dir, highRes);
+                Assert.AreEqual(valLow, valHigh, sampleTolerance, $"Height provider must return same value for identical world position (u={u},v={v})");
             }
         }
     }

@@ -5,8 +5,8 @@ using System.Collections;
 namespace HexGlobeProject.TerrainSystem.LOD
 {
     /// <summary>
-    /// Combines terrain mesh and collider logic for a planet tile.
-    /// Centralized management of ray-collider functionality, texture/material setup, and visibility state.
+    /// Encapsulates terrain mesh logic for a planet tile.
+    /// Centralized management of texture/material setup and visibility state.
     /// </summary>
     [DisallowMultipleComponent]
     public class PlanetTerrainTile : MonoBehaviour
@@ -14,12 +14,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
         // MeshFilter and MeshRenderer for terrain visuals
         public MeshFilter meshFilter { get; private set; }
         public MeshRenderer meshRenderer { get; private set; }
-
-        // MeshCollider for occlusion and raycast logic
-        public MeshCollider meshCollider { get; private set; }
-
-        // Cached visual mesh for fast show/hide
-        private Mesh cachedVisualMesh;
 
         // Tile metadata (can be extended)
         public TileId tileId;
@@ -29,10 +23,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
         public bool isVisible { get; private set; } = true;
         public float spawnTime { get; private set; }
 
-        // How long (seconds) without hits before the tile auto-deactivates.
-        // Tests can override the debounce by setting TestDeactivationDebounceOverride to a positive value.
-        [SerializeField]
-        public float deactivationDebounceSeconds = 5f;
+    // How long (seconds) without hits before the tile auto-deactivates.
+    // Tests can override the debounce by setting TestDeactivationDebounceOverride to a positive value.
+    [SerializeField]
+    public float deactivationDebounceSeconds = 0.5f;
 
         // Internal coroutine handle for auto-deactivation so we can restart when the tile is refreshed.
         private Coroutine _autoDeactivateCoroutine;
@@ -50,7 +44,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
         }
 
         /// <summary>
-        /// Ensure MeshFilter, MeshRenderer and MeshCollider components are present on the GameObject.
+        /// Ensure MeshFilter and MeshRenderer components are present on the GameObject.
         /// This mirrors part of Initialize but is safe to call independently for tests.
         /// </summary>
         private void EnsureComponentsExist()
@@ -65,17 +59,12 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 meshRenderer = gameObject.GetComponent<MeshRenderer>();
                 if (meshRenderer == null) meshRenderer = gameObject.AddComponent<MeshRenderer>();
             }
-            if (meshCollider == null)
-            {
-                meshCollider = gameObject.GetComponent<MeshCollider>();
-                if (meshCollider == null) meshCollider = gameObject.AddComponent<MeshCollider>();
-            }
         }
 
         /// <summary>
-        /// Initializes the tile and generates the collider mesh.
+        /// Initializes the tile.
         /// </summary>
-        public void Initialize(TileId id, TileData data, System.Func<TileId, Mesh> colliderMeshGenerator)
+        public void Initialize(TileId id, TileData data)
         {
             tileId = id;
             tileData = data;
@@ -126,17 +115,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
                         // success log removed
                     }
                 }
-
-                // Create MeshCollider
-                meshCollider = gameObject.GetComponent<MeshCollider>();
-                if (meshCollider == null)
-                {
-                    meshCollider = gameObject.AddComponent<MeshCollider>();
-                    if (meshCollider == null)
-                    {
-                        Debug.LogError($"[TILE INIT] FAILED to create MeshCollider component!");
-                    }
-                }
                 
                 // Restore original active state if we changed it
                 if (!wasActive && gameObject.activeSelf)
@@ -148,21 +126,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
             {
                 Debug.LogError($"[TILE INIT] Exception during component creation: {ex.Message}\n{ex.StackTrace}");
                 throw;
-            }
-
-            // Generate and assign collider mesh
-            Mesh colliderMesh = colliderMeshGenerator != null ? colliderMeshGenerator(id) : null;
-            if (meshCollider != null)
-            {
-                if (colliderMesh != null)
-                {
-                    meshCollider.sharedMesh = colliderMesh;
-                }
-                else
-                {
-                    Debug.LogWarning($"[TILE INIT] No collider mesh generated for {id} - MeshCollider will have no mesh");
-                }
-                meshCollider.convex = false;
             }
 
             // Set initial visual mesh if available
@@ -182,17 +145,12 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 Debug.LogError($"[TILE INIT] CRITICAL: MeshRenderer is still null after initialization!");
                 meshRenderer = gameObject.AddComponent<MeshRenderer>(); // Try one more time
             }
-            if (meshCollider == null)
-            {
-                Debug.LogError($"[TILE INIT] CRITICAL: MeshCollider is still null after initialization!");
-                meshCollider = gameObject.AddComponent<MeshCollider>(); // Try one more time
-            }
         }
 
         /// <summary>
         /// Setup material and layer configuration for the tile.
         /// </summary>
-        public void ConfigureMaterialAndLayer(Material terrainMaterial, int targetLayer, Vector3 planetCenter = default)
+        public void ConfigureMaterialAndLayer(Material terrainMaterial, Vector3 planetCenter = default)
         {
             baseMaterial = terrainMaterial;
             
@@ -203,50 +161,13 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 materialInstance.name = terrainMaterial.name + " (Tile Instance)";
                 meshRenderer.material = materialInstance;
                 
-                // Set planet center for proper shader calculations
-                if (materialInstance.HasProperty("_PlanetCenter"))
-                {
-                    materialInstance.SetVector("_PlanetCenter", new Vector4(planetCenter.x, planetCenter.y, planetCenter.z, 0));
-                }
-                
-                // Set default color
-                if (materialInstance.HasProperty("_Color"))
-                {
-                    materialInstance.SetColor("_Color", Color.white);
-                }
+                materialInstance.SetVector("_PlanetCenter", new Vector4(planetCenter.x, planetCenter.y, planetCenter.z, 0));
             }
             else
             {
                 // no-op when meshRenderer or terrainMaterial is missing
             }
 
-            // Configure layers recursively
-            SetLayerRecursively(gameObject, targetLayer);
-        }
-
-        /// <summary>
-        /// Set layer recursively on GameObject and all children.
-        /// </summary>
-        private void SetLayerRecursively(GameObject obj, int layer)
-        {
-            if (obj == null) return;
-            obj.layer = layer;
-            foreach (Transform t in obj.transform)
-            {
-                SetLayerRecursively(t.gameObject, layer);
-            }
-        }
-
-        /// <summary>
-        /// Test if a ray intersects with this tile's collider.
-        /// </summary>
-        public bool TestRayIntersection(Ray ray, out RaycastHit hitInfo, int layerMask)
-        {
-            hitInfo = default;
-            if (meshCollider == null || !gameObject.activeInHierarchy)
-                return false;
-
-            return meshCollider.Raycast(ray, out hitInfo, Mathf.Infinity);
         }
 
         /// <summary>
@@ -330,7 +251,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
         }
 
         /// <summary>
-        /// Public method to refresh tile activity from external systems (for example the raycast heuristic).
+        /// Public method to refresh tile activity from external systems (for example the visibility heuristic).
         /// This restarts the auto-deactivate timer so the tile remains active while being observed/hit.
         /// If the tile is hidden, it will be shown again.
         /// </summary>
@@ -339,7 +260,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             // If tile is hidden, show it again when refreshed
             if (!isVisible)
             {
-                ShowVisualMesh();
+                this.gameObject.SetActive(true);
             }
             try { RestartAutoDeactivate(); } catch { }
         }
@@ -350,15 +271,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
             if(debug) Debug.Log($"{Time.realtimeSinceStartup} AutoDeactivateCoroutine started, waiting {timeout}s");
             yield return new WaitForSecondsRealtime(timeout);
 
-            // Instead of fully deactivating the GameObject (which disables colliders
-            // and makes the tile un-targetable by raycasts), only hide the visual
-            // mesh. Keep the GameObject and MeshCollider active so external
-            // heuristics can still raycast against this tile and reactivate visuals
-            // when needed. This preserves raycastability while saving rendering cost.
             try
             {
                 if(debug) Debug.Log($"{Time.realtimeSinceStartup} AutoDeactivateCoroutine timeout reached, hiding mesh");
-                HideVisualMesh();
+                this.gameObject.SetActive(false);
             }
             catch (Exception ex)
             {
@@ -372,63 +288,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
         /// </summary>
         public void BuildTerrain()
         {
-            EnsureComponentsExist();
-            if (meshFilter == null) return;
-            if (meshFilter.sharedMesh != null) return; // already built
-            if (cachedVisualMesh != null)
-            {
-                meshFilter.sharedMesh = cachedVisualMesh;
-                return; // already cached
-            }
-
-            // Create a simple box mesh to satisfy tests (much more reliable for raycasting than a flat quad)
-            var m = new Mesh();
-            m.name = "Tile_FallbackMesh";
-            
-            // Create a box with small thickness (0.2 units) centered at origin
-            float w = 1.0f, h = 0.2f, d = 1.0f; // width, height, depth
-            float hw = w * 0.5f, hh = h * 0.5f, hd = d * 0.5f;
-            
-            // 8 vertices of a box
-            m.vertices = new Vector3[] {
-                // Bottom face (y = -hh)
-                new Vector3(-hw, -hh, -hd), // 0: back-left-bottom
-                new Vector3( hw, -hh, -hd), // 1: back-right-bottom
-                new Vector3( hw, -hh,  hd), // 2: front-right-bottom
-                new Vector3(-hw, -hh,  hd), // 3: front-left-bottom
-                // Top face (y = +hh)
-                new Vector3(-hw,  hh, -hd), // 4: back-left-top
-                new Vector3( hw,  hh, -hd), // 5: back-right-top
-                new Vector3( hw,  hh,  hd), // 6: front-right-top
-                new Vector3(-hw,  hh,  hd), // 7: front-left-top
-            };
-            
-            // 12 triangles (2 per face, 6 faces)
-            m.triangles = new int[] {
-                // Bottom face (y = -hh)
-                0, 2, 1,  0, 3, 2,
-                // Top face (y = +hh)  
-                4, 5, 6,  4, 6, 7,
-                // Front face (+Z)
-                3, 6, 2,  3, 7, 6,
-                // Back face (-Z)
-                1, 4, 0,  1, 5, 4,
-                // Left face (-X)
-                0, 7, 3,  0, 4, 7,
-                // Right face (+X)
-                2, 5, 1,  2, 6, 5
-            };
-            
-            m.RecalculateNormals();
-            m.RecalculateBounds();
-            meshFilter.sharedMesh = m;
-            cachedVisualMesh = m;
-
-            // If this method was called while the GameObject was inactive, treat
-            // it as a hint that the tile has become relevant again and reactivate
-            // the GameObject. This lets external systems (for example a visibility
-            // heuristic) call EnsureMeshBuilt on inactive tiles and have the tile
-            // handle reactivation itself.
             if (!gameObject.activeInHierarchy)
             {
                 try { gameObject.SetActive(true); }
@@ -437,73 +296,14 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     Debug.LogError($"[TILE] Failed to reactivate GameObject when EnsureMeshBuilt was called on inactive tile.");
                 }
             }
+            EnsureComponentsExist();
+            if (meshFilter == null) return;
+            if (meshFilter.sharedMesh != null) return; // already built
 
             // Restart the auto-deactivation timer so any externally-set debounce
             // value (for example, set by tests before calling EnsureMeshBuilt)
             // is respected immediately.
             try { RestartAutoDeactivate(); } catch { }
-        }
-
-        public bool ActivateIfHit(Ray ray)
-        {
-            bool hitThisTile = false;
-            // Prefer testing the tile's own MeshCollider directly when available
-            var col = meshCollider;
-            if (col != null)
-            {
-                try
-                {
-                    if (col.Raycast(ray, out RaycastHit phCol, Mathf.Infinity))
-                    {
-                        hitThisTile = true;
-                    }
-                }
-                catch { }
-            }
-
-            if (hitThisTile)
-            {
-        if (debug) Debug.Log($"{Time.realtimeSinceStartup} Tile hit by ray: {gameObject.name}");
-                // If the tile's visuals are currently hidden, reactivate them
-                // since the camera is now hitting this tile
-                if (!isVisible)
-                {
-                    try
-                    {
-            if (debug) Debug.Log($"{Time.realtimeSinceStartup} Reactivating visuals for: {gameObject.name}");
-                        ShowVisualMesh();  // Re-enable the renderer
-                    }
-                    catch { }
-                }
-
-                // Always refresh activity to restart the debounce timer
-                try { RefreshActivity(); } catch { }
-            }
-            
-            return hitThisTile;
-        }
-
-        /// <summary>
-        /// Show the visual mesh (enable renderer and assign cached mesh).
-        /// Tile remains a raycast target to prevent hitting the far side of the planet.
-        /// </summary>
-        public void ShowVisualMesh()
-        {
-            if(debug) Debug.Log($"{Time.realtimeSinceStartup} ShowMesh");
-            isVisible = true;
-            if (meshRenderer != null) meshRenderer.enabled = true;
-            if (meshFilter != null && cachedVisualMesh != null) meshFilter.sharedMesh = cachedVisualMesh;
-        }
-
-        /// <summary>
-        /// Hide the visual mesh (disable renderer) but keep collider active.
-        /// Tile remains a raycast target to prevent hitting the far side of the planet.
-        /// </summary>
-        public void HideVisualMesh()
-        {
-            if(debug) Debug.Log($"{Time.realtimeSinceStartup} HideMesh");
-            isVisible = false;
-            if (meshRenderer != null) meshRenderer.enabled = false;
         }
 
         /// <summary>
@@ -516,8 +316,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 tileName = gameObject.name,
                 isActive = gameObject.activeInHierarchy,
                 parentName = transform.parent?.name ?? "<null>",
-                layer = gameObject.layer,
-                layerName = LayerMask.LayerToName(gameObject.layer),
                 position = transform.position,
                 scale = transform.lossyScale,
                 isVisible = this.isVisible,
@@ -540,19 +338,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 info.materialName = meshRenderer.sharedMaterial.name ?? "<unnamed-material>";
                 info.shaderName = meshRenderer.sharedMaterial.shader?.name ?? "<null-shader>";
                 info.rendererEnabled = meshRenderer.enabled;
-            }
-
-            // Camera visibility check
-            if (camera != null)
-            {
-                try 
-                { 
-                    info.cameraSeesLayer = (camera.cullingMask & (1 << gameObject.layer)) != 0; 
-                } 
-                catch 
-                { 
-                    info.cameraSeesLayer = false; 
-                }
             }
 
             return info;
@@ -580,13 +365,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
         public string tileName;
         public bool isActive;
         public string parentName;
-        public int layer;
-        public string layerName;
         public Vector3 position;
         public Vector3 scale;
         public bool isVisible;
         public float spawnTime;
-        public bool cameraSeesLayer;
         
         // Mesh info
         public string meshName;
@@ -602,8 +384,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
         public override string ToString()
         {
             return $"[TILE INFO] {tileName} active={isActive} parent={parentName} " +
-                   $"layer={layer}({layerName}) camSeesLayer={cameraSeesLayer} mesh={meshName} " +
-                   $"verts={vertexCount} tris={triangleCount} bounds={bounds} " +
+                   $"mesh={meshName} verts={vertexCount} tris={triangleCount} bounds={bounds} " +
                    $"material={materialName} shader={shaderName} rendererEnabled={rendererEnabled} " +
                    $"pos={position} scale={scale} visible={isVisible}";
         }

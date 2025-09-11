@@ -52,7 +52,7 @@ namespace HexGlobeProject.Tests.Editor
         public void HideThenShow_ShouldRestoreOriginalMeshInstanceAndVertexCount()
         {
             // Initialize tile and ensure the visual mesh is assigned
-            terrainTile.Initialize(testTileId, testTileData, _ => testMesh);
+            terrainTile.Initialize(testTileId, testTileData);
 
             Assert.IsNotNull(terrainTile.meshFilter, "MeshFilter must be present after Initialize");
             Assert.IsNotNull(terrainTile.meshFilter.sharedMesh, "MeshFilter should have a mesh assigned after Initialize");
@@ -66,9 +66,9 @@ namespace HexGlobeProject.Tests.Editor
 
             // Hide then show the visual mesh using the component API
             // (tests assume these methods exist on the component)
-            terrainTile.HideVisualMesh();
+            terrainTile.gameObject.SetActive(false);
             // After hiding the renderer may be disabled but the cached mesh should still be preserved or restorable
-            terrainTile.ShowVisualMesh();
+            terrainTile.gameObject.SetActive(true);
 
             Assert.IsNotNull(terrainTile.meshFilter.sharedMesh, "MeshFilter must have a mesh after ShowVisualMesh");
             Assert.AreEqual(4, terrainTile.meshFilter.sharedMesh.vertexCount, "Vertex count should be preserved after hide/show");

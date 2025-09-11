@@ -29,26 +29,22 @@ namespace HexGlobeProject.Tests.Editor
             testTileData.center = Vector3.zero;
 
             // Act
-            terrainTile.Initialize(testTileId, testTileData, _ => testMesh);
+            terrainTile.Initialize(testTileId, testTileData);
 
             // Assert
             
             Assert.IsNotNull(terrainTile.meshFilter, "MeshFilter should be created");
             Assert.IsNotNull(terrainTile.meshRenderer, "MeshRenderer should be created");
-            Assert.IsNotNull(terrainTile.meshCollider, "MeshCollider should be created");
 
             // Check if components are actually on the GameObject
             var meshFilter = testGameObject.GetComponent<MeshFilter>();
             var meshRenderer = testGameObject.GetComponent<MeshRenderer>();
-            var meshCollider = testGameObject.GetComponent<MeshCollider>();
 
             Assert.IsNotNull(meshFilter, "GameObject should have MeshFilter component");
             Assert.IsNotNull(meshRenderer, "GameObject should have MeshRenderer component");
-            Assert.IsNotNull(meshCollider, "GameObject should have MeshCollider component");
 
             // Check mesh assignment
             Assert.AreEqual(testMesh, meshFilter.sharedMesh, "MeshFilter should have correct mesh");
-            Assert.AreEqual(testMesh, meshCollider.sharedMesh, "MeshCollider should have correct mesh");
 
             // Cleanup
             Object.DestroyImmediate(testGameObject);

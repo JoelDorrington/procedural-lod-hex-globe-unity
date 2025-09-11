@@ -16,7 +16,7 @@ namespace HexGlobeProject.Tests.Editor
             var td = new TileData { id = id, resolution = 4, isBaked = true };
             td.center = new Vector3(10.5f, -2.25f, 3.125f);
 
-            tile.Initialize(id, td, colliderMeshGenerator: _ => null);
+            tile.Initialize(id, td);
 
             Assert.AreEqual(td.center, go.transform.position);
 
@@ -38,7 +38,7 @@ namespace HexGlobeProject.Tests.Editor
             var td = new TileData { id = id, resolution = 4, isBaked = true };
             td.center = new Vector3(12f, 6f, 5f);
 
-            tile.Initialize(id, td, colliderMeshGenerator: _ => null);
+            tile.Initialize(id, td);
 
             // World position should equal tile center regardless of parent offset
             Assert.AreEqual(td.center, go.transform.position);

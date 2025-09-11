@@ -28,7 +28,7 @@ namespace HexGlobeProject.Tests.Editor
             yield return null;
 
             var tileId = new TileId(0, 0, 0, 0);
-            var spawned = mgr.TrySpawnTile(tileId, resolution: 8);
+            var spawned = mgr.TrySpawnTile(tileId);
 
             // Assert: a tile was spawned and it is parented under the planet transform
             Assert.IsNotNull(spawned, "Manager should spawn a tile for a precomputed entry");

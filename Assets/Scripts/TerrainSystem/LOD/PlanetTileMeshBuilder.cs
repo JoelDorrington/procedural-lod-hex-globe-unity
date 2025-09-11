@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 using HexGlobeProject.Util;
+using System;
 
 namespace HexGlobeProject.TerrainSystem.LOD
 {
@@ -63,27 +64,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             // (for example a serialized reference couldn't be deserialized), fall back to
             // the config's provider or a new default SimplePerlinHeightProvider so terrain
             // is still generated instead of flat tiles.
-            var provider = heightProvider ?? config.heightProvider ?? (TerrainHeightProviderBase)new SimplePerlinHeightProvider();
-
-            // Calculate tile center using canonical barycentric center (resolution-independent)
-            Vector3 canonicalTileCenter;
-            if (data.id.face >= 0)
-            {
-                // Use discrete tile coordinates for canonical center calculation
-                IcosphereMapping.GetTileBarycentricCenter(data.id.x, data.id.y, data.id.depth, out float centerU, out float centerV);
-                Vector3 centerDir = IcosphereMapping.BarycentricToWorldDirection(data.id.face, centerU, centerV).normalized;
-
-                // Sample height at canonical center for consistent positioning
-                float centerHeight = provider.Sample(in centerDir, res) * config.heightScale;
-                canonicalTileCenter = centerDir * (radius + centerHeight);
-            }
-            else
-            {
-                // Fallback: use faceNormal as approximate center direction
-                Vector3 centerDir = data.id.faceNormal.normalized;
-                float centerHeight = provider.Sample(in centerDir, res) * config.heightScale;
-                canonicalTileCenter = centerDir * (radius + centerHeight);
-            }
+            var provider = heightProvider ?? config.heightProvider ?? new SimplePerlinHeightProvider();
 
             Vector3 centerAccum = Vector3.zero; // Still accumulate for fallback/validation
             int vertCounter = 0;
@@ -98,16 +79,17 @@ namespace HexGlobeProject.TerrainSystem.LOD
             System.Diagnostics.Stopwatch swSampling = null;
             System.Diagnostics.Stopwatch swTriBuild = null;
             int degenerateTriangleCount = 0;
-            if (UnityEngine.Debug.isDebugBuild)
+            if (Debug.isDebugBuild)
             {
                 swTotal = System.Diagnostics.Stopwatch.StartNew();
                 swSampling = new System.Diagnostics.Stopwatch();
                 swTriBuild = new System.Diagnostics.Stopwatch();
             }
 
-            // Per-tile canonical lookup: get 1-D tile index and precomputed entry
-            if (!PlanetTileVisibilityManager.GetPrecomputedIndex(data.id, out int tileIndex, out var entry))
-                throw new System.Exception("Failed to find precomputed entry for tile: " + data.id);
+            var registry = new TerrainTileRegistry(data.id.depth, radius, planetCenter);
+            var key = new TileId(data.id.face, data.id.x, data.id.y, data.id.depth);
+            if (!registry.tiles.TryGetValue(key, out var entry))
+                throw new Exception("Invalid TileId: " + data.id);
 
             // Return cached mesh instance when available to keep reference equality stable.
             if (data != null && data.id.face >= 0)
@@ -188,10 +170,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     float b1 = localU;
                     float b2 = localV;
                     float b0 = 1f - b1 - b2;
-
-                    // Build deterministic per-vertex sample index using canonical tileIndex (1-D)
-                    int vertexLocalIndex = j * res + i;
-                    long perVertexIndex = (long)tileIndex * (res * res) + vertexLocalIndex;
 
                     // Map directly from canonical barycentric coords to world direction to avoid distortion
                     Vector3 dir = IcosphereMapping.BarycentricToWorldDirection(entry.face, globalU, globalV).normalized;
@@ -335,9 +313,13 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 // Timing logs removed in production; keep stopwatch usage for local profiling if needed.
             }
 
-            // Use the precomputed registry center as the authoritative GameObject position.
-            // This keeps spawned GameObjects aligned with the visibility manager's precomputed entries.
-            data.center = entry.centerWorld;
+            // Use the sampled world-space centroid as the authoritative tile center when
+            // possible. This ensures that when we convert vertices to local-space
+            // (subtracting the center) and later place the GameObject at data.center,
+            // the mesh's world-space centroid will equal data.center. If sampling
+            // failed or produced no vertices, fall back to the precomputed registry center.
+            Vector3 sampledCenter = vertCounter > 0 ? (centerAccum / vertCounter) : entry.centerWorld;
+            data.center = sampledCenter;
 
             if (vertCounter > 0)
             {

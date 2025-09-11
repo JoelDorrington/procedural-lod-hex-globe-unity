@@ -1,7 +1,6 @@
 using NUnit.Framework;
 using UnityEngine;
 using System.Collections.Generic;
-using System.Linq;
 using HexGlobeProject.TerrainSystem;
 using HexGlobeProject.TerrainSystem.LOD;
 
@@ -37,15 +36,17 @@ namespace HexGlobeProject.Tests.Editor
                 
                 // Assert: Enumeration should terminate and return finite list
                 Assert.IsNotNull(tileIds, "Method should return a list");
-                Assert.AreEqual(20, tileIds.Count, "Depth 0 should generate exactly 20 TileIds");
+                int expectedPerFace = IcosphereMapping.GetValidTileCountForDepth(0);
+                int expectedTotal = 20 * expectedPerFace;
+                Assert.AreEqual(expectedTotal, tileIds.Count, $"Depth 0 should generate exactly {expectedTotal} TileIds");
                 
                 // Verify enumeration terminates by converting to array (this would hang if infinite)
                 var tileArray = tileIds.ToArray();
-                Assert.AreEqual(20, tileArray.Length, "ToArray conversion should complete with 20 items");
+                Assert.AreEqual(expectedTotal, tileArray.Length, $"ToArray conversion should complete with {expectedTotal} items");
                 
                 // Verify all TileIds are unique (no duplicates that could cause processing loops)
                 var uniqueTileIds = new HashSet<TileId>(tileIds);
-                Assert.AreEqual(20, uniqueTileIds.Count, "All TileIds should be unique (no duplicates)");
+                Assert.AreEqual(expectedTotal, uniqueTileIds.Count, "All TileIds should be unique (no duplicates)");
                 
                 // Verify all TileIds have the correct depth
                 foreach (var tileId in tileIds)
@@ -90,15 +91,17 @@ namespace HexGlobeProject.Tests.Editor
                 
                 // Assert: Enumeration should terminate and return finite list
                 Assert.IsNotNull(tileIds, "Method should return a list");
-                Assert.AreEqual(80, tileIds.Count, "Depth 1 should generate exactly 80 TileIds (20 faces * 2^2 tiles per face)");
+                int tilesPerEdge1 = 1 << 1; // 2^1
+                int expectedTotal1 = 20 * tilesPerEdge1 * tilesPerEdge1; // 20 * (2^1)^2 = 80
+                Assert.AreEqual(expectedTotal1, tileIds.Count, $"Depth 1 should generate exactly {expectedTotal1} TileIds (20 faces * tilesPerEdge^2)");
                 
                 // Verify enumeration terminates by converting to array (this would hang if infinite)
                 var tileArray = tileIds.ToArray();
-                Assert.AreEqual(80, tileArray.Length, "ToArray conversion should complete with 80 items");
+                Assert.AreEqual(expectedTotal1, tileArray.Length, $"ToArray conversion should complete with {expectedTotal1} items");
                 
                 // Verify all TileIds are unique (no duplicates that could cause processing loops)
                 var uniqueTileIds = new HashSet<TileId>(tileIds);
-                Assert.AreEqual(80, uniqueTileIds.Count, "All TileIds should be unique (no duplicates)");
+                Assert.AreEqual(expectedTotal1, uniqueTileIds.Count, "All TileIds should be unique (no duplicates)");
                 
                 // Verify all TileIds have the correct depth
                 foreach (var tileId in tileIds)
@@ -140,52 +143,6 @@ namespace HexGlobeProject.Tests.Editor
             tileSet.Add(tileId1);
             tileSet.Add(tileId2);
             Assert.AreEqual(2, tileSet.Count, "Adding duplicate TileIds should not grow the set");
-        }
-        
-        [Test]
-        public void TileCache_GetAllTileIds_ShouldTerminateEnumeration()
-        {
-            // Arrange: Create a TileCache with some test tiles
-            var meshBuilder = new PlanetTileMeshBuilder(null, null, Vector3.zero);
-            var cache = new TileCache(meshBuilder, null, null, Vector3.zero);
-            
-            // Add some test tiles using reflection to access private cache
-            var cacheField = typeof(TileCache).GetField("tileCache", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            var internalCache = cacheField.GetValue(cache) as Dictionary<TileId, GameObject>;
-            
-            // Add test tiles
-            var testTile1 = new GameObject("TestTile1");
-            var testTile2 = new GameObject("TestTile2");
-            var testTile3 = new GameObject("TestTile3");
-            
-            try
-            {
-                internalCache[new TileId(0, 0, 0, 0)] = testTile1;
-                internalCache[new TileId(1, 0, 0, 0)] = testTile2;
-                internalCache[new TileId(2, 0, 0, 0)] = testTile3;
-                
-                // Act: Get all TileIds (this should terminate)
-                var allTileIds = cache.GetAllTileIds();
-                
-                // Assert: Enumeration should terminate and return finite collection
-                Assert.IsNotNull(allTileIds, "GetAllTileIds should return a collection");
-                
-                var tileIdArray = allTileIds.ToArray();
-                Assert.AreEqual(3, tileIdArray.Length, "Should return exactly 3 TileIds");
-                
-                // Verify no infinite enumeration by iterating twice
-                int count1 = allTileIds.Count();
-                int count2 = allTileIds.Count();
-                Assert.AreEqual(count1, count2, "Multiple enumerations should return same count");
-                Assert.AreEqual(3, count1, "Count should be 3");
-            }
-            finally
-            {
-                // Cleanup
-                Object.DestroyImmediate(testTile1);
-                Object.DestroyImmediate(testTile2);
-                Object.DestroyImmediate(testTile3);
-            }
         }
     }
 }

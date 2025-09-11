@@ -25,8 +25,8 @@ namespace HexGlobeProject.Tests.PlayMode
             if (debugField != null) debugField.SetValue(mgr, true);
 
             // Use reflection to read the manager's last precomputed depth (observable state in tests)
-            var fld = typeof(PlanetTileVisibilityManager).GetField("_lastPrecomputedDepth", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            Assert.IsNotNull(fld, "Expected private field '_lastPrecomputedDepth' to exist for test introspection.");
+            var fld = typeof(PlanetTileVisibilityManager).GetField("_currentDepth", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            Assert.IsNotNull(fld, "Expected private field '_currentDepth' to exist for test introspection.");
 
             // Move camera to far (max) and explicitly set depth based on camera computation
             camCtrl.distance = camCtrl.maxDistance;

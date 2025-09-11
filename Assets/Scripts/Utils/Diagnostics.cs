@@ -11,7 +11,7 @@ namespace HexGlobeProject.Util
         // Enable detailed builder logs (mesh sampling, verts, bounds)
         public static bool EnableBuilderDebug = false;
 
-        // Enable per-tile diagnostics (collider vertex dumps, init summaries)
+        // Enable per-tile diagnostics (mesh vertex dumps, init summaries)
         public static bool EnableTileDiagnostics = false;
     }
 }
