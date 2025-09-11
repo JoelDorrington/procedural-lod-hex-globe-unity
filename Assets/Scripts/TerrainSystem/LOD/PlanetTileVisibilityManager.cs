@@ -615,7 +615,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			{
 				// Map camera direction to canonical tile and include k-ring
 				var centerTile = MathVisibilitySelector.TileFromDirection(camDir, depth);
-				var ring = MathVisibilitySelector.GetKRing(centerTile, mathSelectorBufferK);
+				var ring = MathVisibilitySelector.GetKRing(centerTile, mathSelectorBufferK, camDir);
 				foreach (var t in ring) candidates.Add(t);
 
 				// Also include any precomputed tiles whose face normal faces the camera
@@ -647,28 +647,54 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			}
 			else
 			{
-				// Planet fills view: include any tile whose corner is within 90 degrees of camera (dot>0)
+				// Simpler, distance-proportional center-dot threshold:
+				// Use threshold = R / d (clamped) so that as the camera approaches (d decreases)
+				// the required dot product increases (tighter cone) and fewer tiles are included.
+				// Apply a small relaxation factor so we don't miss edge tiles due to floating math.
+				float planetRadius = _planetRadius;
+				float dist = (camPos - planetCenter).magnitude;
+				float rawCenterDot = Mathf.Clamp01(planetRadius / Mathf.Max(1e-6f, dist));
+				float relaxFactor = 0.98f; // slight relaxation to be permissive of edges
+				float centerDotThreshold = Mathf.Clamp(rawCenterDot * relaxFactor, 0f, 1f);
+
 				if (tileRegistry.TryGetValue(depth, out var reg) && reg != null)
 				{
-					// Slightly widen visibility angle: accept corners up to 100 degrees from camera
-					float cornerDotThreshold = Mathf.Cos(Mathf.Deg2Rad * 100f); // ~ -0.1736
 					foreach (var e in reg.tiles.Values)
 					{
-						// check corners
-						bool any = false;
-						if (e.cornerWorldPositions != null)
-						{
-							foreach (var c in e.cornerWorldPositions)
-							{
-								Vector3 dir = (c - planetCenter).normalized;
-								if (Vector3.Dot(dir, camDir) > cornerDotThreshold) { any = true; break; }
-							}
-						}
-						if (any)
+						// Use the tile centroid direction only — barycentric corner checks are unnecessary
+						Vector3 centerDir = (e.centerWorld - planetCenter).normalized;
+						if (Vector3.Dot(centerDir, camDir) > centerDotThreshold)
 						{
 							candidates.Add(new TileId(e.face, e.x, e.y, depth));
 						}
 					}
+				}
+
+				// Prefetch buffer: small k-ring around the camera-facing tile to warm neighbors
+				// Trim the prefetch by a tighter angular window so only nearby buffer tiles
+				// are kept. This avoids adding many distant k-ring tiles when the planet
+				// fills the view.
+				var centerTile = MathVisibilitySelector.TileFromDirection(camDir, depth);
+				var prefetch = MathVisibilitySelector.GetKRing(centerTile, mathSelectorBufferK, camDir);
+				// Cap prefetch to the top N nearest k-ring tiles by angular closeness to camDir.
+				// This avoids adding many distant tiles at the same depth while still
+				// warming the immediate neighbors. Pick a conservative N.
+				int prefetchTopN = 8;
+				if (tileRegistry.TryGetValue(depth, out var regForPrefetch) && regForPrefetch != null)
+				{
+					var scored = new List<(float score, TileId id)>();
+					foreach (var t in prefetch)
+					{
+						if (!regForPrefetch.tiles.TryGetValue(t, out var pEntry)) continue;
+						Vector3 dir = (pEntry.centerWorld - planetCenter).normalized;
+						float score = Vector3.Dot(dir, camDir); // higher == closer angularly
+						scored.Add((score, t));
+					}
+
+					// sort descending by score and take top N
+					scored.Sort((a, b) => b.score.CompareTo(a.score));
+					int taken = Math.Min(prefetchTopN, scored.Count);
+					for (int i = 0; i < taken; i++) candidates.Add(scored[i].id);
 				}
 			}
 

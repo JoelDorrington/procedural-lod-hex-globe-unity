@@ -14,7 +14,7 @@ namespace HexGlobeProject.Tests.Editor
             var tile = MathVisibilitySelector.TileFromDirection(dir, 2);
             Assert.AreEqual(0, tile.face, "Direction near face 0 center should map to face 0");
 
-            var neighbors = MathVisibilitySelector.GetKRing(tile, 1);
+            var neighbors = MathVisibilitySelector.GetKRing(tile, 1, null);
             Assert.IsTrue(neighbors.Any(), "K-ring should return at least the center tile");
             Assert.IsTrue(neighbors.Any(n => n.x == tile.x && n.y == tile.y), "Center tile should be included in K-ring");
         }

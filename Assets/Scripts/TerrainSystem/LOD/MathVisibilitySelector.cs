@@ -31,9 +31,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
             return new TileId(face, x, y, depth);
         }
 
-        // Generate k-ring neighbors (including center) on the same face only.
-        // This does not currently cross face boundaries.
-        public static List<TileId> GetKRing(TileId center, int k)
+    // Generate k-ring neighbors (including center) on the same face only.
+    // If an optional focus direction is supplied, prioritize and sort the
+    // returned tiles by angular distance to that direction (nearest first).
+    // This helps the prefetch buffer choose nearby tiles first.
+    public static List<TileId> GetKRing(TileId center, int k, Vector3? focusDirection = null)
         {
             var set = new HashSet<TileId>();
             int tilesPerEdge = 1 << center.depth;
@@ -97,7 +99,30 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 }
             }
 
-            return set.ToList();
+            var list = set.ToList();
+
+            // If a focusDirection is provided, sort by angular distance between
+            // tile centroid direction and the focus. Otherwise return arbitrary order.
+            if (focusDirection.HasValue)
+            {
+                var fd = focusDirection.Value.normalized;
+                list.Sort((a, b) =>
+                {
+                    // compute centroid direction for tile a and b using canonical barycentric center
+                    IcosphereMapping.GetTileBarycentricCenter(a.x, a.y, a.depth, out float auc, out float avc);
+                    var adir = IcosphereMapping.BarycentricToWorldDirection(a.face, auc, avc).normalized;
+
+                    IcosphereMapping.GetTileBarycentricCenter(b.x, b.y, b.depth, out float buc, out float bvc);
+                    var bdir = IcosphereMapping.BarycentricToWorldDirection(b.face, buc, bvc).normalized;
+
+                    float adot = Vector3.Dot(adir, fd);
+                    float bdot = Vector3.Dot(bdir, fd);
+                    // higher dot == closer angular distance, so sort descending
+                    return bdot.CompareTo(adot);
+                });
+            }
+
+            return list;
         }
     }
 }

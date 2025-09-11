@@ -26,7 +26,7 @@ namespace HexGlobeProject.Tests.Editor
             var center = MathVisibilitySelector.TileFromDirection(dir, depth);
             Assert.AreEqual(face, center.face, "Sanity: canonical tile should be on the expected face for this direction.");
 
-            var ring = MathVisibilitySelector.GetKRing(center, 1);
+            var ring = MathVisibilitySelector.GetKRing(center, 1, null);
             Assert.IsNotNull(ring, "GetKRing must not return null.");
 
             // Expect: at least one neighbor in the k-ring should be on a different face
