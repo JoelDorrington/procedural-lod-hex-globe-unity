@@ -1,5 +1,7 @@
 
 # Copilot Instructions: Planet Tile Streaming System (HexGlobeProject)
+“Perfection is achieved, not when there is nothing more to add, but when there is nothing left to take away.”
+― Antoine de Saint-Exupéry, Airman's Odyssey
 
 ## Important Workflow Instructions
 - Regex for find and replace to strip logs: `^ *Debug\.Log\(.*\r\n$`

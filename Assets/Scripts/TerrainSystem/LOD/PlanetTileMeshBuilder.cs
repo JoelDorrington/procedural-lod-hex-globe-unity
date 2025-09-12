@@ -50,7 +50,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
             _uvs.Clear();
 
             // Reserve capacity to avoid repeated reallocations for large resolutions
-            int expectedVertsCap = data.resolution * data.resolution;
+            // Use triangular lattice vertex count: res * (res + 1) / 2
+            int expectedVertsCap = data.resolution * (data.resolution + 1) / 2;
             if (_verts.Capacity < expectedVertsCap) _verts.Capacity = expectedVertsCap;
             if (_normals.Capacity < expectedVertsCap) _normals.Capacity = expectedVertsCap;
             if (_uvs.Capacity < expectedVertsCap) _uvs.Capacity = expectedVertsCap;
@@ -146,9 +147,18 @@ namespace HexGlobeProject.TerrainSystem.LOD
             // Use direct barycentric->world mapping per-vertex to ensure consistent sampling
             // (tangent-plane projection caused area distortion at high resolutions)
 
+            // Generate vertices only inside the canonical triangle (u+v <= 1) by iterating
+            // a triangular lattice. This prevents mirrored/duplicated vertices and keeps
+            // vertex counts minimal: res*(res+1)/2.
+            // We'll keep a mapping from (i,j) -> vertex index so triangle indices can be
+            // constructed easily.
+            int[,] vertexIndexMap = new int[res, res];
+            for (int jj = 0; jj < res; jj++) for (int ii = 0; ii < res; ii++) vertexIndexMap[ii, jj] = -1;
+
             for (int j = 0; j < res; j++)
             {
-                for (int i = 0; i < res; i++)
+                int maxI = res - 1 - j; // ensure i+j <= res-1 (inside triangle)
+                for (int i = 0; i <= maxI; i++)
                 {
                     // Use icosahedral barycentric coordinate system (canonical global u/v)
                     IcosphereMapping.TileVertexToBarycentricCoordinates(
@@ -158,19 +168,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     // Store canonical UV for texturing / consistent coordinates
                     _uvs.Add(new Vector2(globalU, globalV));
 
-                    // Compute local tile coordinates relative to the precomputed entry
-                    float tileUStart = entry.tileOffsetU;
-                    float tileVStart = entry.tileOffsetV;
-                    float localU = (globalU - tileUStart) / tileSize;
-                    float localV = (globalV - tileVStart) / tileSize;
-                    localU = Mathf.Clamp01(localU);
-                    localV = Mathf.Clamp01(localV);
-
-                    // Convert to triangle barycentric (assumes triangle param (0,0),(1,0),(0,1))
-                    float b1 = localU;
-                    float b2 = localV;
-                    float b0 = 1f - b1 - b2;
-
                     // Map directly from canonical barycentric coords to world direction to avoid distortion
                     Vector3 dir = IcosphereMapping.BarycentricToWorldDirection(entry.face, globalU, globalV).normalized;
 
@@ -179,22 +176,12 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     float raw = provider.Sample(in dir, res);
                     if (swSampling != null) swSampling.Stop();
 
-                    // DEBUG: Log height values for first few vertices
-                    // debug logs removed for test/CI cleanliness
-
                     raw *= config.heightScale;
                     if (raw < rawMin) rawMin = raw;
                     if (raw > rawMax) rawMax = raw;
 
                     float hSample = raw;
                     float finalR = radius + hSample;
-
-                    // Convert to world-space vertex position. Precomputed registry entries
-                    // include the planet's world-space center offset (entry.centerWorld),
-                    // whereas earlier computations placed vertices around the origin.
-                    // Apply an offset so the mesh world-space centroid matches the
-                    // precomputed entry center used by the spawner.
-                    Vector3 worldVertex = dir * finalR + planetCenter;
 
                     if (config.shorelineDetail && data.id.depth >= config.shorelineDetailMinDepth)
                     {
@@ -220,55 +207,71 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
                     minH = Mathf.Min(minH, hSample);
                     maxH = Mathf.Max(maxH, hSample);
+
+                    Vector3 worldVertex = dir * finalR + planetCenter;
+
                     _verts.Add(worldVertex);
-                    _normals.Add(dir); // Simple radial normal - shader calculates lighting from world position
+                    _normals.Add(dir);
                     centerAccum += worldVertex;
+                    vertexIndexMap[i, j] = vertCounter;
                     vertCounter++;
                     if (removeTris) submergedFlags.Add(submerged);
                 }
             }
 
+            // Build triangles from the triangular lattice using the vertexIndexMap.
             for (int j = 0; j < res - 1; j++)
             {
-                for (int i = 0; i < res - 1; i++)
+                int maxI = res - 2 - j; // i such that we have (i+1,j) and (i,j+1)
+                for (int i = 0; i <= maxI; i++)
                 {
-                    int idx = j * res + i;
-                    int i0 = idx;
-                    int i1 = idx + 1;
-                    int i2 = idx + res;
-                    int i3 = idx + res + 1;
+                    int i0 = vertexIndexMap[i, j];
+                    int i1 = vertexIndexMap[i + 1, j];
+                    int i2 = vertexIndexMap[i, j + 1];
+                    if (i0 < 0 || i1 < 0 || i2 < 0) continue;
+
                     if (removeTris)
                     {
                         bool sub0 = submergedFlags[i0];
                         bool sub1 = submergedFlags[i1];
                         bool sub2 = submergedFlags[i2];
-                        bool sub3 = submergedFlags[i3];
-                        if (sub0 && sub1 && sub2 && sub3)
-                            continue;
+                        if (sub0 && sub1 && sub2) continue;
                     }
-                    // Build two triangles per grid cell but guard against degenerate triangles
+
                     if (swTriBuild != null) swTriBuild.Start();
-                    Vector3 v0 = _verts[i0]; Vector3 v1 = _verts[i2]; Vector3 v2 = _verts[i1];
+                    Vector3 v0 = _verts[i0]; Vector3 v1 = _verts[i1]; Vector3 v2 = _verts[i2];
                     float area0 = Vector3.Cross(v1 - v0, v2 - v0).magnitude * 0.5f;
                     if (area0 > 1e-7f)
                     {
-                        _tris.Add(i0); _tris.Add(i2); _tris.Add(i1);
+                        _tris.Add(i0); _tris.Add(i1); _tris.Add(i2);
                     }
-                    else
+                    else degenerateTriangleCount++;
+
+                    // Add second triangle in the cell when the upper-right vertex exists
+                    // which is at (i+1, j+1) for interior cells.
+                    if (i + j < res - 2)
                     {
-                        degenerateTriangleCount++;
+                        int i3 = vertexIndexMap[i + 1, j + 1];
+                        if (i3 >= 0)
+                        {
+                            if (removeTris)
+                            {
+                                bool sub1 = submergedFlags[i1];
+                                bool sub2b = submergedFlags[i2];
+                                bool sub3 = submergedFlags[i3];
+                                if (sub1 && sub2b && sub3) { if (swTriBuild != null) swTriBuild.Stop(); continue; }
+                            }
+
+                            Vector3 u0 = _verts[i1]; Vector3 u1 = _verts[i3]; Vector3 u2 = _verts[i2];
+                            float area1 = Vector3.Cross(u1 - u0, u2 - u0).magnitude * 0.5f;
+                            if (area1 > 1e-7f)
+                            {
+                                _tris.Add(i1); _tris.Add(i3); _tris.Add(i2);
+                            }
+                            else degenerateTriangleCount++;
+                        }
                     }
 
-                    Vector3 u0 = _verts[i1]; Vector3 u1 = _verts[i2]; Vector3 u2 = _verts[i3];
-                    float area1 = Vector3.Cross(u1 - u0, u2 - u0).magnitude * 0.5f;
-                    if (area1 > 1e-7f)
-                    {
-                        _tris.Add(i1); _tris.Add(i2); _tris.Add(i3);
-                    }
-                    else
-                    {
-                        degenerateTriangleCount++;
-                    }
                     if (swTriBuild != null) swTriBuild.Stop();
                 }
             }
@@ -297,15 +300,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     FlipTriangleWinding(_tris);
                 }
             }
-            var mesh = new Mesh();
-            // Helpful debug name so runtime logs show which mesh was generated for which tile
-            mesh.name = $"Tile_{data.id.faceNormal}_d{data.id.depth}";
-            mesh.indexFormat = (res * res > 65000) ? UnityEngine.Rendering.IndexFormat.UInt32 : UnityEngine.Rendering.IndexFormat.UInt16;
-            mesh.SetVertices(_verts);
-            mesh.SetTriangles(_tris, 0, true);
-            // Use radial normals - shader calculates lighting from world position for perfect continuity
-            mesh.SetNormals(_normals);
-            mesh.RecalculateBounds();
 
             if (swTotal != null)
             {
@@ -343,61 +337,19 @@ namespace HexGlobeProject.TerrainSystem.LOD
             // the exact sampled world positions when the GameObject transform.position == data.center.
 
             // Create a fresh mesh with corrected vertices
-            mesh = new Mesh();
+            var mesh = new Mesh();
             mesh.name = $"Tile_{data.id.faceNormal}_d{data.id.depth}";
+            mesh.indexFormat = (_verts.Count > 65000) ? UnityEngine.Rendering.IndexFormat.UInt32 : UnityEngine.Rendering.IndexFormat.UInt16;
             mesh.SetVertices(_verts);
             mesh.SetTriangles(_tris, 0);
             mesh.SetUVs(0, _uvs);
 
-            // Compute per-vertex normals from local neighbor geometry to capture slopes reliably
-            Vector3[] computedNormals = new Vector3[_verts.Count];
-            if (data.resolution > 1)
-            {
-                int resLocal = data.resolution;
-                for (int j = 0; j < resLocal; j++)
-                {
-                    for (int i = 0; i < resLocal; i++)
-                    {
-                        int idx = j * resLocal + i;
-                        Vector3 v = _verts[idx];
-                        int iR = Mathf.Min(i + 1, resLocal - 1);
-                        int iL = Mathf.Max(i - 1, 0);
-                        int jU = Mathf.Min(j + 1, resLocal - 1);
-                        int jD = Mathf.Max(j - 1, 0);
-
-                        Vector3 vr = _verts[j * resLocal + iR] - v;
-                        Vector3 vu = _verts[jU * resLocal + i] - v;
-                        Vector3 normal = Vector3.zero;
-                        // Try cross(vr, vu)
-                        normal = Vector3.Cross(vr, vu);
-                        if (normal.sqrMagnitude < 1e-8f)
-                        {
-                            // Try alternate neighbor vectors
-                            Vector3 vl = _verts[j * resLocal + iL] - v;
-                            Vector3 vd = _verts[jD * resLocal + i] - v;
-                            normal = Vector3.Cross(vd, vl);
-                        }
-                        if (normal.sqrMagnitude < 1e-8f)
-                        {
-                            // Fallback to radial if geometry degenerate
-                            normal = v.sqrMagnitude > 1e-9f ? v.normalized : Vector3.up;
-                        }
-                        else
-                        {
-                            normal.Normalize();
-                            // Ensure normal points roughly outward relative to vertex position
-                            if (Vector3.Dot(normal, v) < 0f) normal = -normal;
-                        }
-                        computedNormals[idx] = normal;
-                    }
-                }
-            }
-            else
-            {
-                for (int i = 0; i < computedNormals.Length; i++) computedNormals[i] = _verts[i].sqrMagnitude > 1e-9f ? _verts[i].normalized : Vector3.up;
-            }
-
-            mesh.SetNormals(computedNormals);
+            // Recalculate normals from triangle geometry. The previous square-grid
+            // neighbor-based computation assumed a full rectangular grid and caused
+            // indexing errors after switching to a triangular lattice. Using
+            // Unity's RecalculateNormals() on the mesh triangles produces robust
+            // per-vertex normals that align with the actual triangle topology.
+            mesh.RecalculateNormals();
             mesh.RecalculateBounds();
             // Force the mesh bounds center to origin so the mesh's world-centroid
             // equals the GameObject position (data.center) without modifying vertex positions.
@@ -405,6 +357,12 @@ namespace HexGlobeProject.TerrainSystem.LOD
             mesh.bounds = new Bounds(Vector3.zero, b.size);
             // Debug: count normals deviating from radial
             data.mesh = mesh;
+
+            // Populate sampled height ranges so callers and cache entries are correct
+            data.minHeight = minH == float.MaxValue ? 0f : minH;
+            data.maxHeight = maxH == float.MinValue ? 0f : maxH;
+            rawMin = data.minHeight;
+            rawMax = data.maxHeight;
 
             // Cache the produced mesh and sampled range so subsequent builder invocations
             // for the same TileId return the same instance and meaningful rawMin/rawMax.

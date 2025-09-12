@@ -71,7 +71,7 @@ namespace HexGlobeProject.Tests.Editor
                 var centerTile = tileFromDir.Invoke(null, new object[] { dir, 2 });
                 Assert.IsNotNull(centerTile, "TileFromDirection must return a TileId-like value.");
 
-                var ringObj = getKRing.Invoke(null, new object[] { centerTile, 1 }) as IEnumerable;
+                var ringObj = getKRing.Invoke(null, new object[] { centerTile, 1, null }) as IEnumerable;
                 Assert.IsNotNull(ringObj, "GetKRing should return an IEnumerable of TileId.");
 
                 var tiles = new List<object>();

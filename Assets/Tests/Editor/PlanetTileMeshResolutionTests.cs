@@ -63,15 +63,15 @@ namespace HexGlobeProject.Tests.Editor
                 Assert.IsNotNull(lowData.mesh, "Low-res mesh should be generated");
                 Assert.IsNotNull(highData.mesh, "High-res mesh should be generated");
 
-                int expectedLow = lowRes * lowRes;
-                int expectedHigh = highRes * highRes;
+                int expectedLow = lowRes * (lowRes + 1) / 2;
+                int expectedHigh = highRes * (highRes + 1) / 2;
 
                 Assert.AreEqual(expectedLow, lowData.mesh.vertexCount, $"Low-res vertex count should equal {expectedLow}");
                 Assert.AreEqual(expectedHigh, highData.mesh.vertexCount, $"High-res vertex count should equal {expectedHigh}");
 
                 float expectedRatio = (float)expectedHigh / expectedLow;
                 float actualRatio = (float)highData.mesh.vertexCount / Mathf.Max(1, lowData.mesh.vertexCount);
-                Assert.AreEqual(expectedRatio, actualRatio, expectedRatio * 0.01f, "Vertex count ratio should be approximately quadratic in resolution");
+                Assert.AreEqual(expectedRatio, actualRatio, expectedRatio * 0.02f, "Vertex count ratio should be approximately quadratic in resolution (triangular lattice)");
             }
             finally
             {

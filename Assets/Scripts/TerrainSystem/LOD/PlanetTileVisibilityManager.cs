@@ -572,15 +572,32 @@ namespace HexGlobeProject.TerrainSystem.LOD
 				t = Mathf.Clamp01(GameCamera.ProportionalDistance);
 			}
 
-			// Apply bias exponent (1 = linear, >1 biases bins toward higher distances)
-			float biased = Mathf.Pow(t, Mathf.Max(0.0001f, binBias));
+			// Use exponential-halving thresholds toward the planet surface.
+			// For depths n = 1..maxDepth, the transition threshold T_n is:
+			// T_n = camMin + (camMax - camMin) / (2^n)
+			// We pick the highest depth d such that camDist <= T_d. If none, depth=0.
+			float camMinClamped = camMin;
+			float camMaxClamped = camMax;
+			if (camMaxClamped <= camMinClamped)
+			{
+				// fallback to linear mapping when bounds invalid
+				float biased = Mathf.Pow(t, Mathf.Max(0.0001f, binBias));
+				float inverted = 1f - biased;
+				int newDepthFallBack = Mathf.Clamp(Mathf.FloorToInt(inverted * (maxDepth + 1)), 0, maxDepth);
+				return newDepthFallBack;
+			}
 
-			// Invert mapping so that larger distances map to depth 0 and closer distances
-			// (smaller camDist) map to higher depth values. This satisfies the contract:
-			// depth == 0 at max camera distance; depth increases as the camera approaches.
-			float inverted = 1f - biased;
-			int newDepth = Mathf.Clamp(Mathf.FloorToInt(inverted * (maxDepth + 1)), 0, maxDepth);
-			return newDepth;
+			// Clamp camDist into range to avoid unexpected results
+			camDist = Mathf.Clamp(camDist, camMinClamped, camMaxClamped);
+
+			for (int depth = maxDepth; depth >= 0; depth--)
+			{
+				float denom = Mathf.Pow(2f, depth);
+				float threshold = camMinClamped + (camMaxClamped - camMinClamped) / denom;
+				if (camDist <= threshold) return Mathf.Clamp(depth, 0, maxDepth);
+			}
+
+			return 0;
 		}
 
 		// Placeholder stub for the new math-based visibility selector.
@@ -654,7 +671,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
 				float planetRadius = _planetRadius;
 				float dist = (camPos - planetCenter).magnitude;
 				float rawCenterDot = Mathf.Clamp01(planetRadius / Mathf.Max(1e-6f, dist));
-				float relaxFactor = 0.98f; // slight relaxation to be permissive of edges
+				float relaxFactor = 0.92f; // tighter visibility arc (fewer close tiles)
 				float centerDotThreshold = Mathf.Clamp(rawCenterDot * relaxFactor, 0f, 1f);
 
 				if (tileRegistry.TryGetValue(depth, out var reg) && reg != null)
@@ -679,7 +696,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
 				// Cap prefetch to the top N nearest k-ring tiles by angular closeness to camDir.
 				// This avoids adding many distant tiles at the same depth while still
 				// warming the immediate neighbors. Pick a conservative N.
-				int prefetchTopN = 8;
+				int prefetchTopN = 4;
 				if (tileRegistry.TryGetValue(depth, out var regForPrefetch) && regForPrefetch != null)
 				{
 					var scored = new List<(float score, TileId id)>();

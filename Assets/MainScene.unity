@@ -191,13 +191,13 @@ MonoBehaviour:
   config: {fileID: 11400000, guid: 39abb1e81f4f4774a84dbe903a64257d, type: 2}
   GameCamera: {fileID: 977176986}
   planetTransform: {fileID: 53093758}
-  terrainTileLayer: 3
-  curvedIcosphereRadiusMultiplier: 1.01
   terrainMaterial: {fileID: 2100000, guid: 0df5d813211e9c6428c2aec838d9605d, type: 2}
-  maxDepth: 2
+  maxDepth: 4
   binBias: 1.2
-  depthLevelMaxDistance: 50
+  mathSelectorBufferK: 1
+  debugDisableCameraDepthSync: 0
   heuristicTickCount: 0
+  maxSpawnsPerFrame: 4
 --- !u!1 &95784711
 GameObject:
   m_ObjectHideFlags: 0

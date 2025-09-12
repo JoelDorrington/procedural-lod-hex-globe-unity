@@ -49,7 +49,7 @@ namespace HexGlobeProject.Tests.Editor
             var depthVal = (int)depthField.GetValue(tile);
             Assert.AreEqual(depth, depthVal, "Returned TileId.depth must match requested depth.");
 
-            var ring = getKRing.Invoke(null, new object[] { tile, 1 }) as IEnumerable;
+            var ring = getKRing.Invoke(null, new object[] { tile, 1, null }) as IEnumerable;
             Assert.IsNotNull(ring, "GetKRing must return an IEnumerable of TileId-like values.");
 
             bool containsCenter = false;
