@@ -262,8 +262,32 @@ namespace HexGlobeProject.TerrainSystem.LOD
 		[SerializeField]
 		private int maxSpawnsPerFrame = 4; // how many tiles we allow to spawn per frame
 
-		private struct SpawnRequest { public TileId id; public int resolution; public SpawnRequest(TileId i, int r) { id = i; resolution = r; } }
-		private readonly Queue<SpawnRequest> _spawnQueue = new Queue<SpawnRequest>();
+		private struct SpawnRequest { public TileId id; public int resolution; public float priority; public SpawnRequest(TileId i, int r, float p = 0f) { id = i; resolution = r; priority = p; } }
+		// Use a prioritized list (nearest-first) instead of a plain FIFO queue so
+		// tiles are built from the inside-out (camera-proximity prioritized).
+		private readonly List<SpawnRequest> _spawnQueue = new List<SpawnRequest>();
+
+		// Insert a spawn request into the prioritized queue (lower priority value = earlier)
+		private void EnqueueSpawnRequest(SpawnRequest req)
+		{
+			// Find insertion index to keep list sorted by ascending priority
+			int idx = _spawnQueue.FindIndex(r => r.priority > req.priority);
+			if (idx < 0) _spawnQueue.Add(req);
+			else _spawnQueue.Insert(idx, req);
+		}
+
+		// Safely fetches the registry's centerWorld for a tile, falling back to planet center
+		private Vector3 GetRegistryEntryCenter(TileId id, int depth)
+		{
+			if (tileRegistry != null && tileRegistry.TryGetValue(depth, out var reg) && reg != null)
+			{
+				if (reg.tiles != null && reg.tiles.TryGetValue(new TileId(id.face, id.x, id.y, depth), out var entry))
+				{
+					return entry.centerWorld;
+				}
+			}
+			return planetTransform != null ? planetTransform.position : this.transform.position;
+		}
 		private Coroutine _spawnWorkerCoroutine = null;
 
 		private void StartSpawnWorkerIfNeeded()
@@ -291,7 +315,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
 				int budget = Math.Max(1, maxSpawnsPerFrame);
 				for (int i = 0; i < budget && _spawnQueue.Count > 0; i++)
 				{
-					var req = _spawnQueue.Dequeue();
+					// Pop the highest-priority request (list maintained nearest-first)
+					var req = _spawnQueue[0];
+					_spawnQueue.RemoveAt(0);
 					try
 					{
 						// If the request is stale (depth changed since it was enqueued), remove its queued marker and skip it
@@ -403,7 +429,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
 				}
 				else
 				{
-					_spawnQueue.Enqueue(spawnRequest);
+					EnqueueSpawnRequest(spawnRequest);
 				}
 			}
 			if(_spawnQueue.Count == 0) StopSpawnWorker();
@@ -448,7 +474,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
 				if (!_activeOrQueued.Contains(packed))
 				{
 					try { _activeOrQueued.Add(packed); } catch { }
-					_spawnQueue.Enqueue(new SpawnRequest(id, ResolveResolutionForDepth(id.depth)));
+					// Compute a priority based on squared distance to camera so nearer tiles are processed first
+					Vector3 camPos = cam != null ? cam.transform.position : (planetTransform != null ? planetTransform.position : this.transform.position);
+					float d2 = (GetRegistryEntryCenter(id, id.depth) - camPos).sqrMagnitude;
+					EnqueueSpawnRequest(new SpawnRequest(id, ResolveResolutionForDepth(id.depth), d2));
 				}
 				existingKeys.Remove(id);
 			}
