@@ -430,12 +430,31 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			// Snapshot existing keys to avoid modifying collection while iterating
 			var existingKeys = new List<TileId>(_spawnedTiles.Keys);
 
-			// Spawn/refresh tiles that were hit
+			// Spawn/refresh tiles that were hit. To avoid blocking the main thread
+			// with heavy mesh construction, enqueue spawn requests and let the
+			// SpawnWorkerCoroutine perform the actual creation and mesh build.
 			foreach (var id in hitTiles)
 			{
-				GameObject tileGO = TrySpawnTile(id);
+				// If already spawned and active, refresh it
+				if (_spawnedTiles.TryGetValue(id, out var existing) && existing != null)
+				{
+					try { existing.SetActive(true); } catch { }
+					existingKeys.Remove(id);
+					continue;
+				}
+
+				// Otherwise enqueue a spawn request if not already active or queued
+				ulong packed = PackTileKey(id);
+				if (!_activeOrQueued.Contains(packed))
+				{
+					try { _activeOrQueued.Add(packed); } catch { }
+					_spawnQueue.Enqueue(new SpawnRequest(id, ResolveResolutionForDepth(id.depth)));
+				}
 				existingKeys.Remove(id);
 			}
+
+			// Ensure the worker is started to process enqueued spawns when appropriate
+			StartSpawnWorkerIfNeeded();
 
 			// Deactivate any tiles that were not hit this pass (but don't destroy them)
 			foreach (var id in existingKeys)
@@ -669,8 +688,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
 				float planetRadius = _planetRadius;
 				float dist = (camPos - planetCenter).magnitude;
 				float rawCenterDot = Mathf.Clamp01(planetRadius / Mathf.Max(1e-6f, dist));
-				float relaxFactor = 0.99f; // tighter visibility arc (fewer close tiles)
-				float centerDotThreshold = Mathf.Clamp(rawCenterDot * relaxFactor, 0f, 1f);
+				float clampFactor = 0.999f; // tighter visibility arc (fewer close tiles)
+				float centerDotThreshold = Mathf.Clamp(rawCenterDot * clampFactor, 0f, 1f);
 
 				if (tileRegistry.TryGetValue(depth, out var reg) && reg != null)
 				{
