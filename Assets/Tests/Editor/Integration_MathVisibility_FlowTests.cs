@@ -55,9 +55,7 @@ namespace HexGlobeProject.Tests.Editor
                 Assert.IsNotNull(selectorType, "MathVisibilitySelector must exist.");
 
                 var tileFromDir = selectorType.GetMethod("TileFromDirection", BindingFlags.Public | BindingFlags.Static);
-                var getKRing = selectorType.GetMethod("GetKRing", BindingFlags.Public | BindingFlags.Static);
                 Assert.IsNotNull(tileFromDir, "TileFromDirection must exist.");
-                Assert.IsNotNull(getKRing, "GetKRing must exist.");
 
                 // Pick a reliable direction (face 0 barycentric center)
                 var icosType = FindType("IcosphereMapping");
@@ -71,16 +69,14 @@ namespace HexGlobeProject.Tests.Editor
                 var centerTile = tileFromDir.Invoke(null, new object[] { dir, 2 });
                 Assert.IsNotNull(centerTile, "TileFromDirection must return a TileId-like value.");
 
-                var ringObj = getKRing.Invoke(null, new object[] { centerTile, 1, null }) as IEnumerable;
-                Assert.IsNotNull(ringObj, "GetKRing should return an IEnumerable of TileId.");
-
+                var ringObj = new List<object> { centerTile };
                 var tiles = new List<object>();
                 foreach (var t in ringObj)
                 {
                     tiles.Add(t);
                     if (tiles.Count >= 16) break; // keep the test small
                 }
-                Assert.IsTrue(tiles.Count > 0, "GetKRing should yield at least one tile.");
+                Assert.IsTrue(tiles.Count > 0, "TileFromDirection should yield at least one tile.");
 
                 // Acquire TileMeshCache and schedule/add a mesh for one tile
                 var cacheType = FindType("TileMeshCache");

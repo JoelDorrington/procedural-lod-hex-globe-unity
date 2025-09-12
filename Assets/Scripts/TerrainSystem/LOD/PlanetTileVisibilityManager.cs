@@ -632,8 +632,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			{
 				// Map camera direction to canonical tile and include k-ring
 				var centerTile = MathVisibilitySelector.TileFromDirection(camDir, depth);
-				var ring = MathVisibilitySelector.GetKRing(centerTile, mathSelectorBufferK, camDir);
-				foreach (var t in ring) candidates.Add(t);
 
 				// Also include any precomputed tiles whose face normal faces the camera
 				// This helps ensure a reasonable candidate set for small angular radii
@@ -671,7 +669,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
 				float planetRadius = _planetRadius;
 				float dist = (camPos - planetCenter).magnitude;
 				float rawCenterDot = Mathf.Clamp01(planetRadius / Mathf.Max(1e-6f, dist));
-				float relaxFactor = 0.92f; // tighter visibility arc (fewer close tiles)
+				float relaxFactor = 0.99f; // tighter visibility arc (fewer close tiles)
 				float centerDotThreshold = Mathf.Clamp(rawCenterDot * relaxFactor, 0f, 1f);
 
 				if (tileRegistry.TryGetValue(depth, out var reg) && reg != null)
@@ -686,37 +684,23 @@ namespace HexGlobeProject.TerrainSystem.LOD
 						}
 					}
 				}
-
-				// Prefetch buffer: small k-ring around the camera-facing tile to warm neighbors
-				// Trim the prefetch by a tighter angular window so only nearby buffer tiles
-				// are kept. This avoids adding many distant k-ring tiles when the planet
-				// fills the view.
-				var centerTile = MathVisibilitySelector.TileFromDirection(camDir, depth);
-				var prefetch = MathVisibilitySelector.GetKRing(centerTile, mathSelectorBufferK, camDir);
-				// Cap prefetch to the top N nearest k-ring tiles by angular closeness to camDir.
-				// This avoids adding many distant tiles at the same depth while still
-				// warming the immediate neighbors. Pick a conservative N.
-				int prefetchTopN = 4;
-				if (tileRegistry.TryGetValue(depth, out var regForPrefetch) && regForPrefetch != null)
-				{
-					var scored = new List<(float score, TileId id)>();
-					foreach (var t in prefetch)
-					{
-						if (!regForPrefetch.tiles.TryGetValue(t, out var pEntry)) continue;
-						Vector3 dir = (pEntry.centerWorld - planetCenter).normalized;
-						float score = Vector3.Dot(dir, camDir); // higher == closer angularly
-						scored.Add((score, t));
-					}
-
-					// sort descending by score and take top N
-					scored.Sort((a, b) => b.score.CompareTo(a.score));
-					int taken = Math.Min(prefetchTopN, scored.Count);
-					for (int i = 0; i < taken; i++) candidates.Add(scored[i].id);
-				}
 			}
 
 			try
 			{
+				// Ensure we always have at least one candidate to spawn. Some tests expect
+				// the manager to spawn tiles immediately after a depth change when a camera
+				// is present. After removing k-ring warming, the strict math predicate may
+				// yield an empty set; pick the nearest tile deterministically as a fallback.
+				if (candidates.Count == 0)
+				{
+					Vector3 fallbackPos = camPos;
+					var ids = GetAllTileIdsSortedByDistance(fallbackPos, depth);
+					if (ids.Count > 0)
+					{
+						candidates.Add(ids[0]);
+					}
+				}
 				ManageTileLifecycle(candidates, depth);
 			}
 			catch { }

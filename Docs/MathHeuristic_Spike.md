@@ -74,7 +74,6 @@ Pseudocode (selection per frame)
 2. face = FindClosestFace(c) // test 20 face normals
 3. (u,v) = BarycentricFromWorldDirection(face, c)
 4. (x,y) = TileIndicesFromBarycentric(u,v, depth)
-5. candidates = GetKRingTiles(face,x,y, depth, k)
 6. for each tile in candidates:
      s = dot(c, tile.normal)
      if s < cos(maxAngleForDepth[depth]) continue

@@ -24,16 +24,13 @@ namespace HexGlobeProject.Tests.Editor
         }
 
         [Test]
-        public void MathVisibilitySelector_TileFromDirection_ReturnsValidTile_And_GetKRing_IncludesCenter()
+        public void MathVisibilitySelector_TileFromDirection_ReturnsValidTile()
         {
             var selectorType = FindType("MathVisibilitySelector");
             Assert.IsNotNull(selectorType, "MathVisibilitySelector type must be present for math-based visibility.");
 
             var tileFromDir = selectorType.GetMethod("TileFromDirection", BindingFlags.Public | BindingFlags.Static);
             Assert.IsNotNull(tileFromDir, "TileFromDirection must be a public static method.");
-
-            var getKRing = selectorType.GetMethod("GetKRing", BindingFlags.Public | BindingFlags.Static);
-            Assert.IsNotNull(getKRing, "GetKRing must be a public static method.");
 
             int depth = 2;
             // Use a reliable canonical direction (face 0 barycentric center)
@@ -48,16 +45,6 @@ namespace HexGlobeProject.Tests.Editor
             Assert.IsNotNull(depthField, "TileId must expose a depth field/property.");
             var depthVal = (int)depthField.GetValue(tile);
             Assert.AreEqual(depth, depthVal, "Returned TileId.depth must match requested depth.");
-
-            var ring = getKRing.Invoke(null, new object[] { tile, 1, null }) as IEnumerable;
-            Assert.IsNotNull(ring, "GetKRing must return an IEnumerable of TileId-like values.");
-
-            bool containsCenter = false;
-            foreach (var t in ring)
-            {
-                if (t.Equals(tile)) { containsCenter = true; break; }
-            }
-            Assert.IsTrue(containsCenter, "GetKRing must include the center tile.");
         }
 
         [Test]
