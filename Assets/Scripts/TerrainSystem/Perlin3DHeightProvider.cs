@@ -14,8 +14,20 @@ namespace HexGlobeProject.TerrainSystem
         public int seed = 12345;
 
         private int[] _permCache = null;
-
         public override float Sample(in Vector3 unitDirection, int resolution)
+        {
+            try
+            {
+                return SampleInternal(unitDirection, resolution);
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"Perlin3DHeightProvider.Sample exception: {ex}");
+                return 0f;
+            }
+        }
+
+        private float SampleInternal(in Vector3 unitDirection, int resolution)
         {
             Vector3 p = unitDirection.normalized * baseFrequency;
             float sum = 0f;
@@ -27,7 +39,18 @@ namespace HexGlobeProject.TerrainSystem
                 (seed * 0.0173f) % 10f,
                 (seed * 0.0199f) % 10f);
 
-            if (_permCache == null) _permCache = Perlin3D.BuildPermutation(seed);
+            if (_permCache == null)
+            {
+                _permCache = Perlin3D.BuildPermutation(seed);
+                Debug.Log($"Perlin3DHeightProvider: built permutation for seed {seed}, length {_permCache?.Length}");
+            }
+
+            if (_permCache != null && _permCache.Length == 0)
+            {
+                Debug.LogWarning($"Perlin3DHeightProvider: permutation for seed {seed} is empty; rebuilding.");
+                _permCache = Perlin3D.BuildPermutation(seed);
+                Debug.Log($"Perlin3DHeightProvider: rebuilt permutation for seed {seed}, length {_permCache?.Length}");
+            }
 
             for (int i = 0; i < octaves; i++)
             {

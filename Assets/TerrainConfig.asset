@@ -15,8 +15,8 @@ MonoBehaviour:
   baseRadius: 30
   baseResolution: 16
   heightProvider:
-    rid: 8082500369961975852
-  heightScale: 0.9
+    rid: 8082500369961975853
+  heightScale: 1
   seaLevel: 0
   shallowWaterBand: 2
   cullBelowSea: 0
@@ -38,12 +38,12 @@ MonoBehaviour:
   references:
     version: 2
     RefIds:
-    - rid: 8082500369961975852
-      type: {class: SimplePerlinHeightProvider, ns: HexGlobeProject.TerrainSystem, asm: HexGlobeProject.Scripts}
+    - rid: 8082500369961975853
+      type: {class: Perlin3DHeightProvider, ns: HexGlobeProject.TerrainSystem, asm: HexGlobeProject.Scripts}
       data:
-        baseFrequency: 3
-        octaves: 4
-        lacunarity: 8
-        gain: 0.5
+        baseFrequency: 2
+        octaves: 3
+        lacunarity: 6
+        gain: 1
         amplitude: 1.25
         seed: 12345

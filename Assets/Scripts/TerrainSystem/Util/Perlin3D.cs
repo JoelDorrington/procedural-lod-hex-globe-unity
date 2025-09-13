@@ -30,7 +30,31 @@ namespace HexGlobeProject.TerrainSystem.Util
 
         public static float Noise(Vector3 v, int[] perm)
         {
-            if (perm == null) throw new ArgumentNullException(nameof(perm));
+            if (perm == null)
+            {
+                Debug.LogWarning("Perlin3D.Noise called with null permutation; returning 0.");
+                return 0f; // degrade gracefully when permutation missing
+            }
+
+            if (perm.Length == 0)
+            {
+                Debug.LogError("Perlin3D.Noise received empty permutation array; aborting noise sample and returning 0.");
+                return 0f;
+            }
+
+            if (perm.Length < 512)
+            {
+                Debug.LogWarning($"Perlin3D.Noise received permutation of length {perm.Length}; expected >= 512. Falling back to safe indexing.");
+            }
+
+            // helper to safely index into perm (wrap into 0..perm.Length-1)
+            System.Func<int,int> PermAt = (idx) =>
+            {
+                int m = perm.Length;
+                int i = idx % m;
+                if (i < 0) i += m;
+                return perm[i];
+            };
 
             float x = v.x;
             float y = v.y;
@@ -48,20 +72,20 @@ namespace HexGlobeProject.TerrainSystem.Util
             float v2 = Fade(y);
             float w = Fade(z);
 
-            int A = perm[X] + Y;
-            int AA = perm[A] + Z;
-            int AB = perm[A + 1] + Z;
-            int B = perm[X + 1] + Y;
-            int BA = perm[B] + Z;
-            int BB = perm[B + 1] + Z;
+            int A = PermAt(X) + Y;
+            int AA = PermAt(A) + Z;
+            int AB = PermAt(A + 1) + Z;
+            int B = PermAt(X + 1) + Y;
+            int BA = PermAt(B) + Z;
+            int BB = PermAt(B + 1) + Z;
 
             float res = Lerp(
                 Lerp(
-                    Lerp(Grad(perm[AA], x, y, z), Grad(perm[BA], x - 1, y, z), u),
-                    Lerp(Grad(perm[AB], x, y - 1, z), Grad(perm[BB], x - 1, y - 1, z), u), v2),
+                    Lerp(Grad(PermAt(AA), x, y, z), Grad(PermAt(BA), x - 1, y, z), u),
+                    Lerp(Grad(PermAt(AB), x, y - 1, z), Grad(PermAt(BB), x - 1, y - 1, z), u), v2),
                 Lerp(
-                    Lerp(Grad(perm[AA + 1], x, y, z - 1), Grad(perm[BA + 1], x - 1, y, z - 1), u),
-                    Lerp(Grad(perm[AB + 1], x, y - 1, z - 1), Grad(perm[BB + 1], x - 1, y - 1, z - 1), u), v2),
+                    Lerp(Grad(PermAt(AA + 1), x, y, z - 1), Grad(PermAt(BA + 1), x - 1, y, z - 1), u),
+                    Lerp(Grad(PermAt(AB + 1), x, y - 1, z - 1), Grad(PermAt(BB + 1), x - 1, y - 1, z - 1), u), v2),
                 w);
 
             return res;

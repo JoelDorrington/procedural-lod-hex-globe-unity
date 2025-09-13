@@ -92,6 +92,17 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 
                 materialInstance.SetVector("_PlanetCenter", new Vector4(planetCenter.x, planetCenter.y, planetCenter.z, 0));
             }
+
+            // Ensure the tile GameObject is on the TerrainTiles layer so it can be culled/rendered
+            // separately from background layers (use named layer if present, else fallback to 30).
+            int terrainLayer = LayerMask.NameToLayer("TerrainTiles");
+            if (terrainLayer == -1) terrainLayer = 30;
+            try
+            {
+                gameObject.layer = terrainLayer;
+                if (meshRenderer != null) meshRenderer.gameObject.layer = terrainLayer;
+            }
+            catch { }
         }
 
         /// <summary>
