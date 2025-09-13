@@ -50,6 +50,11 @@ public class CameraController : MonoBehaviour
 
     public float ProportionalDistance => _proportionalDistance;
 
+    [Header("Approach Tilt")]
+    [SerializeField]
+    [Tooltip("Maximum upward tilt in degrees applied as the camera approaches the surface (0 = none).")]
+    private float approachTiltMax = 12f;
+
     void Start()
     {
         _targetDistance = distance;
@@ -95,8 +100,8 @@ public class CameraController : MonoBehaviour
 
     // Roll with Q/E (bank camera around its forward axis AFTER positioning & LookAt)
         bool rollKey = false;
-    if (Input.GetKey(KeyCode.Q)) { roll -= rollSpeed * Time.deltaTime * movementScaleNormalized; rollKey = true; }
-    if (Input.GetKey(KeyCode.E)) { roll += rollSpeed * Time.deltaTime * movementScaleNormalized; rollKey = true; }
+    if (Input.GetKey(KeyCode.Q)) { roll -= rollSpeed * Time.deltaTime; rollKey = true; }
+    if (Input.GetKey(KeyCode.E)) { roll += rollSpeed * Time.deltaTime; rollKey = true; }
         if (rollKey && _rollResetActive) _rollResetActive = false; // cancel smooth reset if user intervenes
         if (Input.GetKeyDown(KeyCode.R))
         {
@@ -161,6 +166,16 @@ public class CameraController : MonoBehaviour
             transform.position = target.position + posOffset;
             // LookAt first to align view to target maintaining latitude/longitude derived distance to poles
             transform.LookAt(target.position, Vector3.up);
+
+            // Apply an upward tilt as we approach the surface. The tilt follows the same
+            // movement-smoothing mapping (movementScaleNormalized) so it eases in/out with zoom.
+            // When movementScaleNormalized == 1 (far) tilt -> 0; when near (small) tilt -> approachTiltMax.
+            float tiltDegrees = Mathf.Lerp(approachTiltMax, 0f, movementScaleNormalized);
+            if (Mathf.Abs(tiltDegrees) > 0.001f)
+            {
+                // Pitch up by -tilt around local X to look slightly above the target center.
+                transform.Rotate(Vector3.right, -tiltDegrees, Space.Self);
+            }
             if (Mathf.Abs(roll) > 0.001f)
             {
                 // Apply roll about the forward axis (preserves position & poles distance)
