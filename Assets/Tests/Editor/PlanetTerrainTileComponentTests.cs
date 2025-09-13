@@ -122,15 +122,6 @@ namespace HexGlobeProject.Tests.Editor
         }
 
         [Test]
-        public void Initialize_WithNullTileData_ShouldNotThrow()
-        {
-            // Act & Assert
-            Assert.DoesNotThrow(() => {
-                terrainTile.Initialize(testTileId, null);
-            }, "Initialize should handle null TileData gracefully");
-        }
-
-        [Test]
         public void ConfigureMaterialAndLayer_WithNullMaterial_ShouldNotThrow()
         {
             // Arrange

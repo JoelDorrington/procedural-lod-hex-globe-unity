@@ -193,6 +193,22 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			}
 
 			// Create a new GameObject for the tile
+			// If we've already spawned this tile, return the existing GameObject so
+			// repeated TrySpawnTile calls are idempotent.
+			if (_spawnedTiles.TryGetValue(tileId, out var existingGo))
+			{
+				if (existingGo != null)
+				{
+					// Ensure it's active and return
+					try { if (!existingGo.activeInHierarchy) existingGo.GetComponent<PlanetTerrainTile>()?.SetVisibility(true); } catch { }
+					return existingGo;
+				}
+				else
+				{
+					// Remove stale null entries and continue to spawn a fresh object
+					try { _spawnedTiles.Remove(tileId); } catch { }
+				}
+			}
 			// Mark as active/queued before creation to avoid races where another caller
 			// enqueues/creates the same tile concurrently.
 			ulong packed = PackTileKey(tileId);
