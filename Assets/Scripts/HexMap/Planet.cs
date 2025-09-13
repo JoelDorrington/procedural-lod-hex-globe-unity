@@ -205,6 +205,22 @@ namespace HexGlobeProject.HexMap
                 if (mr != null && mr.sharedMaterial != null) mr.sharedMaterial.color = wireframeColor;
             }
 
+            // Ensure the wireframe GameObject is on the TerrainTiles layer so it is culled and rendered with tiles
+            int terrainLayer = LayerMask.NameToLayer("TerrainTiles");
+            if (terrainLayer >= 0)
+            {
+                // apply recursively in case children exist
+                wireframeObj.layer = terrainLayer;
+                foreach (Transform t in wireframeObj.transform)
+                {
+                    t.gameObject.layer = terrainLayer;
+                }
+            }
+            else
+            {
+                Debug.LogWarning("Layer 'TerrainTiles' not found. Wireframe GameObject will remain on the default layer.", this);
+            }
+
             // Optional smoothing on raw dual vertices
             if (dualSmoothingIterations > 0 && dualSmoothingMode != DualSmoothingMode.None)
             {
