@@ -16,7 +16,7 @@ MonoBehaviour:
   baseResolution: 32
   heightProvider:
     rid: 8082500241799774252
-  heightScale: 0.4
+  heightScale: 0.9
   seaLevel: 0
   shallowWaterBand: 2
   cullBelowSea: 0

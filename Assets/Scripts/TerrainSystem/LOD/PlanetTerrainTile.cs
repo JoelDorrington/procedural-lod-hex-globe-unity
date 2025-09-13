@@ -22,14 +22,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
         // Visibility and ray-casting state
         public bool isVisible { get; private set; } = true;
         public float spawnTime { get; private set; }
-
-    // How long (seconds) without hits before the tile auto-deactivates.
-    // Tests can override the debounce by setting TestDeactivationDebounceOverride to a positive value.
-    [SerializeField]
-    public float deactivationDebounceSeconds = 0.5f;
-
-        // Internal coroutine handle for auto-deactivation so we can restart when the tile is refreshed.
-        private Coroutine _autoDeactivateCoroutine;
+        // Time when a mesh was assigned to this tile (Time.time)
+        public float meshAssignedTime { get; private set; } = -1f;
+        // Time when the GameObject was activated (Time.time)
+        public float activatedTime { get; private set; } = -1f;
 
         // Material management
         private Material materialInstance;
@@ -37,17 +33,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
         public bool debug = false;
 
-        // Ensure required components exist even if Initialize is not called (tests expect this)
-        private void Awake()
-        {
-            EnsureComponentsExist();
-        }
-
         /// <summary>
         /// Ensure MeshFilter and MeshRenderer components are present on the GameObject.
         /// This mirrors part of Initialize but is safe to call independently for tests.
         /// </summary>
-        private void EnsureComponentsExist()
+        public void EnsureComponentsExist()
         {
             if (meshFilter == null)
             {
@@ -66,85 +56,24 @@ namespace HexGlobeProject.TerrainSystem.LOD
         /// </summary>
         public void Initialize(TileId id, TileData data)
         {
+            if (spawnTime > 0f) return; // already initialized
             tileId = id;
             tileData = data;
             spawnTime = Time.time;
+            transform.position = data.center;
 
-            // Restart auto-deactivate timer when tile is (re)initialized
-            RestartAutoDeactivate();
-
-            // Ensure the GameObject is positioned at the tile's world-space center.
-            // Some callers previously set transform.position externally; centralize here to avoid mistakes.
-            if (data != null)
-            {
-                transform.position = data.center;
-            }
-
-            try
-            {
-                // Ensure GameObject is active for component creation
-                bool wasActive = gameObject.activeSelf;
-                if (!gameObject.activeSelf)
-                {
-                    gameObject.SetActive(true);
-                }
-                
-                // Create MeshFilter
-                meshFilter = gameObject.GetComponent<MeshFilter>();
-                if (meshFilter == null)
-                {
-                    meshFilter = gameObject.AddComponent<MeshFilter>();
-                    if (meshFilter == null)
-                    {
-                        Debug.LogError($"[TILE INIT] FAILED to create MeshFilter component!");
-                    }
-                }
-                
-                // Create MeshRenderer
-                meshRenderer = gameObject.GetComponent<MeshRenderer>();
-                if (meshRenderer == null)
-                {
-                    // creation logs removed
-                    meshRenderer = gameObject.AddComponent<MeshRenderer>();
-                    if (meshRenderer == null)
-                    {
-                        Debug.LogError($"[TILE INIT] FAILED to create MeshRenderer component!");
-                    }
-                    else
-                    {
-                        // success log removed
-                    }
-                }
-                
-                // Restore original active state if we changed it
-                if (!wasActive && gameObject.activeSelf)
-                {
-                    gameObject.SetActive(wasActive);
-                }
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogError($"[TILE INIT] Exception during component creation: {ex.Message}\n{ex.StackTrace}");
-                throw;
-            }
+            EnsureComponentsExist();
+            // Create MeshFilter
+            meshFilter = gameObject.GetComponent<MeshFilter>();
+            if (meshFilter == null) meshFilter = gameObject.AddComponent<MeshFilter>();
 
             // Set initial visual mesh if available
-            if (data != null && data.mesh != null && meshFilter != null)
+            if (data?.mesh != null && meshFilter?.sharedMesh == null)
             {
-                meshFilter.sharedMesh = data.mesh;
+                AssignMesh(data.mesh);
             }
-            
-            // Final verification - ensure all components were created successfully
-            if (meshFilter == null)
-            {
-                Debug.LogError($"[TILE INIT] CRITICAL: MeshFilter is still null after initialization!");
-                meshFilter = gameObject.AddComponent<MeshFilter>(); // Try one more time
-            }
-            if (meshRenderer == null)
-            {
-                Debug.LogError($"[TILE INIT] CRITICAL: MeshRenderer is still null after initialization!");
-                meshRenderer = gameObject.AddComponent<MeshRenderer>(); // Try one more time
-            }
+            isVisible = true;
+            // Activation timestamp is set by the manager when it activates the GameObject.
         }
 
         /// <summary>
@@ -163,91 +92,27 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 
                 materialInstance.SetVector("_PlanetCenter", new Vector4(planetCenter.x, planetCenter.y, planetCenter.z, 0));
             }
-            else
-            {
-                // no-op when meshRenderer or terrainMaterial is missing
-            }
-
         }
 
         /// <summary>
-        /// Get sphere hit point using mathematical ray-sphere intersection.
+        /// Assigns the final mesh to the MeshFilter and records the assignment time for diagnostics.
         /// </summary>
-        public static Vector3 GetSphereHitPoint(Ray ray, Vector3 sphereCenter, float sphereRadius, float curvedRadiusMultiplier = 1.0f)
+        public void AssignMesh(Mesh mesh)
         {
-            // Clamp rays to planet's visible circumference for 100% hit rate when zoomed out
-            Vector3 camToPlanet = sphereCenter - ray.origin;
-            float projectionLength = Vector3.Dot(camToPlanet, ray.direction);
-            Vector3 closestPoint = ray.origin + ray.direction * projectionLength;
-            float distToCenter = (closestPoint - sphereCenter).magnitude;
-
-            if (distToCenter > sphereRadius)
-            {
-                // Ray would miss the sphere - clamp it to hit the sphere edge
-                Vector3 rayToPlanetCenter = (sphereCenter - ray.origin).normalized;
-                Vector3 rayDirection = ray.direction.normalized;
-
-                float dot = Vector3.Dot(rayDirection, rayToPlanetCenter);
-                if (dot > 0f) // Ray pointing towards planet
-                {
-                    Vector3 perpendicular = (rayDirection - dot * rayToPlanetCenter).normalized;
-                    Vector3 tangentPoint = sphereCenter + perpendicular * sphereRadius;
-                    ray.direction = (tangentPoint - ray.origin).normalized;
-                }
-                else
-                {
-                    Vector3 nearestVisible = sphereCenter + rayToPlanetCenter * sphereRadius;
-                    ray.direction = (nearestVisible - ray.origin).normalized;
-                }
-            }
-
-            // Mathematical ray-sphere intersection
-            float a = Vector3.Dot(ray.direction, ray.direction);
-            float b = 2f * Vector3.Dot(ray.direction, ray.origin - sphereCenter);
-            float c = (ray.origin - sphereCenter).sqrMagnitude - sphereRadius * sphereRadius;
-            float discriminant = b * b - 4f * a * c;
-
-            if (discriminant < 0f)
-                return Vector3.zero; // No intersection
-
-            float sqrtDisc = Mathf.Sqrt(discriminant);
-            float t0 = (-b - sqrtDisc) / (2f * a);
-            
-            if (t0 < 0f)
-                return Vector3.zero; // Intersection behind camera
-
-            Vector3 hitPoint = ray.origin + ray.direction * t0;
-            
-            // Apply curved projection if specified
-            if (curvedRadiusMultiplier != 1.0f)
-            {
-                float curvedMultiplier = Mathf.Clamp(curvedRadiusMultiplier, 0.95f, 1.2f);
-                hitPoint = hitPoint.normalized * (sphereRadius * curvedMultiplier);
-            }
-
-            return hitPoint;
+            meshFilter.sharedMesh = mesh;
+            meshAssignedTime = Time.time;
         }
 
         /// <summary>
         /// Restart the auto-deactivation timer. If TestDeactivationDebounceOverride is set (>0), it will be used.
         /// </summary>
+        /// <summary>
+        /// No-op: auto-deactivation is handled externally by the PlanetTileVisibilityManager.
+        /// Kept for API compatibility with tests/code that call RestartAutoDeactivate.
+        /// </summary>
         public void RestartAutoDeactivate()
         {
-            if(debug) Debug.Log($"{Time.realtimeSinceStartup} RestartAutoDeactivate, {deactivationDebounceSeconds}s");
-            // Stop existing coroutine
-            if (_autoDeactivateCoroutine != null)
-            {
-                if(debug) Debug.Log($"coroutine stop {_autoDeactivateCoroutine}");
-                try { StopCoroutine(_autoDeactivateCoroutine); } catch { }
-                _autoDeactivateCoroutine = null;
-            }
-
-            // Only start coroutine when timeout is non-negative
-            if (deactivationDebounceSeconds >= 0f)
-            {
-                if(debug) Debug.Log($"coroutine start, {deactivationDebounceSeconds}s");
-                _autoDeactivateCoroutine = StartCoroutine(AutoDeactivateCoroutine(deactivationDebounceSeconds));
-            }
+            if (debug) Debug.Log("RestartAutoDeactivate called but auto-deactivation is managed by PTVM.");
         }
 
         /// <summary>
@@ -255,30 +120,45 @@ namespace HexGlobeProject.TerrainSystem.LOD
         /// This restarts the auto-deactivate timer so the tile remains active while being observed/hit.
         /// If the tile is hidden, it will be shown again.
         /// </summary>
+        /// <summary>
+        /// Refresh activity - make the tile visible. Activation and deactivation timing
+        /// should be controlled by the PlanetTileVisibilityManager. This method simply
+        /// ensures the GameObject is active and marks visible for diagnostics.
+        /// </summary>
         public void RefreshActivity()
         {
-            // If tile is hidden, show it again when refreshed
             if (!isVisible)
             {
                 this.gameObject.SetActive(true);
+                isVisible = true;
             }
-            try { RestartAutoDeactivate(); } catch { }
+            // Record activation time for diagnostics; manager should set this when appropriate.
+            activatedTime = Time.time;
         }
 
-        private IEnumerator AutoDeactivateCoroutine(float timeout)
+        /// <summary>
+        /// Immediately deactivate this tile's GameObject. Manager should call this when
+        /// a tile is no longer needed.
+        /// </summary>
+        public void DeactivateImmediately()
         {
-            // Wait for the timeout in real time, then deactivate visuals if still eligible
-            if(debug) Debug.Log($"{Time.realtimeSinceStartup} AutoDeactivateCoroutine started, waiting {timeout}s");
-            yield return new WaitForSecondsRealtime(timeout);
+            if (debug) Debug.Log($"DeactivateImmediately called on {gameObject.name}");
+            this.gameObject.SetActive(false);
+            isVisible = false;
+        }
 
-            try
+        public void SetVisibility(bool visible)
+        {
+            if (visible && !isVisible)
             {
-                if(debug) Debug.Log($"{Time.realtimeSinceStartup} AutoDeactivateCoroutine timeout reached, hiding mesh");
-                this.gameObject.SetActive(false);
+                this.gameObject.SetActive(true);
+                isVisible = true;
+                activatedTime = Time.time;
             }
-            catch (Exception ex)
+            else if (!visible && isVisible)
             {
-                if(debug) Debug.LogError($"[TILE] Exception in AutoDeactivateCoroutine: {ex.Message}");
+                this.gameObject.SetActive(false);
+                isVisible = false;
             }
         }
 
@@ -300,10 +180,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             if (meshFilter == null) return;
             if (meshFilter.sharedMesh != null) return; // already built
 
-            // Restart the auto-deactivation timer so any externally-set debounce
-            // value (for example, set by tests before calling EnsureMeshBuilt)
-            // is respected immediately.
-            try { RestartAutoDeactivate(); } catch { }
+            // Note: deactivation is managed by the PlanetTileVisibilityManager.
         }
 
         /// <summary>

@@ -31,6 +31,7 @@ namespace HexGlobeProject.Tests.PlayMode
             meshFilter.mesh = mesh;
 
             var terrainTile = testGO.AddComponent<PlanetTerrainTile>();
+            terrainTile.EnsureComponentsExist();
             
             // Wait a frame for Awake to be called
             yield return null;

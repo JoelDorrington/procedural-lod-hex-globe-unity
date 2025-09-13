@@ -44,11 +44,21 @@ namespace HexGlobeProject.TerrainSystem.LOD
 		[Tooltip("k-ring buffer radius (tiles) applied around the camera-facing tile when the planet does not fill the viewport")]
 		private int mathSelectorBufferK = 1;
 
-		// Runtime state for calculating visible tiles
-		private float _sphereViewportRadius;
+		// Tuning: how strictly we require a tile's centroid to face the camera when the planet fills the view.
+		[SerializeField]
+		[Tooltip("Multiplier applied to raw center dot threshold (R/d). Values >1 tighten the cone; values <1 loosen it.")]
+		private float visibilityConeClampFactor = 1.25f;
 
-	// (removed) previously used buffer radius field — selection logic uses
-	// explicit k-ring parameters and test-configured values instead.
+		[Tooltip("Minimum allowed center-dot threshold to avoid collapsing the visibility cone at close ranges")]
+		[SerializeField]
+		private float maxDotProductThreshold = 0.8f;
+
+		[Tooltip("Minimum allowed center-dot threshold to avoid collapsing the visibility cone at close ranges")]
+		[SerializeField]
+		private float minCenterDotThreshold = 0.35f;
+
+		// (removed) previously used buffer radius field — selection logic uses
+		// explicit k-ring parameters and test-configured values instead.
 
 		// Debug toggle: when true the manager will not compute or apply depth changes
 		// from the camera. Tests can enable this to manually control depth via SetDepth
@@ -70,6 +80,17 @@ namespace HexGlobeProject.TerrainSystem.LOD
 		// from camera state and call SetDepth when it changes.
 		private int _currentDepth = -1;
 
+		// Diagnostics + idempotency guard for ManageTileLifecycle
+		// checksum of last processed hitTiles set (xor of packed keys)
+		private ulong _lastManageChecksum = 0ul;
+		private int _lastManagedDepth = -1;
+		private float _lastManageTime = -1000f;
+		[SerializeField]
+		[Tooltip("Minimum seconds between identical ManageTileLifecycle calls to treat as no-op (debounce)")]
+		private float manageDebounceSeconds = 0.05f;
+		// Count how many times lifecycle manager has been invoked (for diagnostics/tests)
+		public int ManageInvocationCount { get; private set; } = 0;
+
 		// Last observed camera distance to detect external changes
 		private float _lastObservedCameraDistance = float.NaN;
 
@@ -80,6 +101,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
 		// so we can defensively prevent duplicate enqueues across rapid depth transitions.
 		private readonly HashSet<ulong> _activeOrQueued = new HashSet<ulong>();
 
+		// Snapshot of the most recently computed visible hit tiles. The spawn worker
+		// uses this set to drop stale spawn requests that are no longer visible.
+		private readonly HashSet<TileId> _currentHitTiles = new HashSet<TileId>();
+
 		// Pack depth/face/x/y into a 64-bit key for fast set membership tests.
 		private static ulong PackTileKey(TileId id)
 		{
@@ -88,21 +113,54 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
 		// Lazy mesh builder used to construct visual meshes on-demand when a tile is hit
 		private PlanetTileMeshBuilder _meshBuilder = null;
-
-		// Heuristic coroutine handle and interval used by tests to verify the manager
-		// starts a visibility heuristic running at ~30Hz. In EditMode Unity does not
-		// reliably create Coroutine objects, so we store this as an object and use
-		// a simple non-null sentinel when running outside PlayMode so tests can
-		// detect the heuristic has been started.
-		// Initialize to null here; Awake will install a sentinel when not playing
-		// to preserve the original intent without preventing PlayMode coroutines.
-		private object _heuristicCoroutine = null;
-		private const float HeuristicInterval = 1f / 30f;
 #if PLAYMODE_TESTS
-		// Tick counter incremented by the heuristic coroutine. Tests read this
-		// to verify the heuristic is actually running at the expected frequency.
-		public int heuristicTickCount = 0;
+	// Tick counter incremented by the heuristic coroutine. Tests read this
+	// to verify the heuristic is actually running at the expected frequency.
+	public int heuristicTickCount = 0;
 #endif
+
+	// Heuristic coroutine handle and interval used to run visibility selection
+	// at a steady rate to avoid doing math every frame and to match test expectations.
+	private Coroutine _heuristicCoroutineHandle = null;
+	private const float HeuristicIntervalSeconds = 1f / 32f; // ~32 Hz
+
+		// Stores a sentinel object in EditMode so tests can verify the heuristic was started.
+		private object _heuristicCoroutine = null;
+
+		private void StartHeuristicIfNeeded()
+		{
+			if (_heuristicCoroutineHandle == null && Application.isPlaying && GameCamera != null)
+			{
+				_heuristicCoroutineHandle = StartCoroutine(HeuristicCoroutine());
+			}
+			// In EditMode tests put a sentinel to indicate the heuristic was started
+			if (!Application.isPlaying && _heuristicCoroutine == null)
+			{
+				_heuristicCoroutine = new object();
+			}
+		}
+
+		private void StopHeuristic()
+		{
+			if (_heuristicCoroutineHandle != null)
+			{
+				try { StopCoroutine(_heuristicCoroutineHandle); } catch { }
+				_heuristicCoroutineHandle = null;
+			}
+			_heuristicCoroutine = null;
+		}
+
+		private IEnumerator HeuristicCoroutine()
+		{
+			while (true)
+			{
+				try { UpdateVisibilityMathBased(); } catch { }
+				#if PLAYMODE_TESTS
+					heuristicTickCount++;
+				#endif
+				yield return new WaitForSecondsRealtime(HeuristicIntervalSeconds);
+			}
+		}
 
 		public bool GetPrecomputedIndex(TileId tileId, out PrecomputedTileEntry entryOut)
 		{
@@ -124,27 +182,14 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			// Pack the id for quick membership checks
 
 			if (!tileRegistry.ContainsKey(tileId.depth))
-			{
+			{ // Ignore if depth is not registered
 				return null;
 			}
 
 			var registry = tileRegistry[_currentDepth];
-			var key = new TileId(tileId.face, tileId.x, tileId.y, tileId.depth);
-			if (!registry.tiles.TryGetValue(key, out var entry))
-			{
+			if (!registry.tiles.TryGetValue(tileId, out var entry))
+			{ // Ignore if tileId is not in the registry
 				return null;
-			}
-			
-			// Return cached spawned GameObject when present
-			if (_spawnedTiles.TryGetValue(tileId, out var existing) && existing != null)
-			{
-				// If an existing GameObject was previously deactivated, re-enable it.
-				try
-				{
-					existing.SetActive(true);
-				}
-				catch { }
-				return existing;
 			}
 
 			// Create a new GameObject for the tile
@@ -158,6 +203,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			try
 			{
 				go = new GameObject($"Tile_F{entry.face}_{entry.x}_{entry.y}_D{tileId.depth}");
+				_spawnedTiles[tileId] = go;
 				// Parent to the planet transform if available so tiles group under the planet in hierarchy
 				if (planetTransform != null)
 				{
@@ -198,9 +244,12 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
 				go.transform.position = tile.tileData.center;
 
-				// Cache and return
-				_spawnedTiles[tileId] = go;
+				// Place GameObject at final position
+				go.transform.position = tile.tileData.center;
+
+				// Cache and activate now that mesh and material are assigned
 				try { _activeOrQueued.Add(packed); } catch { }
+				try { tile.SetVisibility(true); } catch { }
 				spawnSucceeded = true;
 				return go;
 			}
@@ -243,9 +292,12 @@ namespace HexGlobeProject.TerrainSystem.LOD
 				var data = tile.tileData ?? new TileData { id = id, resolution = resolutionForBuilder(id) };
 				float rawMin = float.MaxValue, rawMax = float.MinValue;
 				_meshBuilder.BuildTileMesh(data, ref rawMin, ref rawMax);
-				// Assign into tile and meshFilter
+				// Assign into tile and meshFilter using the tile helper so assignment time is recorded
 				tile.tileData = data;
-				if (tile.meshFilter != null && data.mesh != null) tile.meshFilter.sharedMesh = data.mesh;
+				if (tile.meshFilter != null && data.mesh != null)
+				{
+					try { tile.AssignMesh(data.mesh); } catch { }
+				}
 			}
 			catch { }
 		}
@@ -327,10 +379,21 @@ namespace HexGlobeProject.TerrainSystem.LOD
 							continue;
 						}
 
+						// If the request is no longer in the current visible set, drop it and
+						// remove its queued marker so it can be enqueued later when it becomes visible again.
+						if (_currentHitTiles != null && !_currentHitTiles.Contains(req.id))
+						{
+							try { _activeOrQueued.Remove(PackTileKey(req.id)); } catch { }
+							continue;
+						}
+
 						// If the tile was created meanwhile, ensure it's active and continue
 						if (_spawnedTiles.TryGetValue(req.id, out var existing) && existing != null)
 						{
-							try { existing.SetActive(true); } catch { }
+							if (!existing.activeInHierarchy)
+							{
+								existing.GetComponent<PlanetTerrainTile>().SetVisibility(true);
+							}
 							continue;
 						}
 
@@ -345,6 +408,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			}
 
 			_spawnWorkerCoroutine = null;
+			// Clear the snapshot when the worker completes so we don't hold stale visibility state.
+			_currentHitTiles.Clear();
 		}
 
 		/// <summary>
@@ -396,21 +461,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
 		public void SetDepth(int depth)
 		{
 			if (depth == _currentDepth) return;
+			_currentDepth = depth;
 			if (!tileRegistry.ContainsKey(depth))
 			{
 				tileRegistry[depth] = new TerrainTileRegistry(depth, _planetRadius, _planetCenter);
 			}
-			_currentDepth = depth;
-
-			// Snapshot keys to avoid collection-modification issues 
-			// and ensure a deterministic deactivation pass.
-			var keys = new List<TileId>(_spawnedTiles.Keys);
-			foreach (var key in keys)
-			{
-				if (!_spawnedTiles.TryGetValue(key, out var go) || go == null) continue;
-				// Deactivate cached tiles whose depth differs from the requested depth.
-				if (key.depth != depth) go.SetActive(false);
-			}	
 
 			// Remove queued markers so they don't permanently block re-enqueueing later.
 			var arr = _spawnQueue.ToArray();
@@ -453,6 +508,26 @@ namespace HexGlobeProject.TerrainSystem.LOD
 		// destroy tiles that were not hit this pass, and remove tiles with mismatched depth.
 		private void ManageTileLifecycle(HashSet<TileId> hitTiles, int depth)
 		{
+			if (hitTiles.Count == 0) return;
+			// Idempotency / debounce: compute a simple checksum of the requested hit set
+			ulong checksum = 0ul;
+			foreach (var t in hitTiles) checksum ^= PackTileKey(t);
+			// If identical to last processed set and within debounce window, skip work
+			if (checksum == _lastManageChecksum && depth == _lastManagedDepth && (Time.realtimeSinceStartup - _lastManageTime) < manageDebounceSeconds)
+			{
+				// Still count the invocation for diagnostics
+				ManageInvocationCount++;
+				return;
+			}
+			// Update last processed info and invocation count
+				// Snapshot visible hits for the spawn worker to consult so it can drop
+				// requests that are no longer visible by the time they are processed.
+				_currentHitTiles.Clear();
+				foreach (var t in hitTiles) _currentHitTiles.Add(t);
+			_lastManageTime = Time.realtimeSinceStartup;
+			_lastManageChecksum = checksum;
+			_lastManagedDepth = depth;
+			ManageInvocationCount++;
 			// Snapshot existing keys to avoid modifying collection while iterating
 			var existingKeys = new List<TileId>(_spawnedTiles.Keys);
 
@@ -461,10 +536,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			// SpawnWorkerCoroutine perform the actual creation and mesh build.
 			foreach (var id in hitTiles)
 			{
-				// If already spawned and active, refresh it
+				// If already spawned, only reactivate it immediately when it already has a mesh assigned.
 				if (_spawnedTiles.TryGetValue(id, out var existing) && existing != null)
 				{
-					try { existing.SetActive(true); } catch { }
+					var tileComp = existing.GetComponent<PlanetTerrainTile>();
+					tileComp.RefreshActivity(); // update last-active timestamp
 					existingKeys.Remove(id);
 					continue;
 				}
@@ -485,16 +561,29 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			// Ensure the worker is started to process enqueued spawns when appropriate
 			StartSpawnWorkerIfNeeded();
 
-			// Deactivate any tiles that were not hit this pass (but don't destroy them)
-			foreach (var id in existingKeys)
+			// Deactivate any tiles that are currently marked active/queued but are no longer
+			// visible in the current hit set. Remove their packed key so they can be
+			// re-enqueued later if they become visible again.
+			var activeArr = _activeOrQueued.ToArray();
+			foreach (var packed in activeArr)
 			{
-				if (_spawnedTiles.TryGetValue(id, out var go) && go != null)
+				uint y = (uint)(packed & 0xFFFFu);
+				uint x = (uint)((packed >> 16) & 0xFFFFu);
+				uint face = (uint)((packed >> 32) & 0xFFFFu);
+				uint depthPacked = (uint)((packed >> 48) & 0xFFFFu);
+				var id = new TileId((int)face, (int)x, (int)y, (int)depthPacked);
+				if (!_currentHitTiles.Contains(id))
 				{
-					var tile = go.GetComponent<PlanetTerrainTile>();
-					if (tile != null)
+					// If a GameObject was created for this tile, deactivate it now.
+					if (_spawnedTiles.TryGetValue(id, out var go) && go != null)
 					{
-						tile.gameObject.SetActive(false);
+						var tile = go.GetComponent<PlanetTerrainTile>();
+						if (tile != null) tile.DeactivateImmediately();
+						// Destroy and remove from spawned registry so it doesn't stick around.
+						try { if (Application.isPlaying) GameObject.Destroy(go); else GameObject.DestroyImmediate(go); } catch { }
+						try { _spawnedTiles.Remove(id); } catch { }
 					}
+					try { _activeOrQueued.Remove(packed); } catch { }
 				}
 			}
 
@@ -504,11 +593,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			{
 				if (_spawnedTiles.TryGetValue(id, out var go) && go != null)
 				{
-					var tile = go.GetComponent<PlanetTerrainTile>();
-					if (tile != null)
-					{
-						tile.gameObject.SetActive(false);
-					}
+					// Destroy and remove so it can be re-spawned cleanly later
+					try { if (Application.isPlaying) GameObject.Destroy(go); else GameObject.DestroyImmediate(go); } catch { }
+					try { _spawnedTiles.Remove(id); } catch { }
+					try { _activeOrQueued.Remove(PackTileKey(id)); } catch { }
 				}
 			}
 		}
@@ -536,33 +624,22 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
 		private void Awake()
 		{
-			// Initialize planet center
 			_planetCenter = planetTransform != null ? planetTransform.position : this.transform.position;
-
-			// Ensure the heuristic sentinel/coroutine is created as early as possible
-			// so Editor tests that activate the GameObject can observe a non-null value.
-			if (Application.isPlaying)
+			// In EditMode tests Unity coroutines are not running; store a non-null sentinel
+			// so tests that assert the heuristic was started can detect it.
+			if (!Application.isPlaying)
 			{
-				// TODO implement and uncomment
-				// StartMathHeuristicLoop();
-			}
-			else
-			{
-				// In EditMode, install a non-null sentinel so tests can observe that the
-				// heuristic would be running without actually starting a Coroutine.
-				if (_heuristicCoroutine == null) _heuristicCoroutine = new object();
-			}
-
-			// In Play mode, if depth hasn't been precomputed yet, initialize to depth 0 so
-			// runtime playtests and manual Play sessions see tiles without requiring an
-			// explicit SetDepth call from other systems.
-			if (Application.isPlaying && _currentDepth < 0)
-			{
-				try { SetDepth(0); } catch { }
+				_heuristicCoroutine = new object();
 			}
 		}
 
-		private void Update()
+        private void OnDisable()
+        {
+			StopHeuristic();
+			StopSpawnWorker();
+        }
+
+        private void Update()
 		{
 			// Only in play mode and when a camera is assigned
 			if (!Application.isPlaying) return;
@@ -587,14 +664,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
 				}
 			}
 
-			// Always run math-based visibility selection in play mode
-			if (Application.isPlaying && GameCamera != null)
-			{
-				try { UpdateVisibilityMathBased(); } catch { }
-			}
+			// Ensure the heuristic coroutine is running; it will call UpdateVisibilityMathBased at ~32Hz.
+			StartHeuristicIfNeeded();
 
-			// Run math-based visibility selection each Update (lightweight)
-			try { UpdateVisibilityMathBased(); } catch { }
 		}
 
 		private int ComputeDepthFromCamera()
@@ -621,6 +693,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			}
 
 			// Use exponential-halving thresholds toward the planet surface.
+
+
 			// For depths n = 1..maxDepth, the transition threshold T_n is:
 			// T_n = camMin + (camMax - camMin) / (2^n)
 			// We pick the highest depth d such that camDist <= T_d. If none, depth=0.
@@ -678,17 +752,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
 			if (!planetFillsView)
 			{
-				// Map camera direction to canonical tile and include k-ring
-				var centerTile = MathVisibilitySelector.TileFromDirection(camDir, depth);
-
-				// Also include any precomputed tiles whose face normal faces the camera
-				// This helps ensure a reasonable candidate set for small angular radii
-				// and matches previous heuristic behavior used by tests.
 				if (tileRegistry.TryGetValue(depth, out var regNearby) && regNearby != null)
 				{
-					// Use a stricter corner threshold for the small-planet case so we only
-					// include tiles whose corners are actually facing the camera (90°)
-					float cornerDotThreshold = 0f; // 90 degrees
+					float cornerDotThreshold = 0f;
 					foreach (var e in regNearby.tiles.Values)
 					{
 						bool anyCornerVisible = false;
@@ -700,25 +766,47 @@ namespace HexGlobeProject.TerrainSystem.LOD
 								if (Vector3.Dot(dir, camDir) > cornerDotThreshold) { anyCornerVisible = true; break; }
 							}
 						}
-						// Include tile when any corner is within the (stricter) angle
-						if (anyCornerVisible)
-						{
-							candidates.Add(new TileId(e.face, e.x, e.y, depth));
-						}
+						if (anyCornerVisible) candidates.Add(new TileId(e.face, e.x, e.y, depth));
 					}
 				}
 			}
 			else
 			{
-				// Simpler, distance-proportional center-dot threshold:
-				// Use threshold = R / d (clamped) so that as the camera approaches (d decreases)
-				// the required dot product increases (tighter cone) and fewer tiles are included.
-				// Apply a small relaxation factor so we don't miss edge tiles due to floating math.
-				float planetRadius = _planetRadius;
-				float dist = (camPos - planetCenter).magnitude;
-				float rawCenterDot = Mathf.Clamp01(planetRadius / Mathf.Max(1e-6f, dist));
-				float clampFactor = 0.999f; // tighter visibility arc (fewer close tiles)
-				float centerDotThreshold = Mathf.Clamp(rawCenterDot * clampFactor, 0f, 1f);
+				// Frustum-proportional center-dot threshold: sample a single viewport corner,
+				// find the corresponding point on the planet surface, compute the angle
+				// between camera-center and that surface point, multiply by 1.1, convert
+				// to a dot (cos) and apply the clamp factor. Clamp the final dot to the
+				// configured min/max so the cone can't collapse or exceed limits.
+				float centerDotThreshold = minCenterDotThreshold;
+				var cameraRef = cam;
+				if (cameraRef != null)
+				{
+					try
+					{
+						var vp = new Vector3(0f, 1f, 0f);
+						var ray = cameraRef.ViewportPointToRay(vp);
+						Vector3 o = ray.origin;
+						Vector3 d = ray.direction.normalized;
+						Vector3 m = o - planetCenter;
+						float b = Vector3.Dot(m, d);
+						float c = Vector3.Dot(m, m) - (_planetRadius * _planetRadius);
+						float discr = b * b - c;
+						if (discr >= 0f)
+						{
+							float t = -b - Mathf.Sqrt(discr);
+							if (t > 0f)
+							{
+								var surfacePoint = o + d * t;
+								var cornerSurfaceDir = (surfacePoint - planetCenter).normalized;
+								float dot = Mathf.Clamp(Vector3.Dot(camDir, cornerSurfaceDir), -1f, 1f);
+								float angle = Mathf.Acos(dot);
+								float cornerDot = Mathf.Clamp01(Mathf.Cos(angle * 1.1f));
+								centerDotThreshold = Mathf.Clamp(cornerDot * visibilityConeClampFactor, minCenterDotThreshold, maxDotProductThreshold);
+							}
+						}
+					}
+					catch { }
+				}
 
 				if (tileRegistry.TryGetValue(depth, out var reg) && reg != null)
 				{

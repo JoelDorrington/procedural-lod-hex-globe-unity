@@ -195,9 +195,13 @@ MonoBehaviour:
   maxDepth: 4
   binBias: 1.2
   mathSelectorBufferK: 1
+  visibilityConeClampFactor: 0.97
+  maxDotProductThreshold: 0.99
+  minCenterDotThreshold: 0.1
   debugDisableCameraDepthSync: 0
+  manageDebounceSeconds: 0.05
   heuristicTickCount: 0
-  maxSpawnsPerFrame: 4
+  maxSpawnsPerFrame: 8
 --- !u!1 &95784711
 GameObject:
   m_ObjectHideFlags: 0
