@@ -41,9 +41,9 @@ MonoBehaviour:
     - rid: 8082500369961975852
       type: {class: SimplePerlinHeightProvider, ns: HexGlobeProject.TerrainSystem, asm: HexGlobeProject.Scripts}
       data:
-        baseFrequency: 1
+        baseFrequency: 3
         octaves: 4
-        lacunarity: 2
+        lacunarity: 8
         gain: 0.5
-        amplitude: 1
+        amplitude: 1.25
         seed: 12345

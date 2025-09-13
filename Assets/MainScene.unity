@@ -192,7 +192,7 @@ MonoBehaviour:
   GameCamera: {fileID: 977176986}
   planetTransform: {fileID: 53093758}
   terrainMaterial: {fileID: 2100000, guid: 0df5d813211e9c6428c2aec838d9605d, type: 2}
-  maxDepth: 4
+  maxDepth: 3
   binBias: 1.2
   mathSelectorBufferK: 1
   visibilityConeClampFactor: 0.97

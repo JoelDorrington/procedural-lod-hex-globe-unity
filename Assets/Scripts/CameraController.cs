@@ -58,6 +58,14 @@ public class CameraController : MonoBehaviour
 
     void Update()
     {
+    // Update proportional distance early so movement scaling can use it.
+    _proportionalDistance = Mathf.InverseLerp(minDistance, maxDistance, distance);
+
+    // Compute movement scale using the same curve as zoom speed, but normalize so
+    // the value is in 0..1. This makes movement slower when close and faster when far.
+    float moveDistanceScale = Mathf.Lerp(zoomSpeedMin, zoomSpeedMax, _proportionalDistance);
+    float movementScaleNormalized = zoomSpeedMax > 0f ? Mathf.Clamp01(moveDistanceScale / zoomSpeedMax) : 1f;
+
         // Current direction from lat/long
         float latRad0 = latitude * Mathf.Deg2Rad;
         float lonRad0 = longitude * Mathf.Deg2Rad;
@@ -65,7 +73,7 @@ public class CameraController : MonoBehaviour
         Vector3 dir = new Vector3(Mathf.Cos(latRad0) * Mathf.Cos(lonRad0), Mathf.Sin(latRad0), Mathf.Cos(latRad0) * Mathf.Sin(lonRad0)); // normalized
 
         // WASD relative movement along tangent directions of current camera orientation.
-        float angleStep = moveAngularSpeed * Time.deltaTime;
+    float angleStep = moveAngularSpeed * Time.deltaTime * movementScaleNormalized;
         bool moved = false;
         if (Input.GetKey(KeyCode.W)) { dir = Quaternion.AngleAxis(angleStep, transform.right) * dir; moved = true; }
         if (Input.GetKey(KeyCode.S)) { dir = Quaternion.AngleAxis(-angleStep, transform.right) * dir; moved = true; }
@@ -87,8 +95,8 @@ public class CameraController : MonoBehaviour
 
     // Roll with Q/E (bank camera around its forward axis AFTER positioning & LookAt)
         bool rollKey = false;
-        if (Input.GetKey(KeyCode.Q)) { roll -= rollSpeed * Time.deltaTime; rollKey = true; }
-        if (Input.GetKey(KeyCode.E)) { roll += rollSpeed * Time.deltaTime; rollKey = true; }
+    if (Input.GetKey(KeyCode.Q)) { roll -= rollSpeed * Time.deltaTime * movementScaleNormalized; rollKey = true; }
+    if (Input.GetKey(KeyCode.E)) { roll += rollSpeed * Time.deltaTime * movementScaleNormalized; rollKey = true; }
         if (rollKey && _rollResetActive) _rollResetActive = false; // cancel smooth reset if user intervenes
         if (Input.GetKeyDown(KeyCode.R))
         {
@@ -106,9 +114,8 @@ public class CameraController : MonoBehaviour
             if (t >= 1f) _rollResetActive = false;
         }
 
-        // Mouse scroll zoom
-        float scroll = Input.GetAxis("Mouse ScrollWheel");
-        _proportionalDistance = Mathf.InverseLerp(minDistance, maxDistance, distance);
+    // Mouse scroll zoom
+    float scroll = Input.GetAxis("Mouse ScrollWheel");
         // If external code assigned to `distance` directly since last frame,
         // treat that as the new requested target distance so external tests
         // and scripts see immediate effect.

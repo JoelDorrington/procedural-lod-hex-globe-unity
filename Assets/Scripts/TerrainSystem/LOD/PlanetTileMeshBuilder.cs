@@ -344,17 +344,40 @@ namespace HexGlobeProject.TerrainSystem.LOD
             mesh.SetTriangles(_tris, 0);
             mesh.SetUVs(0, _uvs);
 
-            // Recalculate normals from triangle geometry. The previous square-grid
-            // neighbor-based computation assumed a full rectangular grid and caused
-            // indexing errors after switching to a triangular lattice. Using
-            // Unity's RecalculateNormals() on the mesh triangles produces robust
-            // per-vertex normals that align with the actual triangle topology.
-            mesh.RecalculateNormals();
-            mesh.RecalculateBounds();
-            // Force the mesh bounds center to origin so the mesh's world-centroid
-            // equals the GameObject position (data.center) without modifying vertex positions.
-            var b = mesh.bounds;
-            mesh.bounds = new Bounds(Vector3.zero, b.size);
+            // Use the precomputed vertex normals collected during sampling instead of
+            // calling RecalculateNormals() which is expensive in native code.
+            // This keeps normals coherent with the sampling direction (dir) and
+            // avoids a costly recompute for each mesh build.
+            try
+            {
+                if (_normals.Count == _verts.Count)
+                {
+                    mesh.SetNormals(_normals);
+                }
+                else
+                {
+                    // Fallback to Unity's recalculation if counts don't match
+                    mesh.RecalculateNormals();
+                }
+            }
+            catch
+            {
+                // If SetNormals throws (unexpected), fallback to safe path
+                try { mesh.RecalculateNormals(); } catch { }
+            }
+
+            // Avoid the heavy RecalculateBounds call; compute an approximate bounds
+            // from the sampled min/max heights which we already track. This is
+            // sufficient to keep the mesh renderable and avoids another native pass.
+            float maxRad = radius + (maxH == float.MinValue ? 0f : maxH);
+            float minRad = radius + (minH == float.MaxValue ? 0f : minH);
+            float maxExtent = Mathf.Max(Mathf.Abs(maxRad), Mathf.Abs(minRad));
+            var approxSize = Vector3.one * (maxExtent * 2f + 1f);
+            mesh.bounds = new Bounds(Vector3.zero, approxSize);
+
+            // Hint that this mesh may be updated frequently to allow the engine to
+            // optimize memory and upload paths.
+            try { mesh.MarkDynamic(); } catch { }
             // Debug: count normals deviating from radial
             data.mesh = mesh;
 
