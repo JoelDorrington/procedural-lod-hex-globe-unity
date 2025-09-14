@@ -9,6 +9,8 @@ Performance Critical: planet hex-cell model that is deterministic, cache-friendl
 
 Assumptions
 - The exact TileId bit-encoding/format is undecided. The design exposes a thin TileId → index mapping so the encoding can change without refactoring the core storage.
+ - The exact TileId bit-encoding/format is undecided. The design exposes a thin TileId → index mapping so the encoding can change without refactoring the core storage.
+ - Important distinction: Terrain TileIds (used by rendering tiles / PlanetTerrainTile) are a different concept from game-model cell ids. A single Terrain TileId (a render tile at a particular LOD and face) may correspond to many game cells (hexes) inside its area. Terrain tiles are purely for rendering; the game model should use its own compact cell indices and topology.
 - Topology (connectivity) is mostly static at runtime. Mutable per-cell properties are supported but topology rebuilds are rare.
 
 Design goals (succinct)
@@ -75,6 +77,22 @@ Lookup table (replacement for binary tree)
 	- Dense array keyed by decoded TileId components (depth→face→localIndex → linear index). Fastest and simplest when TileId space is compact per-depth.
 	- Sparse array + perfect-hash / flat dictionary when TileId space is sparse.
 	- Int32 -> int mapping via an array or pooled dictionary as a fallback.
+
+	TileId → multiple game-cell mapping
+
+	- Because a Terrain TileId can contain many game cells, the lookup table should support two related mappings:
+		1. tileIdToPrimaryCellIndex: TileId -> representative game cell index (optional, for quick visual selection)
+		2. tileIdToCellIndices: TileId -> contiguous slice (start,count) into a global cellIndexList[] where every game's cell index contained in that terrain tile is listed. This keeps per-tile lists compact and contiguous for fast iteration.
+
+	- Storage pattern:
+		- int[] cellIndexList  // flat list of game cell indices
+		- TileCellSlice[] tileSlices  // for each TileId store (startIndex, count)
+
+	- This allows the renderer or selection tools to map a clicked Terrain TileId to the set of game cells inside it, then pick the correct cell by position or by user choice.
+
+	Separation of concerns
+
+	- Keep the rendering tile system and the game-model topology separate. Provide a small adapter that maps a TerrainTile world-space AABB and LOD to a tileId and then to the game's `tileIdToCellIndices` mapping when the editor needs to resolve selections. This prevents coupling mesh LOD/tiling concerns to game logic.
 
 API contract (tiny, concrete)
 

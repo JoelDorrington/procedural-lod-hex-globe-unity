@@ -28,6 +28,38 @@ public class CellStateEditorWindow : EditorWindow
         }
     }
 
+    void OnFocus()
+    {
+        SceneView.duringSceneGui += OnSceneGUI;
+    }
+
+    void OnDisable()
+    {
+        SceneView.duringSceneGui -= OnSceneGUI;
+    }
+
+    void OnSceneGUI(SceneView sv)
+    {
+        if (!EditorWindow.focusedWindow) return;
+        if (Event.current == null) return;
+        if (Event.current.type == EventType.MouseDown && Event.current.button == 0 && Event.current.clickCount == 1 && !Event.current.alt)
+        {
+            Ray worldRay = HandleUtility.GUIPointToWorldRay(Event.current.mousePosition);
+            if (Physics.Raycast(worldRay, out RaycastHit hit, 1000f))
+            {
+                var comp = hit.collider.gameObject.GetComponent<TileIdComponent>();
+                if (comp != null)
+                {
+                    // set inputTileId and resolve
+                    inputTileId = comp.tileId;
+                    useTileId = true;
+                    ResolveTileId();
+                    Event.current.Use();
+                }
+            }
+        }
+    }
+
     void OnGUI()
     {
         GUILayout.Label("Migration Records (editable)", EditorStyles.boldLabel);
