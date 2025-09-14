@@ -29,6 +29,27 @@ namespace HexGlobeProject.UI
         public void StartButton()
         {
             if (isBootstrapping) return;
+            // If no bootstrapper assigned, try to find or create a SceneBootstrapper so Start runs a real test flow
+            if (bootstrapper == null)
+            {
+                var existing = GetBootstrapper();
+                if (existing == null)
+                {
+                    var go = this.gameObject;
+                    var sb = go.GetComponent<SceneBootstrapper>();
+                    if (sb == null)
+                    {
+                        Debug.Log("No IBootstrapper found — adding SceneBootstrapper to MainMenuController GameObject.");
+                        sb = go.AddComponent<SceneBootstrapper>();
+                    }
+                    bootstrapper = sb as MonoBehaviour;
+                }
+                else
+                {
+                    bootstrapper = existing as MonoBehaviour;
+                }
+            }
+
             StartCoroutine(StartGameCoroutine());
         }
 
@@ -193,7 +214,7 @@ namespace HexGlobeProject.UI
             var btnImage = buttonGO.AddComponent<Image>();
             btnImage.color = new Color(0.2f, 0.6f, 0.2f, 1f);
             var button = buttonGO.AddComponent<Button>();
-            button.onClick.AddListener(() => { Debug.Log("Start button clicked (noop)"); StartButton(); });
+            button.onClick.AddListener(() => { Debug.Log("Start button clicked"); StartButton(); });
 
             var btnTextGO = new GameObject("Text");
             btnTextGO.transform.SetParent(buttonGO.transform, false);
