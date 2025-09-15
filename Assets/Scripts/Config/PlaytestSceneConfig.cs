@@ -33,7 +33,12 @@ namespace HexGlobeProject.Config
         [Header("Directional Light (Sun)")]
         public Color sunColor = new Color(1f, 0.95686275f, 0.8392157f, 1f);
         public float sunIntensity = 1f;
-        public bool sunDrawHalo = true;
+        public bool sunFlareEnabled = true;
+        [Tooltip("Name of the Flare resource (Resources/ or asset name) to use for the sun halo. Prefer 'sunburst'.")]
+        public string sunFlareName = "sunburst";
+
+        [Tooltip("Brightness multiplier for the LensFlare component (0..1 recommended, >1 allowed).")]
+        public float sunFlareBrightness = 1f;
         // Rotation as Euler angles
         public Vector3 sunRotationEuler = new Vector3(51.459f, -30f, 0f);
         // Position (optional, directional lights don't use position for lighting, but useful for editor placement)

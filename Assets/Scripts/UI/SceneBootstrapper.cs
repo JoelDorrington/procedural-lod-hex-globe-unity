@@ -42,27 +42,16 @@ namespace HexGlobeProject.UI
                     {
                         try
                         {
-                            var json = System.IO.File.ReadAllText(jsonPath);
-                            cfg = JsonUtility.FromJson<RootConfig>(json);
-                            // Fallback: older/flat PlaytestSceneConfig may serialize fields at root rather than nested.
-                            // If galacticStarField is null or missing, attempt to map flat fields into it.
-                            if (cfg != null && cfg.galacticStarField != null)
+                            cfg = new RootConfig(jsonPath);
+                            if (cfg != null)
                             {
                                 try
                                 {
                                     // Parse into a quick helper object matching the flat PlaytestSceneConfig layout
-                                    var flat = JsonUtility.FromJson<PlaytestSceneConfigFlat>(json);
+                                    var flat = JsonUtility.FromJson<PlaytestSceneConfigFlat>("");
                                     if (flat != null)
                                     {
-                                        cfg.galacticStarField = new StarFieldConfig();
-                                        cfg.galacticStarField.shape = "Donut";
-                                        cfg.galacticStarField.donutRadius = flat.galacticDonutRadius;
-                                        cfg.galacticStarField.radius = flat.galacticRadius;
-                                        cfg.galacticStarField.arc = flat.galacticArc;
-                                        cfg.galacticStarField.emissionRateOverTime = flat.galacticRateOverTime;
-                                        cfg.galacticStarField.maxParticles = flat.galacticMaxParticles;
-                                        cfg.galacticStarField.innerBiasSkew = flat.galacticInnerBiasSkew;
-                                        cfg.galacticStarField.torusTiltDegrees = flat.galacticTorusTiltDegrees;
+
                                     }
                                 }
                                 catch { /* ignore fallback mapping failures */ }
@@ -179,6 +168,65 @@ namespace HexGlobeProject.UI
         [Serializable]
         public class RootConfig
         {
+
+            public RootConfig(string jsonPath)
+            {
+                var json = System.IO.File.ReadAllText(jsonPath);
+                var flat = JsonUtility.FromJson<PlaytestSceneConfigFlat>(json);
+
+                // config camera
+                camera = new CameraConfig();
+                camera.backgroundColor = flat.backgroundColor;
+                // map clearFlags int to CameraClearFlags string representation
+                try
+                {
+                    camera.clearFlags = ((CameraClearFlags)flat.clearFlags).ToString();
+                }
+                catch
+                {
+                    camera.clearFlags = "SolidColor";
+                }
+
+                // config universal starfield
+                universalStarField = new StarFieldConfig();
+                universalStarField.shape = "Sphere";
+                // prefer explicit universalRadius, otherwise fall back to universalVoidRadius if present
+                universalStarField.radius = (flat.universalRadius > 0f) ? flat.universalRadius : flat.universalVoidRadius;
+                universalStarField.arc = flat.universalArc;
+                universalStarField.emissionRateOverTime = flat.universalRateOverTime;
+                universalStarField.burstCount = flat.universalBurstCount;
+
+                // config galaxytic starfield
+                galacticStarField = new StarFieldConfig();
+                galacticStarField.shape = "Donut";
+                galacticStarField.donutRadius = flat.galacticDonutRadius;
+                galacticStarField.radius = flat.galacticRadius;
+                galacticStarField.arc = flat.galacticArc;
+                galacticStarField.emissionRateOverTime = flat.galacticRateOverTime;
+                galacticStarField.maxParticles = flat.galacticMaxParticles;
+                galacticStarField.innerBiasSkew = flat.galacticInnerBiasSkew;
+                galacticStarField.torusTiltDegrees = flat.galacticTorusTiltDegrees;
+
+                // config sun
+                directionalLight = new DirectionalLightConfig();
+                directionalLight.color = flat.sunColor;
+                directionalLight.intensity = flat.sunIntensity;
+                // prefer sunFlareEnabled if present; fall back to legacy sunDrawHalo if provided in older JSON
+                if (flat.sunFlareEnabled)
+                {
+                    directionalLight.sunFlareEnabled = flat.sunFlareEnabled;
+                }
+                else
+                {
+                    // legacy key may be sunDrawHalo
+                    directionalLight.sunFlareEnabled = flat.sunDrawHalo;
+                }
+                if (!string.IsNullOrEmpty(flat.sunFlareName)) directionalLight.flareName = flat.sunFlareName;
+                directionalLight.flareBrightness = flat.sunFlareBrightness;
+                directionalLight.rotation = flat.sunRotationEuler;
+                directionalLight.position = flat.sunPosition;
+            }
+
             public CameraConfig camera;
             public StarFieldConfig universalStarField;
             public StarFieldConfig galacticStarField;
@@ -222,7 +270,9 @@ namespace HexGlobeProject.UI
             public string name = "Directional Light";
             public Color color = Color.white;
             public float intensity = 1f;
-            public bool drawHalo = true;
+            public bool sunFlareEnabled = true;
+            public string flareName = "sunburst";
+            public float flareBrightness = 1f;
             public Vector3 rotation = new Vector3(51.459f, -30f, 0f);
             public Vector3 position = new Vector3(200f, 100f, 0f);
         }
@@ -231,12 +281,18 @@ namespace HexGlobeProject.UI
         [Serializable]
         public class PlaytestSceneConfigFlat
         {
+            // Camera
+            public Color backgroundColor;
+            public int clearFlags;
+
+            // Universal starfield
             public float universalRadius;
             public float universalVoidRadius;
             public float universalArc;
             public int universalRateOverTime;
             public int universalBurstCount;
 
+            // Galactic starfield
             public float galacticDonutRadius;
             public float galacticRadius;
             public float galacticArc;
@@ -245,9 +301,16 @@ namespace HexGlobeProject.UI
             public float galacticInnerBiasSkew;
             public float galacticTorusTiltDegrees;
 
-            // directional light fields (optional)
+            // Directional light (sun)
             public Color sunColor;
             public float sunIntensity;
+            // legacy/alternate keys
+            public bool sunDrawHalo;
+            public bool sunFlareEnabled;
+            public string sunFlareName;
+            public float sunFlareBrightness;
+            public Vector3 sunRotationEuler;
+            public Vector3 sunPosition;
         }
 
         private void CreateCameraFromConfig(RootConfig root)
@@ -266,6 +329,17 @@ namespace HexGlobeProject.UI
             {
                 go.AddComponent<AudioListener>();
             }
+
+            // Add FlareLayer so legacy flares assigned to lights will render in the Built-in pipeline.
+            // This is safe to call even if FlareLayer is not supported by current pipeline; Unity will ignore it.
+            try
+            {
+                if (go.GetComponent<FlareLayer>() == null)
+                {
+                    go.AddComponent<FlareLayer>();
+                }
+            }
+            catch { /* ignore if FlareLayer not available on this Unity version/pipeline */ }
 
             // Configure CameraController if a CameraTarget exists
             var targetGO = GameObject.Find("CameraTarget");
@@ -421,50 +495,127 @@ namespace HexGlobeProject.UI
         private void CreateDirectionalLightFromConfig(DirectionalLightConfig l)
         {
             if (l == null) l = new DirectionalLightConfig();
-            var go = new GameObject(l.name ?? "Directional Light");
-            var light = go.AddComponent<Light>();
-            light.type = LightType.Directional;
-            light.color = l.color;
-            light.intensity = l.intensity;
-            // If the config requests a halo/glare, try to attach a Flare asset to the light.
-            if (l.drawHalo)
+
+            // Try to find an existing directional light in the scene to reuse
+            Light targetLight = null;
+            try
             {
-                Flare flare = null;
-#if UNITY_EDITOR
-                // Editor: try to find any Flare asset in the project called 'PlaytestSunFlare' or any flare if available.
-                var guids = UnityEditor.AssetDatabase.FindAssets("t:Flare PlaytestSunFlare");
-                if (guids != null && guids.Length > 0)
+                var allLights = UnityEngine.Object.FindObjectsByType<Light>(FindObjectsSortMode.None);
+                if (allLights != null)
                 {
-                    var path = UnityEditor.AssetDatabase.GUIDToAssetPath(guids[0]);
-                    flare = UnityEditor.AssetDatabase.LoadAssetAtPath<Flare>(path);
-                }
-                else
-                {
-                    // fallback: find any Flare
-                    var all = UnityEditor.AssetDatabase.FindAssets("t:Flare");
-                    if (all != null && all.Length > 0)
+                    foreach (var lt in allLights)
                     {
-                        var p = UnityEditor.AssetDatabase.GUIDToAssetPath(all[0]);
-                        flare = UnityEditor.AssetDatabase.LoadAssetAtPath<Flare>(p);
+                        if (lt != null && lt.type == LightType.Directional)
+                        {
+                            targetLight = lt;
+                            break;
+                        }
                     }
                 }
-#else
-                // Runtime: look for a flare in Resources named PlaytestSunFlare
-                flare = Resources.Load<Flare>("PlaytestSunFlare");
-#endif
-                if (flare != null)
-                {
-                    light.flare = flare;
-                }
-                else
-                {
-                    Debug.LogWarning("SceneBootstrapper: sun halo requested but no Flare asset found in project (searching for 'PlaytestSunFlare').");
-                }
+            }
+            catch { /* ignore find errors */ }
+
+            GameObject go;
+            if (targetLight != null)
+            {
+                go = targetLight.gameObject;
             }
             else
             {
-                // Legacy comment: no halo requested.
+                go = new GameObject(l.name ?? "Directional Light");
+                targetLight = go.AddComponent<Light>();
+                targetLight.type = LightType.Directional;
             }
+
+            // Ensure the directional light GameObject is named "Sun" for clarity in the scene hierarchy.
+            try
+            {
+                go.name = "Sun";
+            }
+            catch { /* ignore if renaming not allowed in this context */ }
+
+            // Apply color/intensity/transform
+            targetLight.color = l.color;
+            targetLight.intensity = l.intensity;
+
+            // If the config requests a halo/glare, try to attach a Flare asset to the light.
+            if (l.sunFlareEnabled)
+            {
+                string preferred = string.IsNullOrEmpty(l.flareName) ? "sunburst" : l.flareName;
+
+                // Runtime: look for a flare in Resources named as configured, then 'sunburst'
+                Flare flare = Resources.Load<Flare>(preferred);
+                if (flare == null) flare = Resources.Load<Flare>("sunburst");
+                if (flare != null)
+                {
+                    targetLight.flare = flare;
+                    // Ensure a LensFlare component is present and assigned (legacy component used by some pipelines)
+                    try
+                    {
+                        var lf = go.GetComponent<LensFlare>();
+                        if (lf == null)
+                        {
+                            lf = go.AddComponent<LensFlare>();
+                        }
+                        lf.flare = flare;
+                        // Set brightness from explicit flareBrightness if provided (>0), otherwise use the directional light intensity.
+                        // Note: Playtest JSON commonly sets sunIntensity to large values (e.g. 100). We will assign the value directly
+                        // so designers can control brightness precisely; clamp is intentionally avoided to allow high-intensity flares.
+                        if (l != null && l.flareBrightness > 0f)
+                        {
+                            lf.brightness = l.flareBrightness;
+                        }
+                        else
+                        {
+                            lf.brightness = l != null ? l.intensity : targetLight.intensity;
+                        }
+                        lf.color = targetLight.color;
+                    }
+                    catch { /* ignore if LensFlare not available */ }
+                    // Ensure cameras have a FlareLayer so the flare will render (built-in pipeline)
+                    try
+                    {
+                        var cams = UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None);
+                        if (cams != null)
+                        {
+                            foreach (var c in cams)
+                            {
+                                if (c != null && c.GetComponent<FlareLayer>() == null)
+                                {
+                                    c.gameObject.AddComponent<FlareLayer>();
+                                }
+                                try
+                                {
+                                    // Enable HDR which can affect flare rendering intensity in some pipelines
+                                    c.allowHDR = true;
+                                }
+                                catch {
+                                    // allowHDR may not exist on all platforms/Unity versions
+                                }
+                                try
+                                {
+                                    // Force forward rendering which is compatible with legacy flares
+                                    c.renderingPath = RenderingPath.Forward;
+                                }
+                                catch { }
+                            }
+                        }
+                    }
+                    catch { /* ignore if FlareLayer not available */ }
+                    
+                    // Increase likelihood the light's flare renders: prefer pixel/important render mode
+                    try
+                    {
+                        targetLight.renderMode = LightRenderMode.ForcePixel;
+                    }
+                    catch { /* ignore if LightRenderMode unsupported */ }
+                }
+                else
+                {
+                    Debug.LogWarning("SceneBootstrapper: sun halo requested but no Flare asset named 'sunburst' or 'PlaytestSunFlare' found. Place a Flare in Assets/Resources/sunburst.flare or add a Flare asset to the project.");
+                }
+            }
+
             go.transform.rotation = Quaternion.Euler(l.rotation);
             go.transform.position = l.position;
         }

@@ -114,7 +114,9 @@ public class PlaytestJsonEditorWindow : EditorWindow
             EditorGUILayout.LabelField("Directional Light (Sun)", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(serializedConfig.FindProperty("sunColor"));
             EditorGUILayout.PropertyField(serializedConfig.FindProperty("sunIntensity"));
-            EditorGUILayout.PropertyField(serializedConfig.FindProperty("sunDrawHalo"));
+            EditorGUILayout.PropertyField(serializedConfig.FindProperty("sunFlareEnabled"));
+            EditorGUILayout.PropertyField(serializedConfig.FindProperty("sunFlareName"));
+            EditorGUILayout.PropertyField(serializedConfig.FindProperty("sunFlareBrightness"));
             EditorGUILayout.PropertyField(serializedConfig.FindProperty("sunRotationEuler"));
             EditorGUILayout.PropertyField(serializedConfig.FindProperty("sunPosition"));
 
