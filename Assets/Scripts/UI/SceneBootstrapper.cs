@@ -576,6 +576,7 @@ namespace HexGlobeProject.UI
                             lf = go.AddComponent<LensFlare>();
                         }
                         lf.flare = flare;
+                        lf.fadeSpeed = 10f;
                         // Set brightness from explicit flareBrightness if provided (>0), otherwise use the directional light intensity.
                         // Note: Playtest JSON commonly sets sunIntensity to large values (e.g. 100). We will assign the value directly
                         // so designers can control brightness precisely; clamp is intentionally avoided to allow high-intensity flares.
@@ -636,6 +637,31 @@ namespace HexGlobeProject.UI
 
             go.transform.rotation = Quaternion.Euler(l.rotation);
             go.transform.position = l.position;
+
+            // Attach SunFlareOccluder if a Planet/CameraTarget exists in the scene to occlude the flare
+            try
+            {
+                var planetGO = GameObject.Find("Planet") ?? GameObject.Find("CameraTarget");
+                if (planetGO != null)
+                {
+                    var oc = go.GetComponent<HexGlobeProject.Visual.SunFlareOccluder>();
+                    if (oc == null) oc = go.AddComponent<HexGlobeProject.Visual.SunFlareOccluder>();
+                    oc.targetLight = targetLight;
+                    oc.lensFlare = go.GetComponent<LensFlare>();
+                    oc.planetTransform = planetGO.transform;
+                    oc.fadeSpeed = 9999f;
+                    // attempt to pull radius from TerrainConfig asset if present
+                    try
+                    {
+#if UNITY_EDITOR
+                        var conf = UnityEditor.AssetDatabase.LoadAssetAtPath<HexGlobeProject.TerrainSystem.TerrainConfig>("Assets/TerrainConfig.asset");
+                        if (conf != null) oc.planetRadius = conf.baseRadius;
+#endif
+                    }
+                    catch { }
+                }
+            }
+            catch { }
         }
 
         // Create a Planet object under the existing CameraTarget so the planet is centered on the camera target origin

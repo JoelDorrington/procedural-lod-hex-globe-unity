@@ -39,11 +39,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
 		[SerializeField]
 		private float binBias = 1.2f;
 
-		// Buffer radius in tile coordinates (k-ring) used when planet does not fill the view
-		[SerializeField]
-		[Tooltip("k-ring buffer radius (tiles) applied around the camera-facing tile when the planet does not fill the viewport")]
-		private int mathSelectorBufferK = 1;
-
 		// Tuning: how strictly we require a tile's centroid to face the camera when the planet fills the view.
 		[SerializeField]
 		[Tooltip("Multiplier applied to raw center dot threshold (R/d). Values >1 tighten the cone; values <1 loosen it.")]
