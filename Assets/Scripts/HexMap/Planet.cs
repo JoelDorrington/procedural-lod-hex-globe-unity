@@ -51,7 +51,13 @@ namespace HexGlobeProject.HexMap
             cellGraph = new CellGraph();
             // Mirror setting to TerrainRoot if present
             ApplyHideOceanToTerrainRoot();
+            // generation state
+            isGenerated = false;
         }
+
+        // Public flag to indicate when GeneratePlanet() has completed
+        [HideInInspector]
+        public bool isGenerated = false;
 
         /// <summary>
         /// Generates the planet by creating an icosphere and building its dual-wireframe overlay.
@@ -66,10 +72,10 @@ namespace HexGlobeProject.HexMap
                 var terrainRoot = UnityEngine.Object.FindAnyObjectByType<HexGlobeProject.TerrainSystem.TerrainRoot>();
                 if (terrainRoot != null && terrainRoot.config != null && terrainRoot.config.baseRadius > 0f)
                 {
-                        // Prefer the tile-center radius used by the visibility system so the visual sphere aligns with spawned tiles.
-                        // PlanetTileVisibilityManager uses a small curved multiplier (~1.01) when computing tile center world positions;
-                        // match that here so the helper icosphere and the tile precomputed centers coincide visually.
-                        sphereR = terrainRoot.config.baseRadius * 1.01f;
+                    // Prefer the tile-center radius used by the visibility system so the visual sphere aligns with spawned tiles.
+                    // PlanetTileVisibilityManager uses a small curved multiplier (~1.01) when computing tile center world positions;
+                    // match that here so the helper icosphere and the tile precomputed centers coincide visually.
+                    sphereR = terrainRoot.config.baseRadius * 1.01f;
                 }
             }
             catch { /* robust fallback: keep designer-set sphereRadius */ }
@@ -109,6 +115,8 @@ namespace HexGlobeProject.HexMap
             {
                 BuildDualWireframe(sphereMesh, sphereR);
             }
+            // mark generation complete
+            isGenerated = true;
 
         }
 

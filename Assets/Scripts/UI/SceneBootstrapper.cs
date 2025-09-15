@@ -22,160 +22,181 @@ namespace HexGlobeProject.UI
 
         public IEnumerator RunBootstrapper(Action<float> onProgress, Action<string> onError, Action onComplete)
         {
-            try
+            if (spaceOnly)
             {
-                if (spaceOnly)
+                // Space-only bootstrap: create an empty camera target at origin, create camera, starfields and directional light.
+                onProgress?.Invoke(0.05f);
+
+                // create camera target at origin
+                var cameraTarget = new GameObject("CameraTarget");
+                cameraTarget.transform.position = Vector3.zero;
+
+                onProgress?.Invoke(0.15f);
+
+                // attempt to load JSON config
+                var jsonPath = System.IO.Path.Combine(Application.dataPath, playtestConfigRelativePath.Replace("Assets/", ""));
+                RootConfig cfg = null;
+                if (System.IO.File.Exists(jsonPath))
                 {
-                    // Space-only bootstrap: create an empty camera target at origin, create camera, starfields and directional light.
-                    onProgress?.Invoke(0.05f);
-
-                    // create camera target at origin
-                    var cameraTarget = new GameObject("CameraTarget");
-                    cameraTarget.transform.position = Vector3.zero;
-
-                    onProgress?.Invoke(0.15f);
-
-                    // attempt to load JSON config
-                    var jsonPath = System.IO.Path.Combine(Application.dataPath, playtestConfigRelativePath.Replace("Assets/", ""));
-                    RootConfig cfg = null;
-                    if (System.IO.File.Exists(jsonPath))
-                    {
-                        try
-                        {
-                            cfg = new RootConfig(jsonPath);
-                            if (cfg != null)
-                            {
-                                try
-                                {
-                                    // Parse into a quick helper object matching the flat PlaytestSceneConfig layout
-                                    var flat = JsonUtility.FromJson<PlaytestSceneConfigFlat>("");
-                                    if (flat != null)
-                                    {
-
-                                    }
-                                }
-                                catch { /* ignore fallback mapping failures */ }
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Debug.LogWarning("SceneBootstrapper: failed to parse playtest config JSON: " + ex.Message);
-                            cfg = null;
-                        }
-                    }
-                    else
-                    {
-                        Debug.LogWarning("SceneBootstrapper: playtest config JSON not found at " + jsonPath + ". Falling back to defaults.");
-                    }
-
-                    // create camera
-                    CreateCameraFromConfig(cfg);
-                    onProgress?.Invoke(0.45f);
-
-                    // create starfields
-                    CreateStarFieldFromConfig(cfg?.universalStarField, "UniversalStarField");
-                    onProgress?.Invoke(0.7f);
-                    CreateStarFieldFromConfig(cfg?.galacticStarField, "GalacticStarField");
-                    onProgress?.Invoke(0.85f);
-
-                    // create directional light
-                    CreateDirectionalLightFromConfig(cfg?.directionalLight);
-
-                    // Optionally spawn the planet if the config requests it
                     try
                     {
-                        if (cfg != null && cfg is RootConfig rc)
+                        cfg = new RootConfig(jsonPath);
+                        if (cfg != null)
                         {
-                            // RootConfig is built from the flat PlaytestSceneConfig JSON; check flat.spawnPlanet via reading the file again if needed
-                            // The PlaytestSceneConfigFlat is parsed into RootConfig in the RootConfig ctor, so inspect the JSON directly for spawnPlanet
-                            var json = System.IO.File.ReadAllText(System.IO.Path.Combine(Application.dataPath, playtestConfigRelativePath.Replace("Assets/", "")));
-                            // quick check for "spawnPlanet":true (case-insensitive)
-                            if (!string.IsNullOrEmpty(json) && json.IndexOf("\"spawnPlanet\"", StringComparison.OrdinalIgnoreCase) >= 0 && json.IndexOf("true", json.IndexOf("\"spawnPlanet\"", StringComparison.OrdinalIgnoreCase), StringComparison.OrdinalIgnoreCase) >= 0)
+                            try
                             {
-                                CreatePlanetUnderCameraTarget();
+                                // Parse into a quick helper object matching the flat PlaytestSceneConfig layout
+                                var flat = JsonUtility.FromJson<PlaytestSceneConfigFlat>("");
+                                if (flat != null)
+                                {
+
+                                }
                             }
+                            catch { /* ignore fallback mapping failures */ }
                         }
                     }
-                    catch { }
-
-                    onProgress?.Invoke(1f);
-                    onComplete?.Invoke();
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning("SceneBootstrapper: failed to parse playtest config JSON: " + ex.Message);
+                        cfg = null;
+                    }
                 }
                 else
                 {
-                    // original behaviour: build a tiny topology (0..0.4)
-                    onProgress?.Invoke(0.05f);
-                    var cfg = new TopologyConfig();
-                    cfg.entries = new System.Collections.Generic.List<TopologyConfig.TileEntry>();
-
-                    // Build a tiny 4-node test (a cross)
-                    cfg.entries.Add(new TopologyConfig.TileEntry { tileId = 100, neighbors = new[] { 101, 102 }, center = Vector3.right });
-                    cfg.entries.Add(new TopologyConfig.TileEntry { tileId = 101, neighbors = new[] { 100, 103 }, center = Vector3.up });
-                    cfg.entries.Add(new TopologyConfig.TileEntry { tileId = 102, neighbors = new[] { 100, 103 }, center = Vector3.left });
-                    cfg.entries.Add(new TopologyConfig.TileEntry { tileId = 103, neighbors = new[] { 101, 102 }, center = Vector3.down });
-
-                    var topology = TopologyBuilder.Build(cfg, new SparseMapIndex());
-                    Debug.Log("SceneBootstrapper: topology built");
-                    onProgress?.Invoke(0.35f);
-
-                    // Stage 2: create a managed GameModel (0.35..0.7)
-                    Debug.Log("SceneBootstrapper: initializing GameModel");
-                    var model = new GameModel();
-                    model.Initialize(topology);
-                    onProgress?.Invoke(0.7f);
-
-                    // Stage 3: spawn UnitManager and one unit (0.7..1.0)
-                    UnitManager um = null;
-                    if (unitManagerPrefab != null)
-                    {
-                        var go = Instantiate(unitManagerPrefab.gameObject);
-                        um = go.GetComponent<UnitManager>();
-                    }
-                    else
-                    {
-                        var go = new GameObject("UnitManager");
-                        um = go.AddComponent<UnitManager>();
-                    }
-
-                    Debug.Log("SceneBootstrapper: creating UnitManager and wiring model/topology");
-                    // wire topology and model for playtest
-                    um.topology = topology;
-                    um.modelManaged = model;
-                    um.planetRadius = 10f;
-                    um.planetTransform = null;
-
-                    onProgress?.Invoke(0.85f);
-
-                    // create a simple visible primitive to use as the unit prefab if none provided
-                    if (um.unitPrefab == null)
-                    {
-                        Debug.Log("SceneBootstrapper: creating temporary unit prefab (sphere)");
-                        var temp = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                        temp.name = "TestUnitPrefab";
-                        temp.transform.localScale = Vector3.one * 0.6f;
-                        // give it a simple color
-                        var rend = temp.GetComponent<Renderer>();
-                        if (rend != null)
-                        {
-                            var mat = new Material(Shader.Find("Standard"));
-                            mat.color = Color.green;
-                            rend.sharedMaterial = mat;
-                        }
-                        // keep this prefab in the scene hidden - we will instantiate clones of it
-                        temp.SetActive(false);
-                        um.unitPrefab = temp;
-                    }
-
-                    Debug.Log("SceneBootstrapper: spawning test unit at node 0");
-                    um.SpawnUnitAtNode(0, 1);
-
-                    onProgress?.Invoke(1f);
-                    onComplete?.Invoke();
+                    Debug.LogWarning("SceneBootstrapper: playtest config JSON not found at " + jsonPath + ". Falling back to defaults.");
                 }
+
+                // create camera
+                CreateCameraFromConfig(cfg);
+                onProgress?.Invoke(0.45f);
+                // allow a frame for UI to update
+                yield return null;
+
+                // create starfields (may be heavy); run as coroutine so we can yield while emitting many particles
+                yield return StartCoroutine(CreateStarFieldFromConfig(cfg?.universalStarField, "UniversalStarField"));
+                onProgress?.Invoke(0.7f);
+                yield return null;
+                yield return StartCoroutine(CreateStarFieldFromConfig(cfg?.galacticStarField, "GalacticStarField"));
+                onProgress?.Invoke(0.85f);
+                yield return null;
+
+                // create directional light
+                CreateDirectionalLightFromConfig(cfg?.directionalLight);
+                yield return null;
+
+                // Optionally spawn the planet if the config requests it
+                bool shouldSpawnPlanet = false;
+                try
+                {
+                    if (cfg != null && cfg is RootConfig rc)
+                    {
+                        // RootConfig is built from the flat PlaytestSceneConfig JSON; check flat.spawnPlanet via reading the file again if needed
+                        // The PlaytestSceneConfigFlat is parsed into RootConfig in the RootConfig ctor, so inspect the JSON directly for spawnPlanet
+                        var json = System.IO.File.ReadAllText(System.IO.Path.Combine(Application.dataPath, playtestConfigRelativePath.Replace("Assets/", "")));
+                        // quick check for "spawnPlanet":true (case-insensitive)
+                        if (!string.IsNullOrEmpty(json) && json.IndexOf("\"spawnPlanet\"", StringComparison.OrdinalIgnoreCase) >= 0 && json.IndexOf("true", json.IndexOf("\"spawnPlanet\"", StringComparison.OrdinalIgnoreCase), StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            shouldSpawnPlanet = true;
+                        }
+                    }
+                }
+                catch { }
+                if (shouldSpawnPlanet)
+                {
+                    CreatePlanetUnderCameraTarget();
+                    // planet creation may schedule heavy work on Start; allow a frame for initialization
+                    // wait for Planet.GeneratePlanet to complete (poll isGenerated). Timeout after 10 seconds to avoid deadlock.
+                    float waitStart = Time.realtimeSinceStartup;
+                    float timeout = 10f;
+                    // find the Planet component on the created GameObject (named 'Planet')
+                    HexGlobeProject.HexMap.Planet planetComp = null;
+                    try { planetComp = GameObject.Find("Planet")?.GetComponent<HexGlobeProject.HexMap.Planet>(); } catch { planetComp = null; }
+                    while (planetComp != null && !planetComp.isGenerated && Time.realtimeSinceStartup - waitStart < timeout)
+                    {
+                        yield return null;
+                    }
+                    yield return null;
+                }
+                onProgress?.Invoke(1f);
+                yield return null;
+                onComplete?.Invoke();
             }
-            catch (Exception ex)
+            else
             {
-                onError?.Invoke(ex.Message + "\n" + ex.StackTrace);
+                // original behaviour: build a tiny topology (0..0.4)
+                onProgress?.Invoke(0.05f);
+                var cfg = new TopologyConfig();
+                cfg.entries = new System.Collections.Generic.List<TopologyConfig.TileEntry>();
+
+                // Build a tiny 4-node test (a cross)
+                cfg.entries.Add(new TopologyConfig.TileEntry { tileId = 100, neighbors = new[] { 101, 102 }, center = Vector3.right });
+                cfg.entries.Add(new TopologyConfig.TileEntry { tileId = 101, neighbors = new[] { 100, 103 }, center = Vector3.up });
+                cfg.entries.Add(new TopologyConfig.TileEntry { tileId = 102, neighbors = new[] { 100, 103 }, center = Vector3.left });
+                cfg.entries.Add(new TopologyConfig.TileEntry { tileId = 103, neighbors = new[] { 101, 102 }, center = Vector3.down });
+
+
+                var topology = TopologyBuilder.Build(cfg, new SparseMapIndex());
+                Debug.Log("SceneBootstrapper: topology built");
+                onProgress?.Invoke(0.35f);
+                // allow UI update after topology build
+                yield return null;
+
+                // Stage 2: create a managed GameModel (0.35..0.7)
+                Debug.Log("SceneBootstrapper: initializing GameModel");
+                var model = new GameModel();
+                model.Initialize(topology);
+                onProgress?.Invoke(0.7f);
+                yield return null;
+
+                // Stage 3: spawn UnitManager and one unit (0.7..1.0)
+                UnitManager um = null;
+                if (unitManagerPrefab != null)
+                {
+                    var go = Instantiate(unitManagerPrefab.gameObject);
+                    um = go.GetComponent<UnitManager>();
+                }
+                else
+                {
+                    var go = new GameObject("UnitManager");
+                    um = go.AddComponent<UnitManager>();
+                }
+
+                Debug.Log("SceneBootstrapper: creating UnitManager and wiring model/topology");
+                // wire topology and model for playtest
+                um.topology = topology;
+                um.modelManaged = model;
+                um.planetRadius = 10f;
+                um.planetTransform = null;
+
+                onProgress?.Invoke(0.85f);
+
+                // create a simple visible primitive to use as the unit prefab if none provided
+                if (um.unitPrefab == null)
+                {
+                    Debug.Log("SceneBootstrapper: creating temporary unit prefab (sphere)");
+                    var temp = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                    temp.name = "TestUnitPrefab";
+                    temp.transform.localScale = Vector3.one * 0.6f;
+                    // give it a simple color
+                    var rend = temp.GetComponent<Renderer>();
+                    if (rend != null)
+                    {
+                        var mat = new Material(Shader.Find("Standard"));
+                        mat.color = Color.green;
+                        rend.sharedMaterial = mat;
+                    }
+                    // keep this prefab in the scene hidden - we will instantiate clones of it
+                    temp.SetActive(false);
+                    um.unitPrefab = temp;
+                }
+
+                Debug.Log("SceneBootstrapper: spawning test unit at node 0");
+                um.SpawnUnitAtNode(0, 1);
+                yield return null;
+
+                onProgress?.Invoke(1f);
+                yield return null;
+                onComplete?.Invoke();
             }
 
             yield break;
@@ -377,7 +398,7 @@ namespace HexGlobeProject.UI
             }
         }
 
-        private void CreateStarFieldFromConfig(StarFieldConfig s, string name)
+        private IEnumerator CreateStarFieldFromConfig(StarFieldConfig s, string name)
         {
             if (s == null) s = new StarFieldConfig();
             var go = new GameObject(name);
@@ -469,9 +490,11 @@ namespace HexGlobeProject.UI
                     localPos = tilt * localPos;
                     emitParams.position = localPos;
                     ps.Emit(emitParams, 1);
+                    if ((i & 63) == 0) yield return null; // yield every 64 emits to keep UI responsive
                 }
 
                 ps.Pause();
+                yield break;
             }
             else
             {
@@ -497,8 +520,10 @@ namespace HexGlobeProject.UI
                         var dir = UnityEngine.Random.onUnitSphere;
                         emitParams.position = dir * s.radius;
                         ps.Emit(emitParams, 1);
+                        if ((i & 127) == 0) yield return null; // yield every 128 emits
                     }
                     ps.Pause();
+                    yield break;
                 }
                 else
                 {
@@ -506,6 +531,7 @@ namespace HexGlobeProject.UI
                     ps.Clear();
                     ps.Simulate(1f, true, true);
                     ps.Pause();
+                    yield break;
                 }
             }
         }
@@ -608,7 +634,8 @@ namespace HexGlobeProject.UI
                                     // Enable HDR which can affect flare rendering intensity in some pipelines
                                     c.allowHDR = true;
                                 }
-                                catch {
+                                catch
+                                {
                                     // allowHDR may not exist on all platforms/Unity versions
                                 }
                                 try
@@ -621,7 +648,7 @@ namespace HexGlobeProject.UI
                         }
                     }
                     catch { /* ignore if FlareLayer not available */ }
-                    
+
                     // Increase likelihood the light's flare renders: prefer pixel/important render mode
                     try
                     {

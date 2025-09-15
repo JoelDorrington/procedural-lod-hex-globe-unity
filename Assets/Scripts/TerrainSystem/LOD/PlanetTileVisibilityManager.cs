@@ -109,15 +109,15 @@ namespace HexGlobeProject.TerrainSystem.LOD
 		// Lazy mesh builder used to construct visual meshes on-demand when a tile is hit
 		private PlanetTileMeshBuilder _meshBuilder = null;
 #if PLAYMODE_TESTS
-	// Tick counter incremented by the heuristic coroutine. Tests read this
-	// to verify the heuristic is actually running at the expected frequency.
-	public int heuristicTickCount = 0;
+		// Tick counter incremented by the heuristic coroutine. Tests read this
+		// to verify the heuristic is actually running at the expected frequency.
+		public int heuristicTickCount = 0;
 #endif
 
-	// Heuristic coroutine handle and interval used to run visibility selection
-	// at a steady rate to avoid doing math every frame and to match test expectations.
-	private Coroutine _heuristicCoroutineHandle = null;
-	private const float HeuristicIntervalSeconds = 1f / 32f; // ~32 Hz
+		// Heuristic coroutine handle and interval used to run visibility selection
+		// at a steady rate to avoid doing math every frame and to match test expectations.
+		private Coroutine _heuristicCoroutineHandle = null;
+		private const float HeuristicIntervalSeconds = 1f / 32f; // ~32 Hz
 
 		// Stores a sentinel object in EditMode so tests can verify the heuristic was started.
 		private object _heuristicCoroutine = null;
@@ -150,9 +150,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			while (true)
 			{
 				try { UpdateVisibilityMathBased(); } catch { }
-				#if PLAYMODE_TESTS
-					heuristicTickCount++;
-				#endif
+#if PLAYMODE_TESTS
+				heuristicTickCount++;
+#endif
 				yield return new WaitForSecondsRealtime(HeuristicIntervalSeconds);
 			}
 		}
@@ -498,7 +498,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
 					EnqueueSpawnRequest(spawnRequest);
 				}
 			}
-			if(_spawnQueue.Count == 0) StopSpawnWorker();
+			if (_spawnQueue.Count == 0) StopSpawnWorker();
 			else StartSpawnWorkerIfNeeded();
 
 			// If no GameCamera is assigned (common in some PlayMode tests), ensure a
@@ -531,10 +531,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
 				return;
 			}
 			// Update last processed info and invocation count
-				// Snapshot visible hits for the spawn worker to consult so it can drop
-				// requests that are no longer visible by the time they are processed.
-				_currentHitTiles.Clear();
-				foreach (var t in hitTiles) _currentHitTiles.Add(t);
+			// Snapshot visible hits for the spawn worker to consult so it can drop
+			// requests that are no longer visible by the time they are processed.
+			_currentHitTiles.Clear();
+			foreach (var t in hitTiles) _currentHitTiles.Add(t);
 			_lastManageTime = Time.realtimeSinceStartup;
 			_lastManageChecksum = checksum;
 			_lastManagedDepth = depth;
@@ -644,13 +644,13 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			}
 		}
 
-        private void OnDisable()
-        {
+		private void OnDisable()
+		{
 			StopHeuristic();
 			StopSpawnWorker();
-        }
+		}
 
-        private void Update()
+		private void Update()
 		{
 			// Only in play mode and when a camera is assigned
 			if (!Application.isPlaying) return;

@@ -18,6 +18,7 @@ namespace HexGlobeProject.UI
         public GameObject menuPanel; // contains Start button
         public GameObject loadingPanel; // contains loading bar
         public Image loadingFill; // fill image with fillAmount 0..1
+    public Text loadingMessage; // optional message text to display loading progress
         public CanvasGroup fadeGroup; // for fading out
 
         [Header("Bootstrap Settings")]
@@ -50,15 +51,17 @@ namespace HexGlobeProject.UI
                 }
             }
 
+            isBootstrapping = true;
             StartCoroutine(StartGameCoroutine());
         }
 
         public IEnumerator StartGameCoroutine()
         {
-            isBootstrapping = true;
+            // Reset loading bar
             if (menuPanel) menuPanel.SetActive(false);
             if (loadingPanel) loadingPanel.SetActive(true);
             SetLoadingProgress(0f);
+            yield return null; // wait a frame for UI to update
 
             var bs = GetBootstrapper();
 
@@ -78,7 +81,7 @@ namespace HexGlobeProject.UI
                 SetLoadingProgress(0.5f);
                 yield return new WaitForSeconds(0.25f);
                 SetLoadingProgress(1f);
-                yield return StartCoroutine(FadeOutAndEnable(0.4f));
+                yield return StartCoroutine(FadeOutAndEnable(1f));
                 isBootstrapping = false;
                 yield break;
             }
@@ -89,6 +92,7 @@ namespace HexGlobeProject.UI
             // Kick off the bootstrapper; it will call back with progress
             StartCoroutine(bs.RunBootstrapper((p) => {
                 SetLoadingProgress(p);
+                SetLoadingMessage($"Loading... {Mathf.RoundToInt(p * 100f)}%");
             }, (err) => {
                 error = err;
                 finished = true;
@@ -111,7 +115,7 @@ namespace HexGlobeProject.UI
             }
 
             SetLoadingProgress(1f);
-            yield return StartCoroutine(FadeOutAndEnable(0.6f));
+            yield return StartCoroutine(FadeOutAndEnable(1f));
 
             isBootstrapping = false;
         }
@@ -132,6 +136,15 @@ namespace HexGlobeProject.UI
             if (loadingFill) loadingFill.fillAmount = Mathf.Clamp01(p);
         }
 
+        void SetLoadingMessage(string msg)
+        {
+            try
+            {
+                if (loadingMessage != null) loadingMessage.text = msg ?? string.Empty;
+            }
+            catch { }
+        }
+
         void Awake()
         {
             // If no menu panel assigned, create a minimal runtime UI so Start is visible in an empty scene.
@@ -139,6 +152,34 @@ namespace HexGlobeProject.UI
             {
                 SetupRuntimeUI();
             }
+
+            // If the project already has Title or StartButton GameObjects in the scene (designer-placed),
+            // parent them under the menuPanel so toggling menuPanel hides them.
+            try
+            {
+                if (menuPanel != null)
+                {
+                    var titleGO = GameObject.Find("Title");
+                    if (titleGO != null && titleGO.transform.parent != menuPanel.transform)
+                    {
+                        titleGO.transform.SetParent(menuPanel.transform, false);
+                    }
+
+                    var startGO = GameObject.Find("StartButton");
+                    if (startGO != null && startGO.transform.parent != menuPanel.transform)
+                    {
+                        // Ensure the Button component is wired up to this controller
+                        var btn = startGO.GetComponent<Button>();
+                        if (btn != null)
+                        {
+                            btn.onClick.RemoveAllListeners();
+                            btn.onClick.AddListener(() => { Debug.Log("Start button clicked"); StartButton(); });
+                        }
+                        startGO.transform.SetParent(menuPanel.transform, false);
+                    }
+                }
+            }
+            catch { /* best-effort reparenting, ignore failures */ }
         }
 
         void SetupRuntimeUI()
@@ -159,6 +200,7 @@ namespace HexGlobeProject.UI
             canvasGO.AddComponent<CanvasScaler>();
             canvasGO.AddComponent<GraphicRaycaster>();
             DontDestroyOnLoad(canvasGO);
+            canvasGO.SetActive(true);
 
             // Ensure at least one Camera exists so Unity doesn't show the "No cameras rendering" overlay
             var anyCam = UnityEngine.Object.FindAnyObjectByType<Camera>();
@@ -182,10 +224,11 @@ namespace HexGlobeProject.UI
             panelRect.offsetMin = Vector2.zero;
             panelRect.offsetMax = Vector2.zero;
             var image = panelGO.AddComponent<Image>();
-            image.color = new Color(0.08f, 0.08f, 0.08f, 0.9f);
+            image.color = new Color(0.08f, 0.08f, 0.08f, 1f);
 
             // Title
             var titleGO = new GameObject("Title");
+            // parent under the MenuPanel so hiding menuPanel hides the title
             titleGO.transform.SetParent(panelGO.transform, false);
             var titleRect = titleGO.AddComponent<RectTransform>();
             titleRect.anchorMin = new Vector2(0.5f, 0.7f);
@@ -206,6 +249,7 @@ namespace HexGlobeProject.UI
 
             // Start Button
             var buttonGO = new GameObject("StartButton");
+            // parent under the MenuPanel so hiding menuPanel hides the button
             buttonGO.transform.SetParent(panelGO.transform, false);
             var btnRect = buttonGO.AddComponent<RectTransform>();
             btnRect.anchorMin = new Vector2(0.5f, 0.45f);
@@ -214,6 +258,7 @@ namespace HexGlobeProject.UI
             var btnImage = buttonGO.AddComponent<Image>();
             btnImage.color = new Color(0.2f, 0.6f, 0.2f, 1f);
             var button = buttonGO.AddComponent<Button>();
+            // wire to MainMenuController.StartButton so runtime and editor UIs behave the same
             button.onClick.AddListener(() => { Debug.Log("Start button clicked"); StartButton(); });
 
             var btnTextGO = new GameObject("Text");
@@ -230,16 +275,46 @@ namespace HexGlobeProject.UI
             btnTextRect.offsetMin = Vector2.zero;
             btnTextRect.offsetMax = Vector2.zero;
 
-            // Loading Panel
+            // Create a sibling canvas for the loading screen so it can be faded independently
+            var loadingCanvasGO = new GameObject("LoadingScreenCanvas");
+            var loadingCanvas = loadingCanvasGO.AddComponent<Canvas>();
+            loadingCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            loadingCanvasGO.AddComponent<CanvasScaler>();
+            loadingCanvasGO.AddComponent<GraphicRaycaster>();
+            DontDestroyOnLoad(loadingCanvasGO);
+            // Keep loading canvas inactive by default to avoid occluding runtime visuals
+            loadingCanvasGO.SetActive(false);
+
+            // Ensure loading canvas has its own CanvasGroup so its alpha can be changed independently
+            var loadingCg = loadingCanvasGO.GetComponent<CanvasGroup>();
+            if (loadingCg == null) loadingCg = loadingCanvasGO.AddComponent<CanvasGroup>();
+            loadingCg.alpha = 1f;
+
+            // Loading Panel (child of loading canvas)
             var loadingGO = new GameObject("LoadingPanel");
-            loadingGO.transform.SetParent(canvasGO.transform, false);
+            loadingGO.transform.SetParent(loadingCanvasGO.transform, false);
             var loadingRect = loadingGO.AddComponent<RectTransform>();
-            loadingRect.anchorMin = new Vector2(0.2f, 0.2f);
-            loadingRect.anchorMax = new Vector2(0.8f, 0.3f);
+            loadingRect.anchorMin = Vector2.zero;
+            loadingRect.anchorMax = Vector2.one;
             loadingRect.offsetMin = Vector2.zero;
             loadingRect.offsetMax = Vector2.zero;
             var loadingImage = loadingGO.AddComponent<Image>();
-            loadingImage.color = new Color(0f, 0f, 0f, 0.0f);
+            // Match the MenuPanel opaque background so the loading panel hides the scene
+            loadingImage.color = new Color(0.08f, 0.08f, 0.08f, 1f);
+
+            // Loading title (same displayed title, unique object name to avoid collisions)
+            var loadingTitleGO = new GameObject("LoadingTitle");
+            loadingTitleGO.transform.SetParent(loadingGO.transform, false);
+            var loadingTitleRect = loadingTitleGO.AddComponent<RectTransform>();
+            loadingTitleRect.anchorMin = new Vector2(0.5f, 0.7f);
+            loadingTitleRect.anchorMax = new Vector2(0.5f, 0.7f);
+            loadingTitleRect.sizeDelta = new Vector2(600, 120);
+            var loadingTitleText = loadingTitleGO.AddComponent<Text>();
+            loadingTitleText.text = "HexGlobe";
+            loadingTitleText.fontSize = 48;
+            loadingTitleText.alignment = TextAnchor.MiddleCenter;
+            loadingTitleText.color = Color.white;
+            loadingTitleText.font = builtinFont;
 
             // Loading fill (simple Image as bar)
             var fillGO = new GameObject("LoadingFill");
@@ -256,16 +331,30 @@ namespace HexGlobeProject.UI
             fillImage.fillOrigin = 0;
             fillImage.fillAmount = 0f;
 
+            // Progress message text (will be updated with progress messages)
+            var msgGO = new GameObject("LoadingMessage");
+            msgGO.transform.SetParent(loadingGO.transform, false);
+            var msgRect = msgGO.AddComponent<RectTransform>();
+            msgRect.anchorMin = new Vector2(0.5f, 0.15f);
+            msgRect.anchorMax = new Vector2(0.5f, 0.15f);
+            msgRect.sizeDelta = new Vector2(600, 40);
+            var msgText = msgGO.AddComponent<Text>();
+            msgText.text = string.Empty;
+            msgText.fontSize = 18;
+            msgText.alignment = TextAnchor.MiddleCenter;
+            msgText.color = Color.white;
+            msgText.font = builtinFont;
+
             // Assign to fields
             menuPanel = panelGO;
             loadingPanel = loadingGO;
             loadingFill = fillImage;
+            loadingMessage = msgText;
             loadingPanel.SetActive(false);
 
-            // Fade group
-            var fadeGO = new GameObject("FadeGroup");
-            fadeGO.transform.SetParent(canvasGO.transform, false);
-            var fg = fadeGO.AddComponent<CanvasGroup>();
+            // Fade group - attach CanvasGroup to the Canvas so it affects all child UI (menu/loading)
+            var fg = canvasGO.GetComponent<CanvasGroup>();
+            if (fg == null) fg = canvasGO.AddComponent<CanvasGroup>();
             fg.alpha = 1f;
             fadeGroup = fg;
         }
@@ -283,7 +372,7 @@ namespace HexGlobeProject.UI
             while (t < duration)
             {
                 t += Time.deltaTime;
-                fadeGroup.alpha = Mathf.Lerp(start, 0f, t / duration);
+                fadeGroup.alpha = Mathf.Lerp(start, 0f, Mathf.Clamp01(t / duration));
                 yield return null;
             }
 
