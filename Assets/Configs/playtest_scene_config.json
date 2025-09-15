@@ -28,14 +28,14 @@
     "spawnPlanet": true,
     "sunFlareEnabled": true,
     "sunFlareName": "sunburst",
-    "sunFlareBrightness": 100.0,
+    "sunFlareBrightness": 150.0,
     "sunRotationEuler": {
         "x": 51.45899963378906,
         "y": -30.0,
         "z": 0.0
     },
     "sunPosition": {
-        "x": 200.0,
+        "x": 400.0,
         "y": 100.0,
         "z": 0.0
     }

@@ -148,11 +148,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 79b5771b81d25a243a30bc95200cffc0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  menuPanel: {fileID: 0}
-  loadingPanel: {fileID: 0}
-  loadingFill: {fileID: 0}
-  fadeGroup: {fileID: 0}
-  bootstrapper: {fileID: 0}
 --- !u!4 &1217089674
 Transform:
   m_ObjectHideFlags: 0

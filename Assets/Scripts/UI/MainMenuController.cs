@@ -14,16 +14,16 @@ namespace HexGlobeProject.UI
     /// </summary>
     public class MainMenuController : MonoBehaviour
     {
-        [Header("UI References")] 
-        public GameObject menuPanel; // contains Start button
-        public GameObject loadingPanel; // contains loading bar
-        public Image loadingFill; // fill image with fillAmount 0..1
-    public Text loadingMessage; // optional message text to display loading progress
-        public CanvasGroup fadeGroup; // for fading out
+        private GameObject camGO; // menu camera
+        private GameObject menuCanvasGO; // contains menu panel
+        private GameObject menuPanel; // contains Start button
+        private GameObject loadingPanel; // contains loading bar
+        private GameObject loadingCanvasGO; // contains loading panel
+        private Image loadingFill; // fill image with fillAmount 0..1
+        private Text loadingMessage; // optional message text to display loading progress
 
-        [Header("Bootstrap Settings")]
         // If null, MainMenuController will attempt to find a Bootstrapper in scene by interface IBootstrapper
-        public MonoBehaviour bootstrapper; // should implement IBootstrapper
+        private MonoBehaviour bootstrapper; // should implement IBootstrapper
 
         bool isBootstrapping = false;
 
@@ -58,8 +58,11 @@ namespace HexGlobeProject.UI
         public IEnumerator StartGameCoroutine()
         {
             // Reset loading bar
-            if (menuPanel) menuPanel.SetActive(false);
-            if (loadingPanel) loadingPanel.SetActive(true);
+            if (menuCanvasGO) menuCanvasGO.SetActive(false);
+            if (loadingPanel)
+            {
+                loadingCanvasGO.SetActive(true);
+            }
             SetLoadingProgress(0f);
             yield return null; // wait a frame for UI to update
 
@@ -195,6 +198,7 @@ namespace HexGlobeProject.UI
 
             // Create Canvas
             var canvasGO = new GameObject("MainMenuCanvas");
+            menuCanvasGO = canvasGO;
             var canvas = canvasGO.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvasGO.AddComponent<CanvasScaler>();
@@ -206,7 +210,7 @@ namespace HexGlobeProject.UI
             var anyCam = UnityEngine.Object.FindAnyObjectByType<Camera>();
             if (anyCam == null || !anyCam.enabled)
             {
-                var camGO = new GameObject("MainMenu_Camera");
+                camGO = new GameObject("MainMenu_Camera");
                 var cam = camGO.AddComponent<Camera>();
                 cam.clearFlags = CameraClearFlags.Depth;
                 cam.cullingMask = 0; // render nothing, only to satisfy the engine
@@ -276,7 +280,7 @@ namespace HexGlobeProject.UI
             btnTextRect.offsetMax = Vector2.zero;
 
             // Create a sibling canvas for the loading screen so it can be faded independently
-            var loadingCanvasGO = new GameObject("LoadingScreenCanvas");
+            loadingCanvasGO = new GameObject("LoadingScreenCanvas");
             var loadingCanvas = loadingCanvasGO.AddComponent<Canvas>();
             loadingCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
             loadingCanvasGO.AddComponent<CanvasScaler>();
@@ -286,9 +290,9 @@ namespace HexGlobeProject.UI
             loadingCanvasGO.SetActive(false);
 
             // Ensure loading canvas has its own CanvasGroup so its alpha can be changed independently
-            var loadingCg = loadingCanvasGO.GetComponent<CanvasGroup>();
-            if (loadingCg == null) loadingCg = loadingCanvasGO.AddComponent<CanvasGroup>();
-            loadingCg.alpha = 1f;
+            var loadingCG = loadingCanvasGO.GetComponent<CanvasGroup>();
+            if (loadingCG == null) loadingCG = loadingCanvasGO.AddComponent<CanvasGroup>();
+            loadingCG.alpha = 1f;
 
             // Loading Panel (child of loading canvas)
             var loadingGO = new GameObject("LoadingPanel");
@@ -350,20 +354,19 @@ namespace HexGlobeProject.UI
             loadingPanel = loadingGO;
             loadingFill = fillImage;
             loadingMessage = msgText;
-            loadingPanel.SetActive(false);
 
             // Fade group - attach CanvasGroup to the Canvas so it affects all child UI (menu/loading)
             var fg = canvasGO.GetComponent<CanvasGroup>();
             if (fg == null) fg = canvasGO.AddComponent<CanvasGroup>();
             fg.alpha = 1f;
-            fadeGroup = fg;
         }
 
         IEnumerator FadeOutAndEnable(float duration)
         {
+            var fadeGroup = loadingCanvasGO.GetComponent<CanvasGroup>();
             if (fadeGroup == null)
             {
-                if (loadingPanel) loadingPanel.SetActive(false);
+                if (loadingCanvasGO) loadingCanvasGO.SetActive(false);
                 yield break;
             }
 
@@ -377,7 +380,9 @@ namespace HexGlobeProject.UI
             }
 
             fadeGroup.alpha = 0f;
-            if (loadingPanel) loadingPanel.SetActive(false);
+            if (loadingCanvasGO) loadingCanvasGO.SetActive(false);
+            if (camGO) camGO.SetActive(false);
+            if (menuCanvasGO) menuCanvasGO.SetActive(false);
             // enable gameplay inputs - we rely on a PlayerController or UnitInputController to enable itself based on scene state.
         }
     }
