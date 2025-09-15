@@ -25,6 +25,7 @@
         "a": 1.0
     },
     "sunIntensity": 100.0,
+    "spawnPlanet": true,
     "sunFlareEnabled": true,
     "sunFlareName": "sunburst",
     "sunFlareBrightness": 100.0,

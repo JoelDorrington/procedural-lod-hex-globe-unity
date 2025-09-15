@@ -113,6 +113,11 @@ public class PlaytestJsonEditorWindow : EditorWindow
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Directional Light (Sun)", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(serializedConfig.FindProperty("sunColor"));
+            // Planet spawn toggle
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Planet", EditorStyles.boldLabel);
+            EditorGUILayout.PropertyField(serializedConfig.FindProperty("spawnPlanet"), new GUIContent("Spawn Planet", "If enabled, the bootstrapper will create the Planet under the CameraTarget."));
+            EditorGUILayout.Space();
             EditorGUILayout.PropertyField(serializedConfig.FindProperty("sunIntensity"));
             EditorGUILayout.PropertyField(serializedConfig.FindProperty("sunFlareEnabled"));
             EditorGUILayout.PropertyField(serializedConfig.FindProperty("sunFlareName"));

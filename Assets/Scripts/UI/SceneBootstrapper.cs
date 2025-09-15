@@ -80,6 +80,24 @@ namespace HexGlobeProject.UI
 
                     // create directional light
                     CreateDirectionalLightFromConfig(cfg?.directionalLight);
+
+                    // Optionally spawn the planet if the config requests it
+                    try
+                    {
+                        if (cfg != null && cfg is RootConfig rc)
+                        {
+                            // RootConfig is built from the flat PlaytestSceneConfig JSON; check flat.spawnPlanet via reading the file again if needed
+                            // The PlaytestSceneConfigFlat is parsed into RootConfig in the RootConfig ctor, so inspect the JSON directly for spawnPlanet
+                            var json = System.IO.File.ReadAllText(System.IO.Path.Combine(Application.dataPath, playtestConfigRelativePath.Replace("Assets/", "")));
+                            // quick check for "spawnPlanet":true (case-insensitive)
+                            if (!string.IsNullOrEmpty(json) && json.IndexOf("\"spawnPlanet\"", StringComparison.OrdinalIgnoreCase) >= 0 && json.IndexOf("true", json.IndexOf("\"spawnPlanet\"", StringComparison.OrdinalIgnoreCase), StringComparison.OrdinalIgnoreCase) >= 0)
+                            {
+                                CreatePlanetUnderCameraTarget();
+                            }
+                        }
+                    }
+                    catch { }
+
                     onProgress?.Invoke(1f);
                     onComplete?.Invoke();
                 }
@@ -618,6 +636,113 @@ namespace HexGlobeProject.UI
 
             go.transform.rotation = Quaternion.Euler(l.rotation);
             go.transform.position = l.position;
+        }
+
+        // Create a Planet object under the existing CameraTarget so the planet is centered on the camera target origin
+        private void CreatePlanetUnderCameraTarget()
+        {
+            var target = GameObject.Find("CameraTarget");
+            if (target == null)
+            {
+                Debug.LogWarning("CreatePlanetUnderCameraTarget: CameraTarget not found.");
+                return;
+            }
+
+            // Reuse the existing CameraTarget GameObject as the Planet root. Rename for clarity.
+            var planetGO = target;
+            planetGO.name = "Planet";
+            planetGO.layer = LayerMask.NameToLayer("TerrainTiles") >= 0 ? LayerMask.NameToLayer("TerrainTiles") : planetGO.layer;
+            planetGO.transform.localPosition = new Vector3(0f, 0f, -3.3f);
+
+            // Add or get Planet component on the CameraTarget (now Planet)
+            var planet = planetGO.GetComponent<HexGlobeProject.HexMap.Planet>();
+            if (planet == null) planet = planetGO.AddComponent<HexGlobeProject.HexMap.Planet>();
+            // Apply default playtest values (matching your YAML defaults)
+            planet.wireframeColor = new Color(0.4811321f, 0.4811321f, 0.4811321f, 1f);
+            planet.lineThickness = 1f;
+            // enableWireframe is a private serialized field; set it via reflection
+            try
+            {
+                var pf = typeof(HexGlobeProject.HexMap.Planet).GetField("enableWireframe", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (pf != null) pf.SetValue(planet, true);
+            }
+            catch { }
+            planet.dualSmoothingIterations = 64;
+            planet.subdivisions = 6;
+            planet.hideOceanRenderer = true;
+
+            // Add or get PlanetTileVisibilityManager component on the same GameObject
+            var mgr = planetGO.GetComponent<HexGlobeProject.TerrainSystem.LOD.PlanetTileVisibilityManager>();
+            if (mgr == null) mgr = planetGO.AddComponent<HexGlobeProject.TerrainSystem.LOD.PlanetTileVisibilityManager>();
+
+            // Attempt to assign CameraController reference from existing main camera or controller created earlier
+            try
+            {
+                var camGO = GameObject.Find("Main Camera");
+                if (camGO != null)
+                {
+                    // CameraController lives in the global namespace; qualify with global:: to avoid namespace collisions
+                    var controller = camGO.GetComponent<global::CameraController>();
+                    if (controller != null)
+                    {
+                        mgr.GameCamera = controller;
+                    }
+                    else
+                    {
+                        // fallback: find any CameraController in scene
+                        var any = UnityEngine.Object.FindAnyObjectByType<global::CameraController>();
+                        if (any != null) mgr.GameCamera = any;
+                    }
+                }
+            }
+            catch { }
+
+            // Assign planetTransform to the created planet's transform (private serialized field)
+            try
+            {
+                var f = typeof(HexGlobeProject.TerrainSystem.LOD.PlanetTileVisibilityManager).GetField("planetTransform", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (f != null) f.SetValue(mgr, planetGO.transform);
+            }
+            catch { }
+
+            // Assign terrainMaterial if a default exists at Assets/Materials/Land.mat
+            try
+            {
+                var mat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Land.mat");
+                if (mat != null)
+                {
+                    var tf = typeof(HexGlobeProject.TerrainSystem.LOD.PlanetTileVisibilityManager).GetField("terrainMaterial", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    if (tf != null) tf.SetValue(mgr, mat);
+                }
+            }
+            catch { }
+
+            // Assign TerrainConfig asset if present at Assets/TerrainConfig.asset
+            try
+            {
+#if UNITY_EDITOR
+                // TerrainConfig lives under HexGlobeProject.TerrainSystem namespace
+                var conf = UnityEditor.AssetDatabase.LoadAssetAtPath<HexGlobeProject.TerrainSystem.TerrainConfig>("Assets/TerrainConfig.asset");
+                if (conf == null)
+                {
+                    // fallback: look for any TerrainConfig asset
+                    var gu = UnityEditor.AssetDatabase.FindAssets("t:TerrainConfig");
+                    if (gu != null && gu.Length > 0)
+                    {
+                        var p = UnityEditor.AssetDatabase.GUIDToAssetPath(gu[0]);
+                        conf = UnityEditor.AssetDatabase.LoadAssetAtPath<HexGlobeProject.TerrainSystem.TerrainConfig>(p);
+                    }
+                }
+                if (conf != null)
+                {
+                    // config is a public field on the manager; assign directly
+                    try { mgr.config = conf; } catch { }
+                }
+#endif
+            }
+            catch { }
+
+            // Manager lives on the same GameObject as the Planet; no parenting necessary
         }
     }
 }

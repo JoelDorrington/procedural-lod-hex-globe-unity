@@ -33,6 +33,8 @@ namespace HexGlobeProject.Config
         [Header("Directional Light (Sun)")]
         public Color sunColor = new Color(1f, 0.95686275f, 0.8392157f, 1f);
         public float sunIntensity = 1f;
+    [Tooltip("If true, spawn the Planet and PlanetTileVisibilityManager under the CameraTarget when running the space-only bootstrap.")]
+    public bool spawnPlanet = false;
         public bool sunFlareEnabled = true;
         [Tooltip("Name of the Flare resource (Resources/ or asset name) to use for the sun halo. Prefer 'sunburst'.")]
         public string sunFlareName = "sunburst";
