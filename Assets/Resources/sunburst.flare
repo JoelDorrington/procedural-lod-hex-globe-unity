@@ -18,4 +18,4 @@ Flare:
     m_Rotate: 0
     m_Zoom: 1
     m_Fade: 1
-  m_UseFog: 1
+  m_UseFog: 0
