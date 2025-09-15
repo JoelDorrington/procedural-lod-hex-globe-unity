@@ -10,7 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f5d06e6453c553d4da18dea0560180a1, type: 3}
-  m_Name: TerrainConfig
+  m_Name: EarthLikeWorld
   m_EditorClassIdentifier: 
   baseRadius: 30
   baseResolution: 32

@@ -602,7 +602,7 @@ namespace HexGlobeProject.UI
                             lf = go.AddComponent<LensFlare>();
                         }
                         lf.flare = flare;
-                        lf.fadeSpeed = 10f;
+                        lf.fadeSpeed = 100f;
                         // Set brightness from explicit flareBrightness if provided (>0), otherwise use the directional light intensity.
                         // Note: Playtest JSON commonly sets sunIntensity to large values (e.g. 100). We will assign the value directly
                         // so designers can control brightness precisely; clamp is intentionally avoided to allow high-intensity flares.
