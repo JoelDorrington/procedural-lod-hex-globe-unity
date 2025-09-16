@@ -19,15 +19,7 @@ MonoBehaviour:
   heightScale: 1
   seaLevel: 0
   shallowWaterBand: 2
-  cullBelowSea: 0
-  removeFullySubmergedTris: 0
-  seaClampEpsilon: 0.01
-  bakeDepth: 2
-  splitTargetDepth: 4
-  maxOctaveBake: -1
-  maxOctaveSplit: -1
   debugElevationMultiplier: 1
-  debugDisableUnderwaterCulling: 1
   recalcNormals: 0
   shorelineDetail: 1
   shorelineDetailMinDepth: 4
@@ -35,6 +27,12 @@ MonoBehaviour:
   shorelineDetailAmplitude: 0.6
   shorelineDetailFrequency: 6
   shorelinePreserveSign: 1
+  overlayEnabled: 1
+  overlayColor: {r: 0, g: 0, b: 0, a: 1}
+  overlayOpacity: 0.9
+  overlayCellSize: 1
+  overlayLineThickness: 0.05
+  overlayEdgeExtrusion: 20
   references:
     version: 2
     RefIds:
@@ -43,7 +41,7 @@ MonoBehaviour:
       data:
         baseFrequency: 2.5
         octaves: 3
-        lacunarity: 4
+        lacunarity: 2.5
         gain: 0.9
         amplitude: 1.5
         seed: 736443

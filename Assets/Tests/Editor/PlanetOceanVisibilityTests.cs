@@ -14,8 +14,11 @@ namespace HexGlobeProject.Tests.Editor
             // Create Planet GameObject
             var planetGO = new GameObject("PlanetTest");
             var planet = planetGO.AddComponent<Planet>();
-            // Use minimal subdivisions to keep GeneratePlanet cheap
-            planet.subdivisions = 0;
+            // Use canonical config value for subdivisions by creating a TerrainRoot that holds the config
+            var cfg = ScriptableObject.CreateInstance<HexGlobeProject.TerrainSystem.TerrainConfig>();
+            var trGO = new GameObject("TerrainRootTestConfig");
+            var tr = trGO.AddComponent<HexGlobeProject.TerrainSystem.TerrainRoot>();
+            tr.config = cfg;
             planet.hideOceanRenderer = true;
 
             // Call GeneratePlanet (public)

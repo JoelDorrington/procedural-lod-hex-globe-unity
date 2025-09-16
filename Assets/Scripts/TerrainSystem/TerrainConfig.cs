@@ -18,29 +18,22 @@ namespace HexGlobeProject.TerrainSystem
     [Tooltip("Sea level in provider height units (0 = base radius). Positive raises sea surface, negative lowers it.")] public float seaLevel = 0f; // kept minimal for terrain remap logic
     [Tooltip("Vertical band height above sea for shallow coloration (still used by generation if needed). ")] public float shallowWaterBand = 2f;
 
-    [Header("Underwater Culling")]
-    [Tooltip("If enabled, any terrain below sea surface can be suppressed (clamped or removed) for performance/visual clarity.")]
-    public bool cullBelowSea = false;
-    [Tooltip("Remove triangles fully under the sea (creates coastline holes letting ocean show). If off, vertices are just clamped up.")]
-    public bool removeFullySubmergedTris = true;
-    [Tooltip("Small vertical offset added to clamped coastal vertices to avoid z-fighting with ocean surface.")]
-    [Range(0f,0.1f)] public float seaClampEpsilon = 0.01f;
+    // Underwater culling removed: coastal clamping and triangle removal are deprecated and handled externally if needed.
 
     // Realistic height scaling removed: raw heightProvider output now used directly (scaled only by heightScale / debugElevationMultiplier).
 
-    [Header("LOD (Simplified)")]
-    [Tooltip("Depth baked at startup (0 = one tile per face). Higher = more base tiles.")] public int bakeDepth = 2;
-    [Tooltip("Optional deeper target depth for proximity split. Set <= bakeDepth to disable splitting.")] public int splitTargetDepth = 4;
-    [Tooltip("Max octave index for baked tiles (-1 = all). Lower limits distant high-frequency noise.")] public int maxOctaveBake = -1;
-    [Tooltip("Max octave index for split child tiles (-1 = all). Usually higher or -1 for full detail.")] public int maxOctaveSplit = -1;
+    // LOD (simplified) removed - controlled elsewhere. Previously: bakeDepth, splitTargetDepth, maxOctaveBake, maxOctaveSplit
 
     // Elevation envelope & peaks system removed; raw heights now unbounded except by seaLevel and any external shader logic.
 
     [Header("Debug / Tuning")]
     [Tooltip("Multiplies final sampled elevation (after remap if any) to exaggerate relief for tuning (1 = off)." )]
     public float debugElevationMultiplier = 1f;
-    [Tooltip("If true, ignore underwater culling flags so you can verify full elevation distribution.")]
-    public bool debugDisableUnderwaterCulling = false;
+
+    [Tooltip("Icosphere subdivisions for helper/test sphere and dual-mesh generation. Higher value -> smaller, more numerous cells (affects cell count and game model size).")]
+    [Range(0, 6)]
+    public int icosphereSubdivisions = 4;
+
 
     [Tooltip("Recalculate mesh normals from geometry (shows slopes). If off, uses radial normals (fast but hides relief when viewed head-on)." )]
     public bool recalcNormals = true;
@@ -53,5 +46,17 @@ namespace HexGlobeProject.TerrainSystem
     [Tooltip("Frequency multiplier for shoreline detail noise (higher = finer jaggedness).")] public float shorelineDetailFrequency = 6f;
     [Tooltip("Preserve original above/below sea classification to keep large-scale silhouette stable.")] public bool shorelinePreserveSign = true;
     // Removed seam fix fields (constrainChildEdgeHeights, childEdgeBlendRings, promoteEdgeAfterFade) to revert to original simpler configuration.
+
+    [Header("Overlay / Debug Mesh")]
+    [Tooltip("Enable the procedural dual-mesh overlay (shader-driven).")]
+    public bool overlayEnabled = false;
+    [Tooltip("Color of the overlay lines")]
+    public Color overlayColor = Color.black;
+    [Tooltip("Overlay line opacity")]
+    [Range(0f,1f)] public float overlayOpacity = 0.9f;
+    [Tooltip("Line thickness in lattice units (0..1 approx)")]
+    public float overlayLineThickness = 0.05f;
+    [Tooltip("Radial extrusion height applied to edges when masking overlay")]
+    public float overlayEdgeExtrusion = 0.5f;
     }
 }

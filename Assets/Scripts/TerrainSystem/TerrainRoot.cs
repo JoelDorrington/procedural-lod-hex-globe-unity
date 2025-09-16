@@ -173,9 +173,8 @@ namespace HexGlobeProject.TerrainSystem
             var indices = new int[quadCount * 6];
             int idx = 0;
             float seaRadius = radius + (config != null ? config.seaLevel : 0f);
-            bool doCull = config != null && config.cullBelowSea;
-            bool removeTris = doCull && config.removeFullySubmergedTris;
-            float epsilon = (config != null ? config.seaClampEpsilon : 0.01f);
+            // Underwater culling removed: always render vertices; no triangle removal/clamping
+            bool removeTris = false;
             var below = new bool[vertCount];
             for (int y = 0; y < vertsPerEdge; y++)
             {
@@ -188,15 +187,8 @@ namespace HexGlobeProject.TerrainSystem
                     // Use raw sampled height directly (realistic height remap removed)
                     float h = raw;
                     float finalR = radius + h;
-                    bool submerged = doCull && finalR < seaRadius;
-                    if (submerged)
-                    {
-                        if (!removeTris)
-                        {
-                            finalR = seaRadius + epsilon; // clamp up slightly
-                        }
-                    }
-                    below[idx] = submerged;
+                    // No underwater culling: leave finalR as sampled
+                    below[idx] = false;
                     Vector3 pos = dir * finalR;
                     verts[idx] = pos;
                     normals[idx] = dir;

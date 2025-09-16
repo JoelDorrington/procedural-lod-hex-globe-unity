@@ -36,7 +36,6 @@ namespace HexGlobeProject.Tests.Editor
             var config = ScriptableObject.CreateInstance<TerrainSystem.TerrainConfig>();
             config.baseRadius = 30f;
             config.heightScale = 1f;
-            config.cullBelowSea = false;
 
             var builder = new PlanetTileMeshBuilder(config);
 
@@ -99,7 +98,7 @@ namespace HexGlobeProject.Tests.Editor
         public void DetectNonCoplanarQuadsAlongSeam()
         {
             var config = ScriptableObject.CreateInstance<TerrainSystem.TerrainConfig>();
-            config.baseRadius = 30f; config.heightScale = 1f; config.cullBelowSea = false;
+            config.baseRadius = 30f; config.heightScale = 1f;
             var builder = new PlanetTileMeshBuilder(config);
             int depth = 2;
             var managerGO = new GameObject("PTVM_NC");
@@ -152,7 +151,6 @@ namespace HexGlobeProject.Tests.Editor
             var config = ScriptableObject.CreateInstance<TerrainSystem.TerrainConfig>();
             config.baseRadius = 30f;
             config.heightScale = 1f;
-            config.cullBelowSea = false;
 
             var builder = new PlanetTileMeshBuilder(config);
             int depth = 2;

@@ -69,11 +69,12 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
             Vector3 centerAccum = Vector3.zero; // Still accumulate for fallback/validation
             int vertCounter = 0;
-            bool doCull = config.cullBelowSea && !config.debugDisableUnderwaterCulling;
-            bool removeTris = doCull && config.removeFullySubmergedTris;
+            // Underwater culling removed from config: default to no culling here.
+            bool doCull = false;
+            bool removeTris = false;
             float seaR = radius + config.seaLevel;
-            float eps = config.seaClampEpsilon;
-            var submergedFlags = removeTris ? new List<bool>(res * res) : null;
+            float eps = 0.01f;
+            var submergedFlags = (List<bool>)null;
 
             // Debug observability: measure time spent sampling vs building triangles and detect degenerate tris
             System.Diagnostics.Stopwatch swTotal = null;

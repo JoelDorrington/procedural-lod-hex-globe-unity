@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 using UnityEngine.Rendering;
+using HexGlobeProject.Graphics.DataStructures;
 
 namespace HexGlobeProject.HexMap
 {
@@ -37,7 +38,7 @@ namespace HexGlobeProject.HexMap
         [HideInInspector] public float wireOffsetFraction = 0.01f;
         [HideInInspector] public bool projectEachSmoothingPass = true;
 
-        public int subdivisions = 6; // Determines hex cell size
+    // Subdivision is now canonicalized to TerrainConfig.icosphereSubdivisions
         [Header("Scene helpers")]
         [SerializeField]
         [Tooltip("Hide the ocean renderer (keeps Ocean GameObject/transform). Mirrors TerrainRoot.hideOceanRenderer when a TerrainRoot exists in the scene.")]
@@ -99,8 +100,20 @@ namespace HexGlobeProject.HexMap
                 meshRenderer.sharedMaterial = new Material(shader) { color = sphereColor };
             }
 
-            // Build solid icosphere using the provided generator
-            Mesh sphereMesh = IcosphereGenerator.GenerateIcosphere(radius: sphereR, subdivisions: Mathf.Max(0, subdivisions));
+            // Determine subdivisions: prefer TerrainConfig.icosphereSubdivisions if available
+            int extraSubs = 4; // fallback default when no TerrainConfig is present
+            try
+            {
+                var terrainRoot = UnityEngine.Object.FindAnyObjectByType<HexGlobeProject.TerrainSystem.TerrainRoot>();
+                if (terrainRoot != null && terrainRoot.config != null)
+                {
+                    extraSubs = Mathf.Clamp(terrainRoot.config.icosphereSubdivisions, 0, 6);
+                }
+            }
+            catch { }
+
+            // Build solid icosphere using the provided generator (higher subdivisions -> smaller cells)
+            Mesh sphereMesh = IcosphereGenerator.GenerateIcosphere(radius: sphereR, subdivisions: Mathf.Max(0, extraSubs));
             meshFilter.sharedMesh = sphereMesh;
             // Respect the hideOceanRenderer flag: keep the mesh assigned for transform/selection
             // but disable the MeshRenderer so the visual sphere is invisible when requested.
@@ -109,15 +122,52 @@ namespace HexGlobeProject.HexMap
                 meshRenderer.enabled = !hideOceanRenderer;
             }
 
-            // Optionally build dual-mesh wireframe from triangle duals; projection to sphere is optional
-            // Guarded by `enableWireframe` so wireframe can be disabled during LOD development.
+            // Optionally enable a procedural shader overlay instead of building a mesh-based wireframe.
+            // Guarded by `enableWireframe` so overlay can be toggled during development.
             if (enableWireframe)
             {
-                BuildDualWireframe(sphereMesh, sphereR);
+                SetOverlayOnMaterials(true);
             }
             // mark generation complete
             isGenerated = true;
 
+        }
+
+        // Toggle the procedural overlay property on materials assigned to this planet's MeshRenderer.
+        // If a material doesn't support the property, it is left unchanged. Also hide any old Wireframe GameObject
+        // so legacy geometry won't display while the overlay is active.
+        private void SetOverlayOnMaterials(bool enabled)
+        {
+            if (meshRenderer == null) return;
+            // Gather overlay defaults from any TerrainRoot.config if available
+            var terrainRoot = FindAnyObjectByType<HexGlobeProject.TerrainSystem.TerrainRoot>();
+            HexGlobeProject.TerrainSystem.TerrainConfig cfg = null;
+            if (terrainRoot != null) cfg = terrainRoot.config;
+
+            var mats = meshRenderer.sharedMaterials;
+            for (int i = 0; i < mats.Length; i++)
+            {
+                var m = mats[i];
+                if (m == null) continue;
+                // Ensure overlay parameters are applied using centralized logic (clamps ranges)
+                if (cfg != null)
+                {
+                    HexGlobeProject.TerrainSystem.TerrainShaderGlobals.Apply(cfg, m);
+                }
+                else
+                {
+                    // Fall back to local defaults where sensible
+                    if (m.HasProperty("_BaseRadius")) m.SetFloat("_BaseRadius", sphereRadius);
+                }
+                if (m.HasProperty("_OverlayEnabled")) m.SetFloat("_OverlayEnabled", enabled ? 1f : 0f);
+            }
+
+            // Hide legacy Wireframe object if present
+            GameObject wireframeObj = transform.Find("Wireframe")?.gameObject;
+            if (wireframeObj != null)
+            {
+                wireframeObj.SetActive(!enabled);
+            }
         }
 
         private void ApplyHardcodedSettings()

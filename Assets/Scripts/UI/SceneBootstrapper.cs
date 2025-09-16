@@ -721,7 +721,7 @@ namespace HexGlobeProject.UI
             }
             catch { }
             planet.dualSmoothingIterations = 64;
-            planet.subdivisions = 6;
+            // Subdivision level is now controlled by TerrainConfig. Planet.GeneratePlanet reads the canonical value at runtime.
             planet.hideOceanRenderer = true;
 
             // Add or get PlanetTileVisibilityManager component on the same GameObject

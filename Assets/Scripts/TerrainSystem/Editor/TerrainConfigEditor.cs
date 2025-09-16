@@ -23,20 +23,29 @@ namespace HexGlobeProject.TerrainSystem.Editor
             serializedObject.Update();
             var config = (TerrainConfig)target;
             DrawCoreSection();
-            DrawLodSection();
             DrawElevationSection();
-            DrawUnderwaterSection();
+            DrawOverlaySection();
             EditorGUILayout.Space();
             DrawHeightProvider(config);
 
             if (serializedObject.ApplyModifiedProperties())
             {
                 EditorUtility.SetDirty(config);
+                // Push changes live to any TerrainRoot instances so material parameters update immediately
+                var roots = UnityEngine.Object.FindObjectsOfType<HexGlobeProject.TerrainSystem.TerrainRoot>();
+                foreach (var r in roots)
+                {
+                    if (r != null && r.terrainMaterial != null)
+                    {
+                        HexGlobeProject.TerrainSystem.TerrainShaderGlobals.Apply(config, r.terrainMaterial);
+                        EditorUtility.SetDirty(r.terrainMaterial);
+                    }
+                }
             }
         }
 
         #region Section Drawing
-    private static bool _foldCore = true, _foldLod = true, _foldUnder = false;
+    private static bool _foldCore = true, _foldLod = true;
 
         private void DrawCoreSection()
         {
@@ -46,6 +55,8 @@ namespace HexGlobeProject.TerrainSystem.Editor
             {
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("baseRadius"));
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("baseResolution"));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("icosphereSubdivisions"));
+                EditorGUILayout.HelpBox("Icosphere subdivisions: higher = smaller, more numerous cells. This controls the dual-mesh subdivision level and directly affects the game model cell count and memory/CPU cost.", MessageType.None);
                 // maxLod removed
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("heightScale"));
                 // Realistic height scaling fields removed
@@ -53,48 +64,28 @@ namespace HexGlobeProject.TerrainSystem.Editor
             EditorGUILayout.Space();
         }
 
-        private void DrawLodSection()
+        private void DrawOverlaySection()
         {
-            _foldLod = EditorGUILayout.Foldout(_foldLod, "LOD (Simplified)", true);
-            if (!_foldLod) return;
-            using (new EditorGUI.IndentLevelScope())
+            var propEnabled = serializedObject.FindProperty("overlayEnabled");
+            EditorGUILayout.PropertyField(propEnabled);
+            if (propEnabled.boolValue)
             {
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("bakeDepth"));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("splitTargetDepth"));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("maxOctaveBake"));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("maxOctaveSplit"));
-                var bake = serializedObject.FindProperty("bakeDepth").intValue;
-                var splitT = serializedObject.FindProperty("splitTargetDepth").intValue;
-                if (splitT <= bake)
+                using (new EditorGUI.IndentLevelScope())
                 {
-                    EditorGUILayout.HelpBox("Splitting disabled (splitTargetDepth <= bakeDepth).", MessageType.Info);
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty("overlayColor"));
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty("overlayOpacity"));
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty("overlayLineThickness"));
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty("overlayEdgeExtrusion"));
                 }
             }
-            EditorGUILayout.Space();
         }
+
+        // LOD section removed from editor
 
     // ElevationSection removed (envelope & peaks feature deprecated)
     private void DrawElevationSection() { }
 
-        private void DrawUnderwaterSection()
-        {
-            _foldUnder = EditorGUILayout.Foldout(_foldUnder, "Underwater Culling", true);
-            if (!_foldUnder) return;
-            using (new EditorGUI.IndentLevelScope())
-            {
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("cullBelowSea"));
-                if (serializedObject.FindProperty("cullBelowSea").boolValue)
-                {
-                    using (new EditorGUI.IndentLevelScope())
-                    {
-                        EditorGUILayout.PropertyField(serializedObject.FindProperty("removeFullySubmergedTris"));
-                        EditorGUILayout.PropertyField(serializedObject.FindProperty("seaClampEpsilon"));
-                    }
-                    EditorGUILayout.HelpBox("Triangle removal leaves coastline holes (good with ocean sphere). Disable to just clamp.", MessageType.Info);
-                }
-            }
-            EditorGUILayout.Space();
-        }
+        // Underwater culling UI removed (fields deprecated)
         #endregion
 
         private void DrawHeightProvider(TerrainConfig config)
