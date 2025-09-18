@@ -1,6 +1,5 @@
 using NUnit.Framework;
 using UnityEngine;
-using HexGlobeProject.TerrainSystem;
 using HexGlobeProject.TerrainSystem.LOD;
 using UnityEngine.TestTools;
 using System.Collections;

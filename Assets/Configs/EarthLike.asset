@@ -10,7 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f5d06e6453c553d4da18dea0560180a1, type: 3}
-  m_Name: EarthLikeWorld
+  m_Name: EarthLike
   m_EditorClassIdentifier: 
   baseRadius: 30
   baseResolution: 32
@@ -19,15 +19,8 @@ MonoBehaviour:
   heightScale: 1
   seaLevel: 0
   shallowWaterBand: 2
-  cullBelowSea: 0
-  removeFullySubmergedTris: 0
-  seaClampEpsilon: 0.01
-  bakeDepth: 2
-  splitTargetDepth: 4
-  maxOctaveBake: -1
-  maxOctaveSplit: -1
   debugElevationMultiplier: 1
-  debugDisableUnderwaterCulling: 1
+  icosphereSubdivisions: 4
   recalcNormals: 0
   shorelineDetail: 1
   shorelineDetailMinDepth: 4
@@ -35,15 +28,20 @@ MonoBehaviour:
   shorelineDetailAmplitude: 0.6
   shorelineDetailFrequency: 6
   shorelinePreserveSign: 1
+  overlayEnabled: 1
+  overlayColor: {r: 0, g: 0, b: 0, a: 1}
+  overlayOpacity: 0.9
+  overlayLineThickness: 0.05
+  overlayEdgeExtrusion: 20
   references:
     version: 2
     RefIds:
     - rid: 8082500369961975853
       type: {class: Perlin3DHeightProvider, ns: HexGlobeProject.TerrainSystem, asm: HexGlobeProject.Scripts}
       data:
-        baseFrequency: 2.5
-        octaves: 3
-        lacunarity: 4
-        gain: 0.9
-        amplitude: 1.5
-        seed: 736443
+        baseFrequency: 1.4
+        octaves: 4
+        lacunarity: 5
+        gain: 0.5
+        amplitude: 3
+        seed: 598608

@@ -1,7 +1,8 @@
 using NUnit.Framework;
 using UnityEngine;
 using HexGlobeProject.HexMap;
-using HexGlobeProject.TerrainSystem;
+using HexGlobeProject.TerrainSystem.LOD;
+using HexGlobeProject.TerrainSystem.Core;
 using System.Reflection;
 
 namespace HexGlobeProject.Tests.Editor
@@ -15,9 +16,9 @@ namespace HexGlobeProject.Tests.Editor
             var planetGO = new GameObject("PlanetTest");
             var planet = planetGO.AddComponent<Planet>();
             // Use canonical config value for subdivisions by creating a TerrainRoot that holds the config
-            var cfg = ScriptableObject.CreateInstance<HexGlobeProject.TerrainSystem.TerrainConfig>();
+            var cfg = ScriptableObject.CreateInstance<TerrainConfig>();
             var trGO = new GameObject("TerrainRootTestConfig");
-            var tr = trGO.AddComponent<HexGlobeProject.TerrainSystem.TerrainRoot>();
+            var tr = trGO.AddComponent<TerrainRoot>();
             tr.config = cfg;
             planet.hideOceanRenderer = true;
 

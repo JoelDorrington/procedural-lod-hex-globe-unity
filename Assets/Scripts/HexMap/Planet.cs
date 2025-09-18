@@ -2,6 +2,9 @@ using UnityEngine;
 using System.Collections.Generic;
 using UnityEngine.Rendering;
 using HexGlobeProject.Graphics.DataStructures;
+using HexGlobeProject.TerrainSystem.Core;
+using HexGlobeProject.TerrainSystem.LOD;
+using HexGlobeProject.TerrainSystem.Graphics;
 
 namespace HexGlobeProject.HexMap
 {
@@ -25,9 +28,6 @@ namespace HexGlobeProject.HexMap
         // Public settings for wireframe
         public Color wireframeColor = Color.black;
         public float lineThickness = 1f; // Note: line thickness might require a custom shader to be visible
-        [SerializeField]
-        [Tooltip("Enable dual wireframe overlay (hex game-board). Disabled by default during LOD development.")]
-        private bool enableWireframe = false;
         public enum DualSmoothingMode { None, Laplacian, LaplacianTangent, Taubin, TaubinTangent }
         [Tooltip("Smoothing method for dual vertices. Tangent variants preserve radius; Taubin reduces shrink.")]
         [HideInInspector] public DualSmoothingMode dualSmoothingMode = DualSmoothingMode.TaubinTangent;
@@ -38,7 +38,7 @@ namespace HexGlobeProject.HexMap
         [HideInInspector] public float wireOffsetFraction = 0.01f;
         [HideInInspector] public bool projectEachSmoothingPass = true;
 
-    // Subdivision is now canonicalized to TerrainConfig.icosphereSubdivisions
+        // Subdivision is now canonicalized to TerrainConfig.icosphereSubdivisions
         [Header("Scene helpers")]
         [SerializeField]
         [Tooltip("Hide the ocean renderer (keeps Ocean GameObject/transform). Mirrors TerrainRoot.hideOceanRenderer when a TerrainRoot exists in the scene.")]
@@ -50,8 +50,6 @@ namespace HexGlobeProject.HexMap
             ApplyHardcodedSettings();
             // Initialize the cell graph
             cellGraph = new CellGraph();
-            // Mirror setting to TerrainRoot if present
-            ApplyHideOceanToTerrainRoot();
             // generation state
             isGenerated = false;
         }
@@ -70,7 +68,7 @@ namespace HexGlobeProject.HexMap
             float sphereR = sphereRadius;
             try
             {
-                var terrainRoot = UnityEngine.Object.FindAnyObjectByType<HexGlobeProject.TerrainSystem.TerrainRoot>();
+                var terrainRoot = UnityEngine.Object.FindAnyObjectByType<TerrainRoot>();
                 if (terrainRoot != null && terrainRoot.config != null && terrainRoot.config.baseRadius > 0f)
                 {
                     // Prefer the tile-center radius used by the visibility system so the visual sphere aligns with spawned tiles.
@@ -94,6 +92,8 @@ namespace HexGlobeProject.HexMap
             {
                 meshRenderer = gameObject.AddComponent<MeshRenderer>();
             }
+
+            
             if (meshRenderer.sharedMaterial == null)
             {
                 var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
@@ -104,7 +104,7 @@ namespace HexGlobeProject.HexMap
             int extraSubs = 4; // fallback default when no TerrainConfig is present
             try
             {
-                var terrainRoot = UnityEngine.Object.FindAnyObjectByType<HexGlobeProject.TerrainSystem.TerrainRoot>();
+                var terrainRoot = UnityEngine.Object.FindAnyObjectByType<TerrainRoot>();
                 if (terrainRoot != null && terrainRoot.config != null)
                 {
                     extraSubs = Mathf.Clamp(terrainRoot.config.icosphereSubdivisions, 0, 6);
@@ -122,12 +122,9 @@ namespace HexGlobeProject.HexMap
                 meshRenderer.enabled = !hideOceanRenderer;
             }
 
-            // Optionally enable a procedural shader overlay instead of building a mesh-based wireframe.
-            // Guarded by `enableWireframe` so overlay can be toggled during development.
-            if (enableWireframe)
-            {
-                SetOverlayOnMaterials(true);
-            }
+            // Ensure the procedural shader overlay is enabled by default for playtests so the GPU overlay receives data.
+            // Previously this was guarded by `enableWireframe`; force it on here so users see the overlay immediately.
+            SetOverlayOnMaterials(true);
             // mark generation complete
             isGenerated = true;
 
@@ -140,19 +137,34 @@ namespace HexGlobeProject.HexMap
         {
             if (meshRenderer == null) return;
             // Gather overlay defaults from any TerrainRoot.config if available
-            var terrainRoot = FindAnyObjectByType<HexGlobeProject.TerrainSystem.TerrainRoot>();
-            HexGlobeProject.TerrainSystem.TerrainConfig cfg = null;
+            var terrainRoot = FindAnyObjectByType<TerrainRoot>();
+            TerrainConfig cfg = null;
             if (terrainRoot != null) cfg = terrainRoot.config;
 
             var mats = meshRenderer.sharedMaterials;
+            bool changed = false;
             for (int i = 0; i < mats.Length; i++)
             {
                 var m = mats[i];
                 if (m == null) continue;
+
+                // If the material doesn't use the overlay shader, replace it with one that does so the ComputeBuffer can be bound and read by the shader.
+                // This is an intentional, visible-playtest convenience: overlay will appear by default.
+                var overlayShader = Shader.Find("HexGlobe/PlanetTerrain");
+                if (overlayShader != null && (m.shader == null || m.shader.name != "HexGlobe/PlanetTerrain"))
+                {
+                    var newMat = new Material(overlayShader);
+                    // copy a common color property if present
+                    try { if (m.HasProperty("_Color") && newMat.HasProperty("_Color")) newMat.SetColor("_Color", m.GetColor("_Color")); } catch { }
+                    mats[i] = newMat;
+                    m = newMat;
+                    changed = true;
+                }
+
                 // Ensure overlay parameters are applied using centralized logic (clamps ranges)
                 if (cfg != null)
                 {
-                    HexGlobeProject.TerrainSystem.TerrainShaderGlobals.Apply(cfg, m);
+                    TerrainShaderGlobals.Apply(cfg, m);
                 }
                 else
                 {
@@ -160,6 +172,71 @@ namespace HexGlobeProject.HexMap
                     if (m.HasProperty("_BaseRadius")) m.SetFloat("_BaseRadius", sphereRadius);
                 }
                 if (m.HasProperty("_OverlayEnabled")) m.SetFloat("_OverlayEnabled", enabled ? 1f : 0f);
+                // If enabling overlay, attempt to upload dual segments for exact alignment
+                if (enabled)
+                {
+                    try
+                    {
+                        int segs = DualOverlayBuffer.UploadSegmentsToMaterial(m, meshFilter.sharedMesh, sphereRadius, meshFilter != null ? meshFilter.transform : null);
+
+#if UNITY_EDITOR
+                        // Editor-only validation: read back the ComputeBuffer references and log the first sample for diagnosis
+                        try
+                        {
+                            var buf = DualOverlayBuffer.GetBuffer(m);
+                            var bbuf = DualOverlayBuffer.GetBoundsBuffer(m);
+                            if (buf == null) Debug.LogWarning($"[Planet] Dual segments ComputeBuffer is null for material '{m.name}'");
+                            else
+                            {
+                                // Attempt to read the first two Vector4 entries (if available)
+                                int cnt = buf.count;
+                                Debug.Log($"[Planet] Dual segments buffer count={cnt}");
+                                if (cnt >= 2)
+                                {
+                                    var sample = new Vector4[2];
+                                    buf.GetData(sample, 0, 0, 2);
+                                    Debug.Log($"[Planet] DualSegments[0] = {sample[0]}, [1] = {sample[1]}");
+                                }
+                            }
+                                if (bbuf == null) Debug.LogWarning($"[Planet] Dual segment bounds ComputeBuffer is null for material '{m.name}'");
+                                else
+                                {
+                                    Debug.Log($"[Planet] Dual segment bounds count={bbuf.count}");
+                                    if (bbuf.count >= 1)
+                                    {
+                                        var bsample = new Vector4[1];
+                                        bbuf.GetData(bsample, 0, 0, 1);
+                                        Debug.Log($"[Planet] DualSegmentBounds[0] = {bsample[0]}");
+
+                                        // Create or update a simple diagnostic sphere at the first midpoint so the user can visually spot it.
+                                        try
+                                        {
+                                            var midv = new Vector3(bsample[0].x, bsample[0].y, bsample[0].z);
+                                            var coarse = bsample[0].w;
+                                        }
+                                        catch { }
+                                    }
+                                }
+                        }
+                        catch (System.Exception ex)
+                        {
+                            Debug.LogWarning($"[Planet] Exception reading compute buffers: {ex}");
+                        }
+#endif
+                    }
+                    catch { }
+                }
+                else
+                {
+                    // Release any buffer associated with this material
+                    HexGlobeProject.HexMap.DualOverlayBuffer.ReleaseBufferForMaterial(m);
+                }
+            }
+
+            if (changed)
+            {
+                // If we replaced any materials, assign the modified array back to the renderer so the new materials are used.
+                meshRenderer.sharedMaterials = mats;
             }
 
             // Hide legacy Wireframe object if present
@@ -385,31 +462,34 @@ namespace HexGlobeProject.HexMap
         private void Start()
         {
             GeneratePlanet();
-            ApplyHideOceanToTerrainRoot();
         }
 
-        private void ApplyHideOceanToTerrainRoot()
+        private void OnDestroy()
         {
-            try
+            // Release any GPU buffers we uploaded for overlay rendering to avoid leaks
+            if (meshRenderer != null)
             {
-                // Find TerrainRoot in scene and apply the hide flag if available
-                var terrainRoot = FindAnyObjectByType<TerrainSystem.TerrainRoot>();
-                if (terrainRoot != null)
+                var mats = meshRenderer.sharedMaterials;
+                if (mats != null)
                 {
-                    terrainRoot.SetHideOceanRenderer(hideOceanRenderer);
-                }
-                else
-                {
-                    // Fallback: find any GameObject named "Ocean" and toggle its MeshRenderer directly.
-                    var oceanGO = GameObject.Find("Ocean");
-                    if (oceanGO != null)
+                    for (int i = 0; i < mats.Length; i++)
                     {
-                        var mr = oceanGO.GetComponent<MeshRenderer>();
-                        if (mr != null) mr.enabled = !hideOceanRenderer;
+                        var m = mats[i];
+                        if (m == null) continue;
+                        HexGlobeProject.HexMap.DualOverlayBuffer.ReleaseBufferForMaterial(m);
                     }
                 }
             }
-            catch { /* no-op: keep robust in editor */ }
+            else if (meshFilter != null)
+            {
+                var mf = meshFilter;
+                var go = mf.gameObject;
+                var mr = go.GetComponent<MeshRenderer>();
+                if (mr != null && mr.sharedMaterials != null)
+                {
+                    foreach (var m in mr.sharedMaterials) if (m != null) HexGlobeProject.HexMap.DualOverlayBuffer.ReleaseBufferForMaterial(m);
+                }
+            }
         }
 
     }

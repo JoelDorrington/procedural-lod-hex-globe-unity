@@ -17,14 +17,15 @@ Shader "HexGlobe/PlanetTerrain"
         _ShallowBand ("Shallow Water Band Height", Float) = 2
         _ShallowColor ("Shallow Water Color", Color) = (0.12,0.25,0.55,1)
         _PlanetCenter ("Planet Center (World Position)", Vector) = (0,0,0,0)
-    _CellSize ("Cell Size", Float) = 1.0
+        _CellSize ("Cell Size", Float) = 1.0
         _LineThickness ("Line Thickness", Float) = 0.05
         _OverlayColor ("Overlay Color", Color) = (1,1,1,1)
         _OverlayOpacity ("Overlay Opacity", Range(0,1)) = 0.9
-        _OverlayEnabled ("Overlay Enabled", Float) = 0
+        _OverlayEnabled ("Overlay Enabled", Float) = 1
         // Edge extrusion: project wire edges radially outward from planet center
         _BaseRadius ("Base Planet Radius", Float) = 30.0
         _EdgeExtrusion ("Edge Extrusion Height", Float) = 0.5
+    _DualOverlayCube ("Dual Overlay Cubemap", CUBE) = "white" {}
     }
     SubShader
     {
@@ -73,6 +74,11 @@ Shader "HexGlobe/PlanetTerrain"
             float4 _OverlayColor;
             float _OverlayOpacity;
             float _OverlayEnabled;
+            // Dual-segment overlay buffer (uploaded from CPU). Each segment is two float4 entries (start,end).
+            StructuredBuffer<float4> _DualSegments;
+            StructuredBuffer<float4> _DualSegmentBounds; // (mid.xyz, halfLength)
+            int _DualSegmentCount;
+            UNITY_DECLARE_TEXCUBE(_DualOverlayCube);
             // Edge extrusion parameters
             float _BaseRadius;
             float _EdgeExtrusion;
@@ -129,71 +135,21 @@ Shader "HexGlobe/PlanetTerrain"
                 snowT = saturate(snowT + flatFactor * _SnowSlopeBoost * (1 - snowT));
                 finalCol = lerp(finalCol, _SnowColor, snowT);
 
-                // Overlay: procedural dual-mesh/hex pattern projected per cube-face using planet-local coordinates
-                // New properties exposed above: _CellSize, _LineThickness, _OverlayColor, _OverlayOpacity, _OverlayEnabled
-
-                // By default, keep existing appearance
+                // Dual overlay: sample a pre-rasterized cubemap where R channel = edge strength.
                 float4 outCol = finalCol;
-
                 if (_OverlayEnabled > 0.5)
                 {
-                        // Compute planet-local position vector (from planet center to vertex)
-                        float3 planetToVertex = i.worldPos - _PlanetCenter.xyz;
-                        // Use the same geometricNormal and length as earlier
-                        float axisX = abs(planetToVertex.x);
-                        float axisY = abs(planetToVertex.y);
-                        float axisZ = abs(planetToVertex.z);
-
-                        // Determine dominant axis for cube-face projection and produce a stable 2D coord
-                        float2 faceCoord;
-                        if (axisX >= axisY && axisX >= axisZ)
-                        {
-                            faceCoord = float2(planetToVertex.z, planetToVertex.y) / max(0.0001, axisX);
-                        }
-                        else if (axisY >= axisX && axisY >= axisZ)
-                        {
-                            faceCoord = float2(planetToVertex.x, planetToVertex.z) / max(0.0001, axisY);
-                        }
-                        else
-                        {
-                            faceCoord = float2(planetToVertex.x, planetToVertex.y) / max(0.0001, axisZ);
-                        }
-
-                        // Hex lattice approximate mapping (shear transform)
-                        float2 u = faceCoord / _CellSize;
-                        const float K = 0.86602540378; // cos(30deg)
-                        const float H = 0.5;           // sin(30deg)
-                        float2 q;
-                        q.x = u.x * K;
-                        q.y = u.y + u.x * H;
-                        float2 fq = frac(q);
-                        // compute distance to nearest lattice line (vertical or horizontal in q-space)
-                        float2 distToLine = min(abs(fq), abs(fq - 1.0));
-                        // nearest distance to a grid line (in q-space)
-                        float d = min(distToLine.x, distToLine.y);
-
-                        // edge mask: 1 near border, 0 inside
-                        // convert _LineThickness (in world units) -> q-space thickness fraction by dividing by _CellSize
-                        float qThickness = max(0.0001, _LineThickness / max(0.0001, _CellSize));
-                        float edge = 1.0 - smoothstep(max(0.0, qThickness - 0.02), qThickness + 0.02, d);
-
-                        // Project the wire edge radially outward by a small extrusion height. We approximate
-                        // an extruded edge "radius" by adding a factor proportional to (1 - d) so the exact
-                        // edge (d==~_LineThickness) extrudes most. This is a simple artistic approximation.
-                        float edgeFactor = saturate(1.0 - d / (_LineThickness + 0.0001));
-                        float edgeExtrusion = _EdgeExtrusion * edgeFactor;
-                        float edgeRadius = _BaseRadius + edgeExtrusion;
-
-                        // Only apply overlay where the actual surface radius exceeds the extruded edge radius
-                        // This makes the overlay appear only on geometry that sits above the projected wire edges.
-                        float surfaceAboveEdge = step(edgeRadius, worldR);
-
-                        float4 overlay = _OverlayColor;
-                        overlay.a = _OverlayOpacity * edge * surfaceAboveEdge;
-
-                        // Blend overlay over the computed terrain color
-                        outCol = lerp(outCol, overlay, overlay.a);
-                    }
+                    float3 p = geometricNormal;
+                    // Sample cubemap (assumes generator writes edge strength into .r)
+                    float edgeSample = UNITY_SAMPLE_TEXCUBE(_DualOverlayCube, p).r;
+                    // Remap sample to suppress low/medium values that can "whitewash" the surface.
+                    // Tune the smoothstep lower edge (0.15) to avoid thin but widespread overlay.
+                    float edgeMask = smoothstep(0.15, 1.0, saturate(edgeSample));
+                    float edgeAlpha = saturate(_OverlayOpacity * edgeMask);
+                    // Blend overlay color using computed alpha (keep overlay RGB separate to avoid affecting alpha channel)
+                    float4 overlayRGB = float4(_OverlayColor.rgb, 1.0);
+                    outCol = lerp(outCol, overlayRGB, edgeAlpha);
+                }
 
                 // Opaque: ensure alpha = 1
                 outCol.a = 1.0;

@@ -3,6 +3,7 @@ using System.Collections;
 using UnityEngine;
 using HexGlobeProject.HexMap.Model;
 using HexGlobeProject.HexMap.Runtime;
+using HexGlobeProject.TerrainSystem.LOD;
 
 namespace HexGlobeProject.UI
 {
@@ -671,8 +672,8 @@ namespace HexGlobeProject.UI
                 var planetGO = GameObject.Find("Planet") ?? GameObject.Find("CameraTarget");
                 if (planetGO != null)
                 {
-                    var oc = go.GetComponent<HexGlobeProject.Visual.SunFlareOccluder>();
-                    if (oc == null) oc = go.AddComponent<HexGlobeProject.Visual.SunFlareOccluder>();
+                    var oc = go.GetComponent<Visual.SunFlareOccluder>();
+                    if (oc == null) oc = go.AddComponent<Visual.SunFlareOccluder>();
                     oc.targetLight = targetLight;
                     oc.lensFlare = go.GetComponent<LensFlare>();
                     oc.planetTransform = planetGO.transform;
@@ -681,7 +682,7 @@ namespace HexGlobeProject.UI
                     try
                     {
 #if UNITY_EDITOR
-                        var conf = UnityEditor.AssetDatabase.LoadAssetAtPath<HexGlobeProject.TerrainSystem.TerrainConfig>("Assets/TerrainConfig.asset");
+                        var conf = UnityEditor.AssetDatabase.LoadAssetAtPath<TerrainConfig>("Assets/Configs/TerrainConfig.asset");
                         if (conf != null) oc.planetRadius = conf.baseRadius;
 #endif
                     }
@@ -708,15 +709,15 @@ namespace HexGlobeProject.UI
             planetGO.transform.localPosition = new Vector3(0f, 0f, -3.3f);
 
             // Add or get Planet component on the CameraTarget (now Planet)
-            var planet = planetGO.GetComponent<HexGlobeProject.HexMap.Planet>();
-            if (planet == null) planet = planetGO.AddComponent<HexGlobeProject.HexMap.Planet>();
+            var planet = planetGO.GetComponent<HexMap.Planet>();
+            if (planet == null) planet = planetGO.AddComponent<HexMap.Planet>();
             // Apply default playtest values (matching your YAML defaults)
             planet.wireframeColor = new Color(0.4811321f, 0.4811321f, 0.4811321f, 1f);
             planet.lineThickness = 1f;
             // enableWireframe is a private serialized field; set it via reflection
             try
             {
-                var pf = typeof(HexGlobeProject.HexMap.Planet).GetField("enableWireframe", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                var pf = typeof(HexMap.Planet).GetField("enableWireframe", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
                 if (pf != null) pf.SetValue(planet, true);
             }
             catch { }
@@ -725,8 +726,8 @@ namespace HexGlobeProject.UI
             planet.hideOceanRenderer = true;
 
             // Add or get PlanetTileVisibilityManager component on the same GameObject
-            var mgr = planetGO.GetComponent<HexGlobeProject.TerrainSystem.LOD.PlanetTileVisibilityManager>();
-            if (mgr == null) mgr = planetGO.AddComponent<HexGlobeProject.TerrainSystem.LOD.PlanetTileVisibilityManager>();
+            var mgr = planetGO.GetComponent<PlanetTileVisibilityManager>();
+            if (mgr == null) mgr = planetGO.AddComponent<PlanetTileVisibilityManager>();
 
             // Attempt to assign CameraController reference from existing main camera or controller created earlier
             try
@@ -735,7 +736,7 @@ namespace HexGlobeProject.UI
                 if (camGO != null)
                 {
                     // CameraController lives in the global namespace; qualify with global:: to avoid namespace collisions
-                    var controller = camGO.GetComponent<global::CameraController>();
+                    var controller = camGO.GetComponent<CameraController>();
                     if (controller != null)
                     {
                         mgr.GameCamera = controller;
@@ -743,7 +744,7 @@ namespace HexGlobeProject.UI
                     else
                     {
                         // fallback: find any CameraController in scene
-                        var any = UnityEngine.Object.FindAnyObjectByType<global::CameraController>();
+                        var any = FindAnyObjectByType<CameraController>();
                         if (any != null) mgr.GameCamera = any;
                     }
                 }
@@ -753,7 +754,7 @@ namespace HexGlobeProject.UI
             // Assign planetTransform to the created planet's transform (private serialized field)
             try
             {
-                var f = typeof(HexGlobeProject.TerrainSystem.LOD.PlanetTileVisibilityManager).GetField("planetTransform", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                var f = typeof(PlanetTileVisibilityManager).GetField("planetTransform", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
                 if (f != null) f.SetValue(mgr, planetGO.transform);
             }
             catch { }
@@ -761,21 +762,23 @@ namespace HexGlobeProject.UI
             // Assign terrainMaterial if a default exists at Assets/Materials/Land.mat
             try
             {
-                var mat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Land.mat");
-                if (mat != null)
-                {
-                    var tf = typeof(HexGlobeProject.TerrainSystem.LOD.PlanetTileVisibilityManager).GetField("terrainMaterial", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                    if (tf != null) tf.SetValue(mgr, mat);
-                }
+                    var mat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Land.mat");
+                    if (mat != null)
+                    {
+                        var tf = typeof(PlanetTileVisibilityManager).GetField("terrainMaterial", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                        if (tf != null) tf.SetValue(mgr, mat);
+                        // Setup overlay cubemap and assign to material for immediate visual feedback
+                        try { SetupOverlayCubemap(planetGO, mat); } catch { }
+                    }
             }
             catch { }
 
-            // Assign TerrainConfig asset if present at Assets/TerrainConfig.asset
+            // Assign TerrainConfig asset if present at Assets/Configs/TerrainConfig.asset
             try
             {
 #if UNITY_EDITOR
                 // TerrainConfig lives under HexGlobeProject.TerrainSystem namespace
-                var conf = UnityEditor.AssetDatabase.LoadAssetAtPath<HexGlobeProject.TerrainSystem.TerrainConfig>("Assets/TerrainConfig.asset");
+                var conf = UnityEditor.AssetDatabase.LoadAssetAtPath<TerrainConfig>("Assets/Configs/TerrainConfig.asset");
                 if (conf == null)
                 {
                     // fallback: look for any TerrainConfig asset
@@ -783,7 +786,7 @@ namespace HexGlobeProject.UI
                     if (gu != null && gu.Length > 0)
                     {
                         var p = UnityEditor.AssetDatabase.GUIDToAssetPath(gu[0]);
-                        conf = UnityEditor.AssetDatabase.LoadAssetAtPath<HexGlobeProject.TerrainSystem.TerrainConfig>(p);
+                        conf = UnityEditor.AssetDatabase.LoadAssetAtPath<TerrainConfig>(p);
                     }
                 }
                 if (conf != null)
@@ -796,6 +799,38 @@ namespace HexGlobeProject.UI
             catch { }
 
             // Manager lives on the same GameObject as the Planet; no parenting necessary
+        }
+
+        // Create or find an OverlayCubemapGenerator on the planet root, generate a cubemap, and assign to the provided material.
+        private void SetupOverlayCubemap(GameObject planetRoot, Material targetMaterial)
+        {
+            if (planetRoot == null || targetMaterial == null) return;
+            // Try to find existing generator
+            OverlayCubemapGenerator gen = planetRoot.GetComponent<OverlayCubemapGenerator>();
+            if (gen == null) gen = planetRoot.AddComponent<OverlayCubemapGenerator>();
+
+            var conf = UnityEditor.AssetDatabase.LoadAssetAtPath<TerrainConfig>("Assets/Configs/TerrainConfig.asset");
+
+            // Configure generator defaults for immediate visual feedback
+            gen.faceSize = 128;
+            gen.hexSize = 0.05f;
+            gen.edgeThickness = 0.007f;
+            gen.saveAsset = true;
+            gen.assetName = "DualOverlayCube_Playtest";
+
+            // Generate cubemap (editor-time API is safe to call at runtime in editor)
+            try
+            {
+                var cube = gen.GenerateCubemap(conf.baseRadius, conf.icosphereSubdivisions, 512);
+                if (cube != null)
+                {
+                    targetMaterial.SetTexture("_DualOverlayCube", cube);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("SetupOverlayCubemap: failed to generate or assign cubemap: " + ex.Message);
+            }
         }
     }
 }

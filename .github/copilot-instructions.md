@@ -4,6 +4,7 @@
 ― Antoine de Saint-Exupéry, Airman's Odyssey
 
 ## Important Workflow Instructions
+- Ensure all classes go in the appropriate namespace. No implicit namespacing.
 - Regex for find and replace to strip logs: `^ *Debug\.Log\(.*\r\n$`
 - Maintain these instructions as high priority guidelines.
 - You are allowed to violate these instructions only if explicitly permitted by the user.

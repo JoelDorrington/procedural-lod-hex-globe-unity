@@ -2,6 +2,9 @@ using NUnit.Framework;
 using UnityEngine;
 using System.Reflection;
 using HexGlobeProject.Graphics.DataStructures;
+using HexGlobeProject.TerrainSystem.LOD;
+using HexGlobeProject.TerrainSystem.Core;
+using HexGlobeProject.TerrainSystem.Graphics;
 
 namespace HexGlobeProject.Tests.Editor
 {
@@ -38,7 +41,7 @@ namespace HexGlobeProject.Tests.Editor
         [Test]
         public void TerrainShaderGlobals_Apply_SetsAndClampsProperties()
         {
-            var cfg = ScriptableObject.CreateInstance<HexGlobeProject.TerrainSystem.TerrainConfig>();
+            var cfg = ScriptableObject.CreateInstance<TerrainConfig>();
             cfg.overlayLineThickness = 10f; // intentionally large
             cfg.overlayEdgeExtrusion = 20f; // intentionally large
             cfg.overlayEnabled = true;
@@ -49,7 +52,7 @@ namespace HexGlobeProject.Tests.Editor
             if (sh == null) Assert.Inconclusive("Shader 'HexGlobe/PlanetTerrain' not available in test environment");
 
             var mat = new Material(sh);
-            HexGlobeProject.TerrainSystem.TerrainShaderGlobals.Apply(cfg, mat);
+            TerrainShaderGlobals.Apply(cfg, mat);
 
             // LineThickness clamped to max 0.5
             Assert.AreEqual(Mathf.Clamp(cfg.overlayLineThickness, 0.0005f, 0.5f), mat.GetFloat("_LineThickness"));
@@ -79,8 +82,8 @@ namespace HexGlobeProject.Tests.Editor
 
             // Create TerrainRoot with config and assign to scene so Planet.SetOverlayOnMaterials picks it up
             var trGO = new GameObject("TerrainRootForTest");
-            var tr = trGO.AddComponent<TerrainSystem.TerrainRoot>();
-            var cfg = ScriptableObject.CreateInstance<TerrainSystem.TerrainConfig>();
+            var tr = trGO.AddComponent<TerrainRoot>();
+            var cfg = ScriptableObject.CreateInstance<TerrainConfig>();
             cfg.overlayEnabled = true;
             cfg.overlayLineThickness = 0.02f;
             cfg.overlayEdgeExtrusion = 1f;

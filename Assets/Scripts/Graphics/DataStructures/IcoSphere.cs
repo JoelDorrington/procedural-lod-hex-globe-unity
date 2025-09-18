@@ -10,9 +10,6 @@ namespace HexGlobeProject.Graphics.DataStructures
     {
         public static Mesh GenerateIcosphere(float radius = 1f, int subdivisions = 2)
         {
-
-            Mesh mesh = new Mesh();
-
             List<Vector3> vertices = new List<Vector3>();
             List<int> triangles = new List<int>();
             // Build base icosahedron
@@ -97,6 +94,7 @@ namespace HexGlobeProject.Graphics.DataStructures
             triangles.Clear();
             triangles.AddRange(faces);
 
+            Mesh mesh = new Mesh();
             if (vertices.Count > 65535)
                 mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
 

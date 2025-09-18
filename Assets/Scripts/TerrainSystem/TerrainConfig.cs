@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace HexGlobeProject.TerrainSystem
+namespace HexGlobeProject.TerrainSystem.LOD
 {
     /// <summary>
     /// ScriptableObject storing configuration for procedural terrain generation.

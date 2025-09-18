@@ -1,7 +1,6 @@
 using NUnit.Framework;
 using UnityEngine;
 using System.Reflection;
-using HexGlobeProject.TerrainSystem;
 using HexGlobeProject.TerrainSystem.LOD;
 using System.Collections.Generic;
 

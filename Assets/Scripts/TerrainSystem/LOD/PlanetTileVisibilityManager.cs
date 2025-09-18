@@ -289,7 +289,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
 #if UNITY_EDITOR || PLAYMODE_TESTS
 				if (builderConf == null)
 				{
-					var maybe = UnityEditor.AssetDatabase.LoadAssetAtPath<TerrainConfig>("Assets/TerrainConfig.asset");
+					var maybe = UnityEditor.AssetDatabase.LoadAssetAtPath<TerrainConfig>("Assets/Configs/TerrainConfig.asset");
 					if (maybe != null) builderConf = maybe;
 				}
 #endif

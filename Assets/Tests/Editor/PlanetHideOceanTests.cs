@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using UnityEngine;
 using System.Reflection;
+using HexGlobeProject.TerrainSystem.Core;
 
 namespace HexGlobeProject.Tests.Editor
 {
@@ -11,14 +12,14 @@ namespace HexGlobeProject.Tests.Editor
         {
             // Arrange
             var terrainGO = new GameObject("TerrainRoot_Test");
-            var terrainRoot = terrainGO.AddComponent<HexGlobeProject.TerrainSystem.TerrainRoot>();
+            var terrainRoot = terrainGO.AddComponent<TerrainRoot>();
 
             var planetGO = new GameObject("Planet_Test");
-            var planet = planetGO.AddComponent<HexGlobeProject.HexMap.Planet>();
+            var planet = planetGO.AddComponent<HexMap.Planet>();
             planet.hideOceanRenderer = true;
 
             // Act: call the private method via reflection
-            var method = typeof(HexGlobeProject.HexMap.Planet).GetMethod("ApplyHideOceanToTerrainRoot", BindingFlags.NonPublic | BindingFlags.Instance);
+            var method = typeof(HexMap.Planet).GetMethod("ApplyHideOceanToTerrainRoot", BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.IsNotNull(method, "Reflection: ApplyHideOceanToTerrainRoot should exist");
             method.Invoke(planet, null);
 

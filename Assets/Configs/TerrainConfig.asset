@@ -20,6 +20,7 @@ MonoBehaviour:
   seaLevel: 0
   shallowWaterBand: 2
   debugElevationMultiplier: 1
+  icosphereSubdivisions: 4
   recalcNormals: 0
   shorelineDetail: 1
   shorelineDetailMinDepth: 4
@@ -30,7 +31,6 @@ MonoBehaviour:
   overlayEnabled: 1
   overlayColor: {r: 0, g: 0, b: 0, a: 1}
   overlayOpacity: 0.9
-  overlayCellSize: 1
   overlayLineThickness: 0.05
   overlayEdgeExtrusion: 20
   references:
@@ -39,9 +39,9 @@ MonoBehaviour:
     - rid: 8082500369961975853
       type: {class: Perlin3DHeightProvider, ns: HexGlobeProject.TerrainSystem, asm: HexGlobeProject.Scripts}
       data:
-        baseFrequency: 2.5
-        octaves: 3
-        lacunarity: 2.5
-        gain: 0.9
-        amplitude: 1.5
-        seed: 736443
+        baseFrequency: 1.4
+        octaves: 4
+        lacunarity: 5
+        gain: 0.5
+        amplitude: 3
+        seed: 598608

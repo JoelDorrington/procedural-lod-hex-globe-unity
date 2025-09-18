@@ -1,6 +1,7 @@
 using UnityEngine;
+using HexGlobeProject.TerrainSystem.LOD;    
 
-namespace HexGlobeProject.TerrainSystem
+namespace HexGlobeProject.TerrainSystem.Graphics
 {
     /// <summary>
     /// Centralized terrain shader global synchronization to avoid duplicated logic.
@@ -34,7 +35,7 @@ namespace HexGlobeProject.TerrainSystem
         {
             if (mat == null) return;
             if (mat.HasProperty("_OverlayEnabled")) mat.SetFloat("_OverlayEnabled", 1f);
-            if (mat.HasProperty("_OverlayColor")) mat.SetColor("_OverlayColor", Color.magenta);
+            if (mat.HasProperty("_OverlayColor")) mat.SetColor("_OverlayColor", Color.cyan);
             if (mat.HasProperty("_OverlayOpacity")) mat.SetFloat("_OverlayOpacity", 1f);
             if (mat.HasProperty("_CellSize")) mat.SetFloat("_CellSize", 0.5f);
             if (mat.HasProperty("_LineThickness")) mat.SetFloat("_LineThickness", 0.01f);

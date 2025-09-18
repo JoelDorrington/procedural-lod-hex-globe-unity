@@ -3,6 +3,9 @@ using UnityEngine;
 using System;
 using System.Linq;
 using System.Collections.Generic;
+using HexGlobeProject.TerrainSystem.Core;
+using HexGlobeProject.TerrainSystem.LOD;
+using HexGlobeProject.TerrainSystem.Graphics;
 
 namespace HexGlobeProject.TerrainSystem.Editor
 {
@@ -32,12 +35,12 @@ namespace HexGlobeProject.TerrainSystem.Editor
             {
                 EditorUtility.SetDirty(config);
                 // Push changes live to any TerrainRoot instances so material parameters update immediately
-                var roots = UnityEngine.Object.FindObjectsOfType<HexGlobeProject.TerrainSystem.TerrainRoot>();
+                var roots = FindObjectsByType<TerrainRoot>(FindObjectsSortMode.None);
                 foreach (var r in roots)
                 {
                     if (r != null && r.terrainMaterial != null)
                     {
-                        HexGlobeProject.TerrainSystem.TerrainShaderGlobals.Apply(config, r.terrainMaterial);
+                        TerrainShaderGlobals.Apply(config, r.terrainMaterial);
                         EditorUtility.SetDirty(r.terrainMaterial);
                     }
                 }
@@ -45,7 +48,7 @@ namespace HexGlobeProject.TerrainSystem.Editor
         }
 
         #region Section Drawing
-    private static bool _foldCore = true, _foldLod = true;
+    private static bool _foldCore = true;
 
         private void DrawCoreSection()
         {

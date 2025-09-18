@@ -33,7 +33,7 @@ namespace HexGlobeProject.Tests.Editor
     public void AdjacentTilesSharedEdgeVerticesMatch()
         {
             // Arrange: create a simple TerrainConfig asset in-memory
-            var config = ScriptableObject.CreateInstance<TerrainSystem.TerrainConfig>();
+            var config = ScriptableObject.CreateInstance<TerrainConfig>();
             config.baseRadius = 30f;
             config.heightScale = 1f;
 
@@ -97,7 +97,7 @@ namespace HexGlobeProject.Tests.Editor
         [Test]
         public void DetectNonCoplanarQuadsAlongSeam()
         {
-            var config = ScriptableObject.CreateInstance<TerrainSystem.TerrainConfig>();
+            var config = ScriptableObject.CreateInstance<TerrainConfig>();
             config.baseRadius = 30f; config.heightScale = 1f;
             var builder = new PlanetTileMeshBuilder(config);
             int depth = 2;
@@ -148,7 +148,7 @@ namespace HexGlobeProject.Tests.Editor
             // and catches the regression we fixed where transform-dependent calculations caused seams
             
             // Arrange: create test configuration
-            var config = ScriptableObject.CreateInstance<TerrainSystem.TerrainConfig>();
+            var config = ScriptableObject.CreateInstance<TerrainConfig>();
             config.baseRadius = 30f;
             config.heightScale = 1f;
 

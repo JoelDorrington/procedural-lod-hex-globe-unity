@@ -1,7 +1,6 @@
 using NUnit.Framework;
 using UnityEngine;
 using System.Collections.Generic;
-using HexGlobeProject.TerrainSystem;
 using HexGlobeProject.TerrainSystem.LOD;
 
 namespace HexGlobeProject.Tests.Editor

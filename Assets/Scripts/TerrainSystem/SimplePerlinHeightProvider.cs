@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace HexGlobeProject.TerrainSystem
+namespace HexGlobeProject.TerrainSystem.Core
 {
     /// <summary>
     /// Basic layered Perlin noise height provider.

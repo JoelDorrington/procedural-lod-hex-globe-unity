@@ -1,6 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
-using HexGlobeProject.Util;
+using HexGlobeProject.TerrainSystem.Core;
 using System;
 
 namespace HexGlobeProject.TerrainSystem.LOD

@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.TestTools;
 using System.Collections;
 using HexGlobeProject.TerrainSystem.LOD;
-using HexGlobeProject.TerrainSystem;
+using HexGlobeProject.TerrainSystem.Core;
 
 namespace HexGlobeProject.Tests.PlayMode
 {

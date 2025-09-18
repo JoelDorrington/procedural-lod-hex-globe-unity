@@ -1,5 +1,6 @@
 using UnityEngine;
 using HexGlobeProject.TerrainSystem.Util;
+using HexGlobeProject.TerrainSystem.Core;
 
 namespace HexGlobeProject.TerrainSystem
 {

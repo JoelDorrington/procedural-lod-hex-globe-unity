@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace HexGlobeProject.TerrainSystem
+namespace HexGlobeProject.TerrainSystem.Core
 {
     /// <summary>
     /// Wrapper that masks (excludes) higher octave contributions from an underlying provider.

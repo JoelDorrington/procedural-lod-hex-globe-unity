@@ -1,5 +1,4 @@
 using UnityEngine;
-using HexGlobeProject.TerrainSystem;
 using HexGlobeProject.TerrainSystem.LOD;
 
 namespace HexGlobeProject.Tests.PlayMode

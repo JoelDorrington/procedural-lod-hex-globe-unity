@@ -4,7 +4,6 @@ using NUnit.Framework;
 using System.Collections;
 using System.Reflection;
 using System.Collections.Generic;
-using HexGlobeProject.TerrainSystem;
 using HexGlobeProject.TerrainSystem.LOD;
 
 namespace HexGlobeProject.Tests.PlayMode

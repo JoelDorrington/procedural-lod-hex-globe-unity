@@ -41,7 +41,7 @@ public class HexOverlaySpikeToggle : MonoBehaviour
         }
 
         // No target material assigned: toggle on all Planet instances' MeshRenderers
-        var planets = FindObjectsOfType<HexGlobeProject.HexMap.Planet>();
+        var planets = FindObjectsByType<HexGlobeProject.HexMap.Planet>(FindObjectsSortMode.None);
         if (planets == null || planets.Length == 0)
         {
             Debug.LogWarning("HexOverlaySpikeToggle: No Planet instances found and no target material assigned.");

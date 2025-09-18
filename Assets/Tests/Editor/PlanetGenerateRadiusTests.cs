@@ -1,5 +1,7 @@
 using NUnit.Framework;
 using UnityEngine;
+using HexGlobeProject.TerrainSystem.LOD;
+using HexGlobeProject.TerrainSystem.Core;
 
 namespace HexGlobeProject.Tests.Editor
 {
@@ -9,12 +11,12 @@ namespace HexGlobeProject.Tests.Editor
         public void GeneratePlanet_UsesTerrainRootBaseRadiusWithCurvedMultiplier()
         {
             // Arrange: create TerrainConfig and TerrainRoot
-            var config = ScriptableObject.CreateInstance<HexGlobeProject.TerrainSystem.TerrainConfig>();
+            var config = ScriptableObject.CreateInstance<TerrainConfig>();
             config.baseRadius = 12f;
             config.seaLevel = 0f;
 
             var terrainGO = new GameObject("TerrainRootTest");
-            var terrainRoot = terrainGO.AddComponent<HexGlobeProject.TerrainSystem.TerrainRoot>();
+            var terrainRoot = terrainGO.AddComponent<TerrainRoot>();
             terrainRoot.config = config;
 
             var planetGO = new GameObject("PlanetTest");
