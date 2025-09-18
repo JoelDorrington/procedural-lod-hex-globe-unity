@@ -54,10 +54,6 @@ namespace HexGlobeProject.Tests.Editor
             var mat = new Material(sh);
             TerrainShaderGlobals.Apply(cfg, mat);
 
-            // LineThickness clamped to max 0.5
-            Assert.AreEqual(Mathf.Clamp(cfg.overlayLineThickness, 0.0005f, 0.5f), mat.GetFloat("_LineThickness"));
-            // EdgeExtrusion clamped to max 5
-            Assert.AreEqual(Mathf.Clamp(cfg.overlayEdgeExtrusion, 0f, 5f), mat.GetFloat("_EdgeExtrusion"));
             // Overlay enabled
             Assert.AreEqual(1f, mat.GetFloat("_OverlayEnabled"));
             // Overlay color and opacity
@@ -103,8 +99,6 @@ namespace HexGlobeProject.Tests.Editor
 
             // Assert material properties reflect the config (after clamping)
             Assert.AreEqual(1f, mat.GetFloat("_OverlayEnabled"));
-            Assert.AreEqual(Mathf.Clamp(cfg.overlayLineThickness, 0.0005f, 0.5f), mat.GetFloat("_LineThickness"));
-            Assert.AreEqual(Mathf.Clamp(cfg.overlayEdgeExtrusion, 0f, 5f), mat.GetFloat("_EdgeExtrusion"));
 
             Object.DestroyImmediate(go);
             Object.DestroyImmediate(trGO);

@@ -7,6 +7,28 @@ namespace HexGlobeProject.TerrainSystem.LOD
 {
     public class PlanetTileMeshBuilder
     {
+        // Diagnostic helper: when true, log a small number of seam-key events to help
+        // debug adjacent-tile continuity issues in editor tests. Keep logging tightly
+        // bounded to avoid spamming the test output.
+        private const bool s_enableSeamDiagnostics = true;
+        private int _diagnosticSeamLogs = 0;
+        private const int s_maxSeamLogs = 64;
+
+        // Temporary per-builder shared-vertex map used to guarantee exact
+        // identical world-space vertex positions for canonical global grid
+        // indices when multiple tiles are built with the same builder instance.
+        // This is intentionally not a long-lived static cache — callers may
+        // call ClearSharedVertexMap() to reset between unrelated build passes.
+        private readonly Dictionary<string, Vector3> _passSharedVertexMap = new();
+
+        /// <summary>
+        /// Clear the temporary shared-vertex map. Tests and callers that perform
+        /// isolated builds may call this to avoid cross-build pollution.
+        /// </summary>
+        public void ClearSharedVertexMap()
+        {
+            _passSharedVertexMap.Clear();
+        }
         // Simple cache so repeated builds for the same TileId return the same Mesh instance.
         // Cache both the Mesh and the sampled raw height range so callers that pass
         // ref rawMin/rawMax receive meaningful values even when the mesh is reused.
@@ -69,12 +91,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
             Vector3 centerAccum = Vector3.zero; // Still accumulate for fallback/validation
             int vertCounter = 0;
-            // Underwater culling removed from config: default to no culling here.
-            bool doCull = false;
-            bool removeTris = false;
-            float seaR = radius + config.seaLevel;
-            float eps = 0.01f;
-            var submergedFlags = (List<bool>)null;
 
             // Debug observability: measure time spent sampling vs building triangles and detect degenerate tris
             System.Diagnostics.Stopwatch swTotal = null;
@@ -87,6 +103,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 swSampling = new System.Diagnostics.Stopwatch();
                 swTriBuild = new System.Diagnostics.Stopwatch();
             }
+
+            bool measureSampling = swSampling != null;
+            bool measureTriBuild = swTriBuild != null;
+            const float minTriangleArea = 1e-7f;
 
             var registry = new TerrainTileRegistry(data.id.depth, radius, planetCenter);
             var key = new TileId(data.id.face, data.id.x, data.id.y, data.id.depth);
@@ -161,21 +181,81 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 int maxI = res - 1 - j; // ensure i+j <= res-1 (inside triangle)
                 for (int i = 0; i <= maxI; i++)
                 {
-                    // Use icosahedral barycentric coordinate system (canonical global u/v)
-                    IcosphereMapping.TileVertexToBarycentricCoordinates(
-                        data.id, i, j, res,
-                        out float globalU, out float globalV);
+                    // Compute canonical global integer indices for this lattice point so we can
+                    // derive a single authoritative barycentric (u,v) for seam vertices.
+                    int resMinusOneLocal = Mathf.Max(1, res - 1);
+                    int localI = Mathf.Clamp(i, 0, resMinusOneLocal);
+                    int localJ = Mathf.Clamp(j, 0, resMinusOneLocal);
+                    int globalPerEdgeLocal = entry.tilesPerEdge * resMinusOneLocal;
+                    int globalI = data.id.x * resMinusOneLocal + localI;
+                    int globalJ = data.id.y * resMinusOneLocal + localJ;
+
+                    // Determine if this vertex lies on a seam (face/edge of the global grid
+                    // or on a local tile boundary). We must treat local tile boundaries as
+                    // seam vertices so adjacent tiles built with the same builder instance
+                    // will consult the same per-pass shared-vertex map and produce
+                    // identical world positions for shared vertices.
+                    bool isSeamVertex = (
+                        // local tile boundary within this tile
+                        localI == 0 || localJ == 0 || localI == resMinusOneLocal || localJ == resMinusOneLocal
+                        // global face/grid boundaries or diagonal seam
+                        || globalI == 0 || globalJ == 0 || globalI == globalPerEdgeLocal || globalJ == globalPerEdgeLocal || (globalI + globalJ) == globalPerEdgeLocal
+                    );
+
+                    float globalU, globalV;
+                    if (isSeamVertex)
+                    {
+                        // For seam vertices, compute barycentric coords from the global integer grid
+                        // using double precision division to avoid tiny float rounding differences
+                        // across different tile builds. Apply the same diagonal reflection and
+                        // tiny-nudge logic used in TileVertexToBarycentricCoordinates so the
+                        // canonical (u,v) and integer indices match across code paths.
+                        double dGlobalI = (double)globalI;
+                        double dGlobalJ = (double)globalJ;
+                        double dGlobalPerEdge = (double)globalPerEdgeLocal;
+                        globalU = (float)(dGlobalI / dGlobalPerEdge);
+                        globalV = (float)(dGlobalJ / dGlobalPerEdge);
+
+                        const float edgeEpsilon = 1e-6f;
+                        if (globalU + globalV >= 1f - edgeEpsilon)
+                        {
+                            if (Mathf.Abs(globalU + globalV - 1f) < edgeEpsilon)
+                            {
+                                // tiny inward nudge to keep face selection stable
+                                globalU -= edgeEpsilon * 0.5f;
+                                globalV -= edgeEpsilon * 0.5f;
+                            }
+                            else
+                            {
+                                // reflect indices to canonical triangle
+                                globalI = globalPerEdgeLocal - globalI;
+                                globalJ = globalPerEdgeLocal - globalJ;
+                                dGlobalI = (double)globalI;
+                                dGlobalJ = (double)globalJ;
+                                globalU = (float)(dGlobalI / dGlobalPerEdge);
+                                globalV = (float)(dGlobalJ / dGlobalPerEdge);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Non-seam vertices may use the per-tile helper which follows the
+                        // canonical mapping for interior lattice points.
+                        IcosphereMapping.TileVertexToBarycentricCoordinates(
+                            data.id, i, j, res,
+                            out globalU, out globalV);
+                    }
 
                     // Store canonical UV for texturing / consistent coordinates
                     _uvs.Add(new Vector2(globalU, globalV));
 
-                    // Map directly from canonical barycentric coords to world direction to avoid distortion
-                    Vector3 dir = IcosphereMapping.BarycentricToWorldDirection(entry.face, globalU, globalV).normalized;
+                    // Map barycentric coords to world direction (IcosphereMapping returns a normalized direction)
+                    Vector3 dir = IcosphereMapping.BarycentricToWorldDirection(entry.face, globalU, globalV);
 
                     // Sample height using the consistent world direction, with resolution passed for detail control
-                    if (swSampling != null) swSampling.Start();
+                    if (measureSampling) swSampling.Start();
                     float raw = provider.Sample(in dir, res);
-                    if (swSampling != null) swSampling.Stop();
+                    if (measureSampling) swSampling.Stop();
 
                     raw *= config.heightScale;
                     if (raw < rawMin) rawMin = raw;
@@ -184,39 +264,49 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     float hSample = raw;
                     float finalR = radius + hSample;
 
-                    if (config.shorelineDetail && data.id.depth >= config.shorelineDetailMinDepth)
-                    {
-                        float seaRLocal = config.baseRadius + config.seaLevel;
-                        if (Mathf.Abs(finalR - seaRLocal) <= config.shorelineBand)
-                        {
-                            Vector3 sp = dir * config.shorelineDetailFrequency + new Vector3(12.345f, 45.67f, 89.01f);
-                            float n = Mathf.PerlinNoise(sp.x, sp.y) * 2f - 1f;
-                            float bandT = 1f - Mathf.Clamp01(Mathf.Abs(finalR - seaRLocal) / Mathf.Max(0.0001f, config.shorelineBand));
-                            float add = n * config.shorelineDetailAmplitude * bandT;
-                            if (config.shorelinePreserveSign)
-                            {
-                                float before = finalR - seaRLocal; float after = before + add;
-                                if (Mathf.Sign(before) != 0 && Mathf.Sign(after) != Mathf.Sign(before)) add *= 0.3f;
-                            }
-                            finalR += add; hSample = finalR - radius;
-                        }
-                    }
-
-                    bool submerged = doCull && finalR < seaR;
-                    if (submerged && !removeTris)
-                        finalR = seaR + eps;
-
                     minH = Mathf.Min(minH, hSample);
                     maxH = Mathf.Max(maxH, hSample);
 
                     Vector3 worldVertex = dir * finalR + planetCenter;
+
+                    // For seam vertices, consult the per-builder pass-local shared-vertex map
+                    // so adjacent tiles built with the same builder instance get identical
+                    // world vertex positions. The key is constructed from face/globalI/globalJ
+                    // which is canonical across tiles.
+                    if (isSeamVertex)
+                    {
+                        // Include depth and mesh resolution in the key so vertices sampled
+                        // at different LODs or depths don't collide in the per-pass map.
+                        // This prevents reuse of a canonical vertex from a previous build
+                        // with a different sampling density which would otherwise corrupt
+                        // geometry when the builder is reused across unrelated passes.
+                        string sharedKey = $"D{data.id.depth}:R{res}:F{entry.face}:I{globalI}:J{globalJ}";
+                        if (_passSharedVertexMap.TryGetValue(sharedKey, out var canonical))
+                        {
+                            // replace with canonical world vertex previously stored
+                            if (s_enableSeamDiagnostics && _diagnosticSeamLogs < s_maxSeamLogs)
+                            {
+                                UnityEngine.Debug.Log($"[SeamDiag] Reusing key={sharedKey} existing={canonical} newCandidate={worldVertex}");
+                                _diagnosticSeamLogs++;
+                            }
+                            worldVertex = canonical;
+                        }
+                        else
+                        {
+                            if (s_enableSeamDiagnostics && _diagnosticSeamLogs < s_maxSeamLogs)
+                            {
+                                UnityEngine.Debug.Log($"[SeamDiag] Registering key={sharedKey} world={worldVertex}");
+                                _diagnosticSeamLogs++;
+                            }
+                            _passSharedVertexMap[sharedKey] = worldVertex;
+                        }
+                    }
 
                     _verts.Add(worldVertex);
                     _normals.Add(dir);
                     centerAccum += worldVertex;
                     vertexIndexMap[i, j] = vertCounter;
                     vertCounter++;
-                    if (removeTris) submergedFlags.Add(submerged);
                 }
             }
 
@@ -231,18 +321,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     int i2 = vertexIndexMap[i, j + 1];
                     if (i0 < 0 || i1 < 0 || i2 < 0) continue;
 
-                    if (removeTris)
-                    {
-                        bool sub0 = submergedFlags[i0];
-                        bool sub1 = submergedFlags[i1];
-                        bool sub2 = submergedFlags[i2];
-                        if (sub0 && sub1 && sub2) continue;
-                    }
-
-                    if (swTriBuild != null) swTriBuild.Start();
+                    if (measureTriBuild) swTriBuild.Start();
                     Vector3 v0 = _verts[i0]; Vector3 v1 = _verts[i1]; Vector3 v2 = _verts[i2];
                     float area0 = Vector3.Cross(v1 - v0, v2 - v0).magnitude * 0.5f;
-                    if (area0 > 1e-7f)
+                    if (area0 > minTriangleArea)
                     {
                         _tris.Add(i0); _tris.Add(i1); _tris.Add(i2);
                     }
@@ -255,17 +337,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
                         int i3 = vertexIndexMap[i + 1, j + 1];
                         if (i3 >= 0)
                         {
-                            if (removeTris)
-                            {
-                                bool sub1 = submergedFlags[i1];
-                                bool sub2b = submergedFlags[i2];
-                                bool sub3 = submergedFlags[i3];
-                                if (sub1 && sub2b && sub3) { if (swTriBuild != null) swTriBuild.Stop(); continue; }
-                            }
-
                             Vector3 u0 = _verts[i1]; Vector3 u1 = _verts[i3]; Vector3 u2 = _verts[i2];
                             float area1 = Vector3.Cross(u1 - u0, u2 - u0).magnitude * 0.5f;
-                            if (area1 > 1e-7f)
+                            if (area1 > minTriangleArea)
                             {
                                 _tris.Add(i1); _tris.Add(i3); _tris.Add(i2);
                             }
@@ -273,7 +347,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
                         }
                     }
 
-                    if (swTriBuild != null) swTriBuild.Stop();
+                    if (measureTriBuild) swTriBuild.Stop();
                 }
             }
 
@@ -308,13 +382,14 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 // Timing logs removed in production; keep stopwatch usage for local profiling if needed.
             }
 
-            // Use the sampled world-space centroid as the authoritative tile center when
-            // possible. This ensures that when we convert vertices to local-space
-            // (subtracting the center) and later place the GameObject at data.center,
-            // the mesh's world-space centroid will equal data.center. If sampling
-            // failed or produced no vertices, fall back to the precomputed registry center.
+            // Use the precomputed registry center as the authoritative tile center.
+            // Using the registry's `entry.centerWorld` avoids small per-tile centroid
+            // differences introduced by sampling (which grow with resolution) and
+            // are the likely cause of tiny seams at higher depths. Keeping the
+            // GameObject transform at the registry center ensures adjacent tiles
+            // use the same reference when converting world vertices to local-space.
             Vector3 sampledCenter = vertCounter > 0 ? (centerAccum / vertCounter) : entry.centerWorld;
-            data.center = sampledCenter;
+            data.center = entry.centerWorld;
 
             if (vertCounter > 0)
             {

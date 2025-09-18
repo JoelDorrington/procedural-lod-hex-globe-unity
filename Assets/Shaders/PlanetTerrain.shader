@@ -5,7 +5,6 @@ Shader "HexGlobe/PlanetTerrain"
         _ColorHigh ("High Color", Color) = (0.15,0.35,0.15,1)
         _ColorMountain ("Mountain Color", Color) = (0.5,0.5,0.5,1)
         _Color ("Color", Color) = (1,1,1,1)
-        _FadeProgress ("Fade Progress", Float) = 1.0
         _SeaLevel ("Sea Level (world height)", Float) = 30
         _MountainStart ("Mountain Start Height Offset", Float) = 4
         _MountainFull ("Mountain Full Height Offset", Float) = 10
@@ -17,20 +16,13 @@ Shader "HexGlobe/PlanetTerrain"
         _ShallowBand ("Shallow Water Band Height", Float) = 2
         _ShallowColor ("Shallow Water Color", Color) = (0.12,0.25,0.55,1)
         _PlanetCenter ("Planet Center (World Position)", Vector) = (0,0,0,0)
-        _CellSize ("Cell Size", Float) = 1.0
-        _LineThickness ("Line Thickness", Float) = 0.001
         _OverlayColor ("Overlay Color", Color) = (1,1,1,1)
         _OverlayOpacity ("Overlay Opacity", Range(0,1)) = 0.9
         _OverlayEnabled ("Overlay Enabled", Float) = 1
+        // Need to investigate if these are effective -- see no visible difference so far
         _OverlayEdgeThreshold ("Overlay Edge Threshold", Range(0,1)) = 0.15
         _OverlayAAScale ("Overlay AA Scale", Float) = 100
-        _OverlayGlowSpread ("Overlay Glow Spread", Float) = 0.06
-        _OverlayGlowColor ("Overlay Glow Color", Color) = (1,0.9,0.6,1)
-        _OverlayGlowIntensity ("Overlay Glow Intensity", Float) = 0.8
-        _OverlayGlowLOD ("Overlay Glow LOD (mip)", Range(0,10)) = 2.0
         // Edge extrusion: project wire edges radially outward from planet center
-        _BaseRadius ("Base Planet Radius", Float) = 30.0
-        _EdgeExtrusion ("Edge Extrusion Height", Float) = 0.5
         _DualOverlayCube ("Dual Overlay Cubemap", CUBE) = "white" {}
     }
     SubShader
@@ -60,7 +52,6 @@ Shader "HexGlobe/PlanetTerrain"
             };
 
             UNITY_DECLARE_DEPTH_TEXTURE(_CameraDepthTexture);
-            float _FadeProgress;
 
             float4 _ColorLow;
             float4 _ColorHigh;
@@ -75,8 +66,6 @@ Shader "HexGlobe/PlanetTerrain"
             float _FadeDirection; // 1 for child (fade in), -1 for parent (fade out)
             float4 _PlanetCenter; // Planet center in world coordinates
             // Overlay HLSL-exposed properties
-            float _CellSize;
-            float _LineThickness;
             float4 _OverlayColor;
             float _OverlayOpacity;
             float _OverlayEnabled;
@@ -86,14 +75,7 @@ Shader "HexGlobe/PlanetTerrain"
             float4 _OverlayGlowColor;
             float _OverlayGlowIntensity;
             float _OverlayGlowLOD;
-            // Dual-segment overlay buffer (uploaded from CPU). Each segment is two float4 entries (start,end).
-            StructuredBuffer<float4> _DualSegments;
-            StructuredBuffer<float4> _DualSegmentBounds; // (mid.xyz, halfLength)
-            int _DualSegmentCount;
             UNITY_DECLARE_TEXCUBE(_DualOverlayCube);
-            // Edge extrusion parameters
-            float _BaseRadius;
-            float _EdgeExtrusion;
 
             v2f vert(appdata v)
             {

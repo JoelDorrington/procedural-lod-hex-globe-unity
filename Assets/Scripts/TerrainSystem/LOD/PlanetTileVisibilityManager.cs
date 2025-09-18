@@ -52,9 +52,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
 		[SerializeField]
 		private float minCenterDotThreshold = 0.35f;
 
-		// (removed) previously used buffer radius field — selection logic uses
-		// explicit k-ring parameters and test-configured values instead.
-
 		// Debug toggle: when true the manager will not compute or apply depth changes
 		// from the camera. Tests can enable this to manually control depth via SetDepth
 		// without the manager overriding the value from CameraController.

@@ -12,9 +12,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
     {
         // Golden ratio constant for icosahedron construction
         private const float PHI = 1.618033988749895f; // (1 + sqrt(5)) / 2
-        
+
         // Standard icosahedron vertices (12 vertices)
-        private static readonly Vector3[] IcosahedronVertices = 
+        private static readonly Vector3[] IcosahedronVertices =
         {
             new Vector3(-1,  PHI, 0).normalized,  // 0
             new Vector3( 1,  PHI, 0).normalized,  // 1  
@@ -29,9 +29,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
             new Vector3(-PHI, 0, -1).normalized,  // 10
             new Vector3(-PHI, 0,  1).normalized   // 11
         };
-        
+
         // 20 triangular faces of the icosahedron  
-        private static readonly int[,] IcosahedronFaces = 
+        private static readonly int[,] IcosahedronFaces =
         {
             // 5 faces around point 0
             {0, 11, 5}, {0, 5, 1}, {0, 1, 7}, {0, 7, 10}, {0, 10, 11},
@@ -42,7 +42,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             // 5 adjacent faces  
             {4, 9, 5}, {2, 4, 11}, {6, 2, 10}, {8, 6, 7}, {9, 8, 1}
         };
-        
+
         /// <summary>
         /// Convert a 3D world direction to icosahedral face and barycentric coordinates.
         /// </summary>
@@ -54,35 +54,22 @@ namespace HexGlobeProject.TerrainSystem.LOD
         {
             Vector3 p = worldDirection.normalized;
 
-            // Choose the face whose geometric plane normal best aligns with the direction.
+            // Choose the face whose canonical barycentric center direction
+            // aligns best with the input direction. This uses the same
+            // barycentric center computation used by the registry and the
+            // TileId constructor so face selection is consistent.
             float maxDot = float.MinValue;
             faceIndex = 0;
 
+            // Use the canonical depth-0 tile barycentric center so this routine
+            // matches the registry and TileId constructor which both use
+            // GetTileBarycentricCenter for the authoritative center point.
+            GetTileBarycentricCenter(0, 0, 0, out float centerU, out float centerV);
+
             for (int face = 0; face < IcosahedronFaces.GetLength(0); face++)
             {
-                Vector3 v0 = IcosahedronVertices[IcosahedronFaces[face, 0]];
-                Vector3 v1 = IcosahedronVertices[IcosahedronFaces[face, 1]];
-                Vector3 v2 = IcosahedronVertices[IcosahedronFaces[face, 2]];
-
-                // Compute geometric plane normal
-                Vector3 edgeA = v1 - v0;
-                Vector3 edgeB = v2 - v0;
-                Vector3 planeNormal = Vector3.Cross(edgeA, edgeB);
-
-                if (planeNormal.sqrMagnitude < 1e-12f)
-                {
-                    // Degenerate fallback: use centroid direction
-                    planeNormal = (v0 + v1 + v2);
-                }
-
-                planeNormal.Normalize();
-
-                // Ensure normal points outward (same hemisphere as centroid)
-                Vector3 centroid = (v0 + v1 + v2).normalized;
-                if (Vector3.Dot(planeNormal, centroid) < 0f)
-                    planeNormal = -planeNormal;
-
-                float dot = Vector3.Dot(p, planeNormal);
+                Vector3 centroidDir = BarycentricToWorldDirection(face, centerU, centerV);
+                float dot = Vector3.Dot(p, centroidDir);
                 if (dot > maxDot)
                 {
                     maxDot = dot;
@@ -91,7 +78,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             }
         }
 
-        
+
         /// <summary>
         /// Convert barycentric coordinates back to world direction.
         /// </summary>
@@ -100,13 +87,13 @@ namespace HexGlobeProject.TerrainSystem.LOD
             Vector3 v0 = IcosahedronVertices[IcosahedronFaces[faceIndex, 0]];
             Vector3 v1 = IcosahedronVertices[IcosahedronFaces[faceIndex, 1]];
             Vector3 v2 = IcosahedronVertices[IcosahedronFaces[faceIndex, 2]];
-            
+
             // Third barycentric coordinate
             float w = 1f - u - v;
-            
+
             // Interpolate position using barycentric coordinates
             Vector3 position = w * v0 + u * v1 + v * v2;
-            
+
             return position.normalized;
         }
 
@@ -155,7 +142,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 v *= scale;
             }
         }
-        
+
         /// <summary>
         /// Convert tile indices back to barycentric coordinates for mesh generation.
         /// </summary>
@@ -233,7 +220,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             u = Mathf.Clamp01(u);
             v = Mathf.Clamp01(v);
         }
-        
+
         /// <summary>
         /// Get the number of valid tiles for a given icosahedral face at a specific depth.
         /// <summary>
@@ -244,10 +231,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
         public static int GetValidTileCountForDepth(int depth)
         {
             if (depth == 0) return 1; // One tile per face at depth 0
-            
+
             int tilesPerEdge = 1 << depth;
             int validCount = 0;
-            
+
             for (int x = 0; x < tilesPerEdge; x++)
             {
                 for (int y = 0; y < tilesPerEdge; y++)
@@ -256,10 +243,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
                         validCount++;
                 }
             }
-            
+
             return validCount;
         }
-        
+
         /// <summary>
         /// Validate that tile indices are within the canonical subdivision grid.
         /// For triangular faces, we exclude tiles where the barycentric center
@@ -287,30 +274,23 @@ namespace HexGlobeProject.TerrainSystem.LOD
         public static void GetTileBarycentricCenter(int x, int y, int depth, out float u, out float v)
         {
             int tilesPerEdge = 1 << depth;
-            u = (x + 0.5f) / tilesPerEdge;
-            v = (y + 0.5f) / tilesPerEdge;
+            // Use the canonical triangular centroid offset (1/3) which lies
+            // strictly inside the triangle. Using 0.5 placed the center on the
+            // diagonal (u+v == 1) and produced ambiguous points shared by
+            // multiple faces (causing face-index collisions). 1/3 is the
+            // true barycentric centroid and provides a unique mapping.
+            const float centerOffset = 1f / 3f;
+            u = (x + centerOffset) / tilesPerEdge;
+            v = (y + centerOffset) / tilesPerEdge;
 
             // If the barycentric center falls in the mirrored half (u+v > 1),
             // reflect into the canonical triangle so the center is consistent
             // with TileVertexToBarycentricCoordinates which mirrors grid vertices.
-            if (u + v > 1f)
+            const float edgeEpsilon = 1e-6f;
+            if (u + v > 1f - edgeEpsilon)
             {
                 u = 1f - u;
                 v = 1f - v;
-            }
-
-            // Nudge points that lie on or extremely close to the triangle edge
-            // inward by a tiny epsilon so the face lookup is unambiguous.
-            const float edgeNudge = 1e-6f;
-            if (u + v >= 1f - edgeNudge)
-            {
-                float excess = (u + v) - (1f - edgeNudge);
-                if (excess > 0f)
-                {
-                    float shrink = excess * 0.5f;
-                    u -= shrink;
-                    v -= shrink;
-                }
             }
         }
     }
