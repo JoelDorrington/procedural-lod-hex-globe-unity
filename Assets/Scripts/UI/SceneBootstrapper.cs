@@ -83,6 +83,8 @@ namespace HexGlobeProject.UI
 
                 // create directional light
                 CreateDirectionalLightFromConfig(cfg?.directionalLight);
+                // Ensure in-game controls UI is present so the player can Advance Turn / Pause during playtests
+                EnsureInGameControls();
                 yield return null;
 
                 // Optionally spawn the planet if the config requests it
@@ -193,6 +195,8 @@ namespace HexGlobeProject.UI
 
                 Debug.Log("SceneBootstrapper: spawning test unit at node 0");
                 um.SpawnUnitAtNode(0, 1);
+                // Ensure in-game controls UI is present so the player can Advance Turn / Pause during playtests
+                EnsureInGameControls();
                 yield return null;
 
                 onProgress?.Invoke(1f);
@@ -831,6 +835,24 @@ namespace HexGlobeProject.UI
             catch (Exception ex)
             {
                 Debug.LogWarning("SetupOverlayCubemap: failed to generate or assign cubemap: " + ex.Message);
+            }
+        }
+
+        // Ensure an InGameControlsController exists in the scene (create a persistent GameObject if necessary)
+        private void EnsureInGameControls()
+        {
+            try
+            {
+                var existing = UnityEngine.Object.FindAnyObjectByType<HexGlobeProject.UI.InGameControlsController>();
+                if (existing != null) return;
+
+                var go = new GameObject("InGameControls");
+                DontDestroyOnLoad(go);
+                go.AddComponent<HexGlobeProject.UI.InGameControlsController>();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("EnsureInGameControls: failed to create InGameControlsController: " + ex.Message);
             }
         }
     }

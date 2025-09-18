@@ -90,7 +90,20 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 materialInstance.name = terrainMaterial.name + " (Tile Instance)";
                 meshRenderer.material = materialInstance;
                 
-                materialInstance.SetVector("_PlanetCenter", new Vector4(planetCenter.x, planetCenter.y, planetCenter.z, 0));
+                    materialInstance.SetVector("_PlanetCenter", new Vector4(planetCenter.x, planetCenter.y, planetCenter.z, 0));
+
+                    // Initialize overlay-enabled state on the material instance from the global shader state so
+                    // tiles created after the controller has applied its state still display correctly.
+                    try
+                    {
+                        if (materialInstance.HasProperty("_OverlayEnabled"))
+                        {
+                            float g = 0f;
+                            try { g = Shader.GetGlobalFloat("_OverlayEnabled"); } catch { /* fallback to 0 */ }
+                            materialInstance.SetFloat("_OverlayEnabled", g);
+                        }
+                    }
+                    catch { }
             }
 
             // Ensure the tile GameObject is on the TerrainTiles layer so it can be culled/rendered
