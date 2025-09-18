@@ -18,14 +18,20 @@ Shader "HexGlobe/PlanetTerrain"
         _ShallowColor ("Shallow Water Color", Color) = (0.12,0.25,0.55,1)
         _PlanetCenter ("Planet Center (World Position)", Vector) = (0,0,0,0)
         _CellSize ("Cell Size", Float) = 1.0
-        _LineThickness ("Line Thickness", Float) = 0.05
+        _LineThickness ("Line Thickness", Float) = 0.001
         _OverlayColor ("Overlay Color", Color) = (1,1,1,1)
         _OverlayOpacity ("Overlay Opacity", Range(0,1)) = 0.9
         _OverlayEnabled ("Overlay Enabled", Float) = 1
+        _OverlayEdgeThreshold ("Overlay Edge Threshold", Range(0,1)) = 0.15
+        _OverlayAAScale ("Overlay AA Scale", Float) = 100
+        _OverlayGlowSpread ("Overlay Glow Spread", Float) = 0.06
+        _OverlayGlowColor ("Overlay Glow Color", Color) = (1,0.9,0.6,1)
+        _OverlayGlowIntensity ("Overlay Glow Intensity", Float) = 0.8
+        _OverlayGlowLOD ("Overlay Glow LOD (mip)", Range(0,10)) = 2.0
         // Edge extrusion: project wire edges radially outward from planet center
         _BaseRadius ("Base Planet Radius", Float) = 30.0
         _EdgeExtrusion ("Edge Extrusion Height", Float) = 0.5
-    _DualOverlayCube ("Dual Overlay Cubemap", CUBE) = "white" {}
+        _DualOverlayCube ("Dual Overlay Cubemap", CUBE) = "white" {}
     }
     SubShader
     {
@@ -74,6 +80,12 @@ Shader "HexGlobe/PlanetTerrain"
             float4 _OverlayColor;
             float _OverlayOpacity;
             float _OverlayEnabled;
+            float _OverlayEdgeThreshold;
+            float _OverlayAAScale;
+            float _OverlayGlowSpread;
+            float4 _OverlayGlowColor;
+            float _OverlayGlowIntensity;
+            float _OverlayGlowLOD;
             // Dual-segment overlay buffer (uploaded from CPU). Each segment is two float4 entries (start,end).
             StructuredBuffer<float4> _DualSegments;
             StructuredBuffer<float4> _DualSegmentBounds; // (mid.xyz, halfLength)
@@ -142,13 +154,17 @@ Shader "HexGlobe/PlanetTerrain"
                     float3 p = geometricNormal;
                     // Sample cubemap (assumes generator writes edge strength into .r)
                     float edgeSample = UNITY_SAMPLE_TEXCUBE(_DualOverlayCube, p).r;
-                    // Remap sample to suppress low/medium values that can "whitewash" the surface.
-                    // Tune the smoothstep lower edge (0.15) to avoid thin but widespread overlay.
-                    float edgeMask = smoothstep(0.15, 1.0, saturate(edgeSample));
+                    edgeSample = saturate(edgeSample);
+                    // Antialias: use a small stable AA width (avoid fwidth which may cause issues on some targets)
+                    float aa = max(0.005 * _OverlayAAScale, 1e-6);
+                    // Antialiased mask centered on threshold
+                    float edgeMask = smoothstep(_OverlayEdgeThreshold - aa, _OverlayEdgeThreshold + aa, edgeSample);
                     float edgeAlpha = saturate(_OverlayOpacity * edgeMask);
-                    // Blend overlay color using computed alpha (keep overlay RGB separate to avoid affecting alpha channel)
                     float4 overlayRGB = float4(_OverlayColor.rgb, 1.0);
                     outCol = lerp(outCol, overlayRGB, edgeAlpha);
+
+                    // clamp final color to avoid NaNs/infs that can trigger magenta fallback
+                    // outCol.rgb = saturate(outCol.rgb);
                 }
 
                 // Opaque: ensure alpha = 1

@@ -806,22 +806,23 @@ namespace HexGlobeProject.UI
         {
             if (planetRoot == null || targetMaterial == null) return;
             // Try to find existing generator
-            OverlayCubemapGenerator gen = planetRoot.GetComponent<OverlayCubemapGenerator>();
-            if (gen == null) gen = planetRoot.AddComponent<OverlayCubemapGenerator>();
+            // OverlayCubemapGenerator gen = planetRoot.GetComponent<OverlayCubemapGenerator>();
+            // if (gen == null) gen = planetRoot.AddComponent<OverlayCubemapGenerator>();
 
-            var conf = UnityEditor.AssetDatabase.LoadAssetAtPath<TerrainConfig>("Assets/Configs/TerrainConfig.asset");
+            // var conf = UnityEditor.AssetDatabase.LoadAssetAtPath<TerrainConfig>("Assets/Configs/TerrainConfig.asset");
 
             // Configure generator defaults for immediate visual feedback
-            gen.faceSize = 128;
-            gen.hexSize = 0.05f;
-            gen.edgeThickness = 0.007f;
-            gen.saveAsset = true;
-            gen.assetName = "DualOverlayCube_Playtest";
+            // gen.faceSize = 128;
+            // gen.hexSize = 0.05f;
+            // gen.edgeThickness = 0.007f;
+            // gen.saveAsset = true;
+            // gen.assetName = "DualOverlayCube_Playtest";
 
             // Generate cubemap (editor-time API is safe to call at runtime in editor)
             try
             {
-                var cube = gen.GenerateCubemap(conf.baseRadius, conf.icosphereSubdivisions, 512);
+                // var cube = gen.GenerateCubemap(conf.baseRadius, conf.icosphereSubdivisions, 512);
+                var cube = UnityEditor.AssetDatabase.LoadAssetAtPath<Cubemap>("Resources/DualOverlayCube_Playtest.cubemap");
                 if (cube != null)
                 {
                     targetMaterial.SetTexture("_DualOverlayCube", cube);
