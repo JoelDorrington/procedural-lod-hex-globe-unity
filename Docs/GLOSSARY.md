@@ -20,3 +20,33 @@ This glossary lists key terms used in the HexGlobeProject to help contributors a
 
 
 For more details, see the `Assets/Scripts/TerrainSystem/LOD` folder and the `Docs/` directory.
+
+## Disambiguation: Tile index vs Barycentric coordinates
+
+This project uses two related but distinct coordinate notions when working inside
+an icosphere face. Confusing these leads to subtle off-by-factor mapping bugs.
+
+- Tile index (tile-local subdivision indices): Integer or floating values that
+	represent positions inside a tile measured in subdivision steps. For a tile
+	that has `subdivisionsPerTileEdge = (res - 1)`, valid tile-local indices
+	range from `0` to `subdivisionsPerTileEdge` inclusive. Examples: `[0,0]` is
+	the lower-left tile corner; `[4,0]` would be the right-most index on the
+	first row if `subdivisionsPerTileEdge == 4`.
+
+- Barycentric coordinates (u, v): Fractional coordinates in [0,1] that span
+	the full triangular face. These are the canonical coordinates used by
+	`BaryToWorldDirection(face, bary)` and the `TerrainTileRegistry`.
+
+Recommendation and canonical APIs:
+
+- For hot paths and mesh building, use the non-allocating API
+	`IcosphereMapping.TileIndexToGlobal(tileId, localX, localY, res)` which
+	expects tile-local indices and returns global (u,v) across the face.
+- For adapter-style helpers and legacy callers that pass small arrays, use
+	`IcosphereMapping.BaryLocalToGlobal(tileId, float[] localIndices, res)` —
+	note that despite the historical name this method expects tile-local
+	subdivision indices in its float[] parameter (not normalized bary fractions).
+
+Why this matters: mixing index-based inputs with barycentric expectations led
+to the earlier bug where a boundary value was translated to 1/9 instead of 1.
+Keeping the distinction explicit in docs and tests prevents regressions.

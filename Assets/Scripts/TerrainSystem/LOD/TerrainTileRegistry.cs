@@ -45,10 +45,12 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     {
                         // Enumerate the full square grid per face. Tests expect exactly
                         // 20 * (tilesPerEdge^2) entries (no triangular filtering here).
-                        IcosphereMapping.GetTileBaryCenter(depth, x, y, out float u, out float v);
+                        var center = IcosphereMapping.GetTileBaryCenter(depth, x, y);
+                        var normal = IcosphereMapping.BaryToWorldDirection(face, center).normalized;
 
+                        var key = new TileId(face, x, y, depth);
                         var entry = new PrecomputedTileEntry();
-                        var normal = IcosphereMapping.BaryToWorldDirection(face, u, v).normalized;
+                        
                         entry.normal = normal;
                         entry.centerWorld = entry.normal * planetRadius + planetCenter;
 
@@ -56,17 +58,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
                         entry.face = face;
                         entry.x = x;
                         entry.y = y;
-                        entry.uCenter = u;
-                        entry.vCenter = v;
-                        entry.tilesPerEdge = tilesPerEdge;
-
-                        float u0 = (float)x / tilesPerEdge;
-                        float v0 = (float)y / tilesPerEdge;
-
-                        entry.tileOffsetU = u0;
-                        entry.tileOffsetV = v0;
-
-                        var key = new TileId(face, x, y, depth);
                         entry.cornerWorldPositions = IcosphereMapping.GetCorners(key, planetRadius, planetCenter);
 
                         _tiles.Add(key, entry);
@@ -80,15 +71,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
     public struct PrecomputedTileEntry
     {
+        public int face; // Canonical face index 0..19
+        public int x; // x index of subdivision
+        public int y; // y index of subdivision
         public Vector3 normal;
-        public int face;
-        public int x;
-        public int y;
-        public float uCenter;
-        public float vCenter;
-        public int tilesPerEdge;
-        public float tileOffsetU;
-        public float tileOffsetV;
         public Vector3 centerWorld;
         public Vector3[] cornerWorldPositions;
     }

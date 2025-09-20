@@ -34,8 +34,9 @@ namespace HexGlobeProject.Tests.Editor
         {
             // Simplified diagnostic test: focus on the single problematic global index found in logs
             // earlier: globalI=7, gJ=1 when using res=8 and depth=1.
-            var tileAId = new TileId(0, 0, 0, 1);
-            var tileBId = new TileId(0, 1, 0, 1);
+            int depth = 0;
+            var tileAId = new TileId(depth, 0, 0, 1);
+            var tileBId = new TileId(depth, 1, 0, 1);
 
             var dataA = new TileData { id = tileAId, resolution = config.baseResolution };
             var dataB = new TileData { id = tileBId, resolution = config.baseResolution };
@@ -50,8 +51,9 @@ namespace HexGlobeProject.Tests.Editor
             registry.tiles.TryGetValue(tileAId, out var entryA);
             registry.tiles.TryGetValue(tileBId, out var entryB);
 
+            int tilesPerEdge = 1 << depth;
             int resMinusOne = Mathf.Max(1, dataA.resolution - 1);
-            int globalPerEdge = entryA.tilesPerEdge * resMinusOne;
+            int globalPerEdge = tilesPerEdge * resMinusOne;
 
             int targetGlobalI = resMinusOne; // 7
             int targetGJ = 1;
@@ -59,12 +61,10 @@ namespace HexGlobeProject.Tests.Editor
             float v = targetGJ / (float)globalPerEdge;
             if (u + v > 1f) { u = 1f - v; v = 1f - u; }
 
-            Vector3 dir = IcosphereMapping.BaryToWorldDirection(entryA.face, u, v).normalized;
+            Vector3 dir = IcosphereMapping.BaryToWorldDirection(entryA.face, new(u,v)).normalized;
             var localProvider = (SimplePerlinHeightProvider)(config.heightProvider ?? new SimplePerlinHeightProvider());
             float sampleHeight = config.heightScale * localProvider.Sample(in dir, dataA.resolution);
             Vector3 sampleWorld = dir * (config.baseRadius + sampleHeight);
-
-            Debug.Log($"[DiagSimplified] target globalI={targetGlobalI} gJ={targetGJ} u={u:0.000} v={v:0.000} sampleWorld={sampleWorld}");
 
             // Find nearest mesh vertex in each tile
             Vector3 bestApos = Vector3.zero; float bestAd = float.MaxValue;
@@ -82,10 +82,6 @@ namespace HexGlobeProject.Tests.Editor
                 if (d < bestBd) { bestBd = d; bestBpos = w; }
             }
 
-            Debug.Log($"[DiagSimplified] bestA={bestApos} dA={bestAd:0.000000} bestB={bestBpos} dB={bestBd:0.000000}");
-
-            // Reconstruct expected local indices that would map to this globalI/gJ for each tile
-            int tilesPerEdge = entryA.tilesPerEdge; // same for both
             int subdivisionsPerTileEdge = Mathf.Max(1, dataA.resolution - 1);
 
             // For tileA (x=0), compute local index iA = globalI - tileA.x*subdivisionsPerTileEdge
@@ -96,13 +92,9 @@ namespace HexGlobeProject.Tests.Editor
             int localIB = targetGlobalI - tileBId.x * subdivisionsPerTileEdge;
             int localJB = targetGJ - tileBId.y * subdivisionsPerTileEdge;
 
-            Debug.Log($"[DiagSimplified] local indices => tileA i={localIA} j={localJA} ; tileB i={localIB} j={localJB}");
-
             // Determine whether these local indices are inside the canonical triangle (i+j <= res-1)
-            bool tileA_hasLocal = (localIA >= 0 && localJA >= 0 && localIA + localJA <= dataA.resolution - 1);
-            bool tileB_hasLocal = (localIB >= 0 && localJB >= 0 && localIB + localJB <= dataB.resolution - 1);
-
-            Debug.Log($"[DiagSimplified] tileA_hasLocal={tileA_hasLocal} tileB_hasLocal={tileB_hasLocal}");
+            bool tileA_hasLocal = localIA >= 0 && localJA >= 0 && localIA + localJA <= dataA.resolution - 1;
+            bool tileB_hasLocal = localIB >= 0 && localJB >= 0 && localIB + localJB <= dataB.resolution - 1;
 
             // Assert expectations we observed in logs: tileB should have the local index; tileA likely doesn't
             Assert.IsTrue(tileB_hasLocal, "Tile B should contain the local index corresponding to the global seam sample");
@@ -124,8 +116,6 @@ namespace HexGlobeProject.Tests.Editor
             {
                 if ((vtx + dataB.center - exactSampleWorld).sqrMagnitude <= exactTolSqr) { foundInB = true; break; }
             }
-
-            Debug.Log($"[DiagSimplified] exactSampleWorld={exactSampleWorld} foundInA={foundInA} foundInB={foundInB}");
 
             // Next causal check: builder must use the registry's centerWorld as data.center
             Assert.LessOrEqual((entryA.centerWorld - dataA.center).sqrMagnitude, 1e-6f, "Tile A center must equal registry centerWorld");

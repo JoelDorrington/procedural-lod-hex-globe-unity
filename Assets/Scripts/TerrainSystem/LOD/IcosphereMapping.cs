@@ -52,7 +52,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
         /// </summary>
         /// <param name="worldDirection">Normalized direction vector from planet center</param>
         /// <param name="faceIndex">Output: icosphere face index</param>
-        public static void WorldDirectionToTileFaceIndex(
+        public static void WorldDirectionToFaceIndex(
             Vector3 p,
             out int faceIndex)
         {
@@ -67,7 +67,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             for (int face = 0; face < 20; face++)
             {
                 // Use barycentric center (u=v=1/3) for canonical face direction
-                Vector3 centroidDir = BaryToWorldDirection(face, ONE_THIRD, ONE_THIRD);
+                Vector3 centroidDir = BaryToWorldDirection(face, new (ONE_THIRD, ONE_THIRD));
                 float dot = Vector3.Dot(p, centroidDir);
                 if (dot > maxDot)
                 {
@@ -77,43 +77,81 @@ namespace HexGlobeProject.TerrainSystem.LOD
             }
         }
 
-        public static Vector2 BaryLocalToGlobal(TileId tileId, float[] localBary, int res)
+    /// <summary>
+    /// Map a tile-local index array into the global barycentric coordinates on
+    /// the icosphere face.
+    ///
+    /// Important semantics (disambiguation):
+    /// - The incoming <paramref name="localBary"/> is treated as a pair of
+    ///   tile-local subdivision indices (not normalized barycentric fractions).
+    ///   Example: for a single tile with <c>subdivisionsPerTileEdge</c> = 4,
+    ///   the lower-left corner is <c>[0,0]</c>, the right-most tile index on
+    ///   the first row is <c>[4,0]</c>, etc.
+    /// - The method computes global (u,v) by converting tile indices and
+    ///   local subdivision offsets into fractional coordinates across the
+    ///   full face, then applying the mirror/reflection rule when u+v &gt; 1.
+    ///
+    /// Use <see cref="VertexMapIndexToGlobal"/> when you have scalar localX/localY
+    /// values (non-allocating) for hot paths. The name <c>BaryLocalToGlobal</c>
+    /// is preserved for historical reasons and because several test helpers and
+    /// callers pass small float[] indices. Future callers should prefer the
+    /// non-allocating API when possible.
+    ///
+    /// New code should prefer the immutable <see cref="Barycentric"/> ADT for
+    /// expressing normalized barycentric coordinates in APIs. Use
+    /// <c>Barycentric.FromTileIndices(...)</c> or
+    /// <c>Barycentric.FromTileIndexArray(...)</c> to convert tile-local indices
+    /// into normalized bary fractions.
+    /// </summary>
+    /// <param name="tileId">Canonical tile identifier (face, x, y, depth).</param>
+    /// <param name="localBary">Two-element array of tile-local subdivision indices (float values allowed).</param>
+    /// <param name="res">Mesh resolution; used to derive subdivisions per tile edge (res - 1).</param>
+    /// <returns>Global barycentric (u,v) coordinates across the icosphere face.</returns>
+    public static Barycentric BaryLocalToGlobal(TileId tileId, Barycentric localBary, int res)
+    {
+        if (tileId.x < 0 || tileId.y < 0)
         {
-            if (tileId.x < 0 || tileId.y < 0)
-            {
-                throw new Exception("BaryLocalToGlobal requires a TileId with positive integer face/x/y indices.");
-            }
-            // localBary is expected to be normalized bary coordinates across the tile
-            // (i.e. values in [0,1] produced by TileVertexBarys). Map these directly
-            // into the global face bary by scaling with the tile's global width.
-            float tileWidthGlobalWeight = 1f / Mathf.Pow(3, tileId.depth + 1);
+            throw new Exception("BaryLocalToGlobal requires a TileId with positive integer face/x/y indices.");
+        }
+        // Treat the incoming float[] as local tile indices (matching other
+        // callsites such as GetCorners, TileMesh tests and the non-alloc overload).
+        // Compute using the same subdivision math to avoid mismatches.
+        int tilesPerFaceEdge = 1 << tileId.depth;
+        int subdivisionsPerTileEdge = Math.Max(1, res - 1);
+        float subdivisionsPerFaceEdge = tilesPerFaceEdge * subdivisionsPerTileEdge;
 
-            float uGlobal = (tileId.x + localBary[0]) * tileWidthGlobalWeight;
-            float vGlobal = (tileId.y + localBary[1]) * tileWidthGlobalWeight;
-            
-            // Targeted diagnostic for known failing case; harmless when not running tests.
-            if (tileId.face == 0 && tileId.depth == 1 && tileId.x == 0 && tileId.y == 0)
-            {
-                Debug.Log($"[ICOSPHERE_DIAG] BaryLocalToGlobal pre-reflect tile={tileId} localBary={localBary[0]},{localBary[1]} uGlobal={uGlobal} vGlobal={vGlobal}");
-            }
-
-            if (uGlobal + vGlobal > 1f)
-            {
-                float oldU = uGlobal;
-                float oldV = vGlobal;
-                uGlobal = 1f - oldU;
-                vGlobal = 1f - oldV;
-            }
-
-            if (tileId.face == 0 && tileId.depth == 1 && tileId.x == 0 && tileId.y == 0)
-            {
-                Debug.Log($"[ICOSPHERE_DIAG] BaryLocalToGlobal post-reflect tile={tileId} uGlobal={uGlobal} vGlobal={vGlobal}");
-            }
-            return new Vector2(uGlobal, vGlobal);
+        float uGlobal = (tileId.x * subdivisionsPerTileEdge + localBary.U) / subdivisionsPerFaceEdge;
+        float vGlobal = (tileId.y * subdivisionsPerTileEdge + localBary.V) / subdivisionsPerFaceEdge;
+        
+        // Targeted diagnostic for known failing case; harmless when not running tests.
+        if (tileId.face == 0 && tileId.depth == 1 && tileId.x == 0 && tileId.y == 0)
+        {
+            Debug.Log($"[ICOSPHERE_DIAG] BaryLocalToGlobal pre-reflect tile={tileId} localBary={localBary} uGlobal={uGlobal} vGlobal={vGlobal}");
         }
 
-        // Non-allocating overload to avoid per-vertex small array allocations.
-        public static Vector2 BaryLocalToGlobal(TileId tileId, float localX, float localY, int res)
+        if (uGlobal + vGlobal > 1f)
+        {
+            return new Barycentric(1f - vGlobal, 1f - uGlobal);
+        }
+        return new Barycentric(uGlobal, vGlobal);
+    }
+
+    /// <summary>
+    /// Convert tile-local scalar subdivision indices into global face barycentric coordinates.
+    ///
+    /// This is the preferred, non-allocating API for hot paths (mesh builder).
+    /// Inputs <paramref name="localX"/> and <paramref name="localY"/> represent
+    /// the tile-local subdivision offsets (0..subdivisionsPerTileEdge) measured
+    /// in the same units as produced by <see cref="TileVertexBarys(int)"/>.
+    /// The method computes fractional (u,v) across the face and applies the
+    /// mirror/reflection step when u+v &gt; 1.
+    /// </summary>
+    /// <param name="tileId">Canonical tile identifier (face, x, y, depth).</param>
+    /// <param name="localX">Tile-local subdivision offset along the u axis.</param>
+    /// <param name="localY">Tile-local subdivision offset along the v axis.</param>
+    /// <param name="res">Mesh resolution; used to derive subdivisions per tile edge (res - 1).</param>
+    /// <returns>Global barycentric (u,v) coordinates across the icosphere face.</returns>
+    public static Barycentric VertexMapIndexToGlobal(TileId tileId, float localX, float localY, int res)
         {
             if (tileId.x < 0 || tileId.y < 0)
             {
@@ -128,30 +166,23 @@ namespace HexGlobeProject.TerrainSystem.LOD
             // expectation that sums equal to 1 are not reflected.
             if (uGlobal + vGlobal > 1f)
             {
-                float oldU2 = uGlobal;
-                float oldV2 = vGlobal;
-                uGlobal = 1f - oldU2;
-                vGlobal = 1f - oldV2;
+                return new Barycentric(1f - vGlobal, 1f - uGlobal);
             }
-            return new Vector2(uGlobal, vGlobal);
+            return new Barycentric(uGlobal, vGlobal);
         }
 
 
         /// <summary>
         /// Convert Bary coordinates back to world direction.
         /// </summary>
-        public static Vector3 BaryToWorldDirection(int faceIndex, float u, float v)
+        public static Vector3 BaryToWorldDirection(int face, Barycentric bary)
         {  // Depth is irrelevant. Converting straight from uv to world direction. no x, y subdivision indexing involved.
-            Vector3 v0 = IcosahedronVertices[IcosahedronFaces[faceIndex, 0]];
-            Vector3 v1 = IcosahedronVertices[IcosahedronFaces[faceIndex, 1]];
-            Vector3 v2 = IcosahedronVertices[IcosahedronFaces[faceIndex, 2]];
-
-            // Third Bary coordinate
-            float w = 1f - u - v;
+            Vector3 v0 = IcosahedronVertices[IcosahedronFaces[face, 0]];
+            Vector3 v1 = IcosahedronVertices[IcosahedronFaces[face, 1]];
+            Vector3 v2 = IcosahedronVertices[IcosahedronFaces[face, 2]];
 
             // Interpolate position using Bary coordinates
-            Vector3 position = w * v0 + u * v1 + v * v2;
-
+            Vector3 position = bary.W * v0 + bary.U * v1 + bary.V * v2;
             return position.normalized;
         }
 
@@ -159,16 +190,16 @@ namespace HexGlobeProject.TerrainSystem.LOD
         {
             var corners = new Vector3[3];
 
-            float[][] localIndices = new float[3][] {
-                new float[2]{0f, 0f},
-                new float[2]{1f, 0f},
-                new float[2]{0f, 1f}
+            Barycentric[] localIndices = new Barycentric[3] {
+                new (0f, 0f),
+                new (1f, 0f),
+                new (0f, 1f)
             };
 
             for (int k = 0; k < 3; k++)
             {
-                Vector2 globalUV = BaryLocalToGlobal(id, localIndices[k], 1);
-                Vector3 dir = BaryToWorldDirection(id.face, globalUV.x, globalUV.y).normalized;
+                Barycentric global = BaryLocalToGlobal(id, localIndices[k], 1);
+                Vector3 dir = BaryToWorldDirection(id.face, global).normalized;
                 corners[k] = dir * planetRadius + planetCenter;
             }
 
@@ -183,7 +214,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
         public static void WorldDirectionToTileIndex(int depth, Vector3 worldDirection, out int faceIndex, out int x, out int y)
         {
 
-            WorldDirectionToTileFaceIndex(worldDirection, out faceIndex);
+            WorldDirectionToFaceIndex(worldDirection, out faceIndex);
             Vector3 p = worldDirection.normalized;
             Vector3 v0 = IcosahedronVertices[IcosahedronFaces[faceIndex, 0]];
             Vector3 v1 = IcosahedronVertices[IcosahedronFaces[faceIndex, 1]];
@@ -212,12 +243,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 v = (d00 * d21 - d01 * d20) / denom;
             }
 
-            if (u + v >= 1f)
+            if (u + v > 1f)
             {
-                float oldU3 = u;
-                float oldV3 = v;
-                u = 1f - oldU3;
-                v = 1f - oldV3;
+                var oldU = u;
+                u = 1f - v;
+                v = 1f - oldU;
             }
 
             if (depth < 0) depth = 0;
@@ -233,12 +263,12 @@ namespace HexGlobeProject.TerrainSystem.LOD
         /// </summary>
         /// <param name="tileId">Canonical face id object</param>
         /// <param name="res">Mesh resolution</param>
-        public static IEnumerable<float[]> TileVertexBarys(int res)
+        public static IEnumerable<Barycentric> TileVertexBarys(int res)
         {
             if (res <= 1)
             {
                 // Degenerate resolution: single vertex at the triangle center index 0
-                yield return new float[2] { 0f, 0f };
+                yield return new (0,0);
                 yield break;
             }
             // Use (res - 1) segments per tile edge. The triangular lattice contains
@@ -254,16 +284,14 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     float u = weight * i;
                     float v = weight * j;
 
-                    float w = 1f - u - v;
-                    if (w < 0f)
+                    if (u+v > 1f)
                     {
-                        // Preserve originals when reflecting across the diagonal
-                        float oldU4 = u;
-                        float oldV4 = v;
-                        u = 1f - oldU4;
-                        v = 1f - oldV4;
+                        yield return new(1f - v, 1f - u);
                     }
-                    yield return new float[2] { u, v };
+                    else
+                    {
+                        yield return new (u,v);
+                    }
                 }
             }
             yield break;
@@ -274,7 +302,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
         /// This is the single source of truth for tile center computation used by
         /// TileId, precomputation, mesh builder, and tests.
         /// </summary>
-        public static void GetTileBaryCenter(int depth, int x, int y, out float u, out float v)
+        public static Barycentric GetTileBaryCenter(int depth, int x, int y)
         {
             /*
                 depth = 0: center weights at thirds
@@ -283,16 +311,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 SOLUTION: weight = 1 / 3^(depth+1)
             */
             float weight = 1f / Mathf.Pow(3, depth + 1); // no possibility of divide by zero
-            u = (x + 1) * weight;
-            v = (y + 1) * weight;
+            float u = (x + 1) * weight;
+            float v = (y + 1) * weight;
             // Reflect only when the sum strictly exceeds 1 so boundary centers are stable.
-            if (u + v > 1f)
-            {
-                float oldU5 = u;
-                float oldV5 = v;
-                u = 1f - oldU5;
-                v = 1f - oldV5;
-            }
+            if (u + v > 1f) return new(1f - v, 1f - u);
+            return new(u, v);
         }
     }
 }

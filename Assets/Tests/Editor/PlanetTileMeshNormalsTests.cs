@@ -32,8 +32,6 @@ namespace HexGlobeProject.Tests.Editor
             var entry = new PrecomputedTileEntry();
             entry.normal = new Vector3(0f, 0f, 1f);
             entry.face = 0; entry.x = 0; entry.y = 0;
-            entry.uCenter = 0.5f; entry.vCenter = 0.5f; entry.tilesPerEdge = 1;
-            entry.tileOffsetU = 0f; entry.tileOffsetV = 0f;
             entry.centerWorld = entry.normal * (config.baseRadius * 1.01f);
             entry.cornerWorldPositions = new Vector3[3] { entry.centerWorld, entry.centerWorld, entry.centerWorld };
 

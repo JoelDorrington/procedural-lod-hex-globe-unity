@@ -18,7 +18,7 @@ namespace HexGlobeProject.Tests.Editor
             int face = 0;
             float u = 0.5f;
             float v = 0.5f;
-            Vector3 dir = IcosphereMapping.BaryToWorldDirection(face, u, v).normalized;
+            Vector3 dir = IcosphereMapping.BaryToWorldDirection(face, new(u,v)).normalized;
 
             // Use TileCoordinateMapping (authoritative mapping) to compute tile indices
             int depth = 0;
@@ -36,7 +36,7 @@ namespace HexGlobeProject.Tests.Editor
             int face = 3;
             float u = 0.1f;
             float v = 0.1f;
-            Vector3 dir = IcosphereMapping.BaryToWorldDirection(face, u, v).normalized;
+            Vector3 dir = IcosphereMapping.BaryToWorldDirection(face, new(u,v)).normalized;
 
             int depth = 2; // tilesPerEdge = 4
             TileCoordinateMapping.WorldDirectionToTileCoordinates(dir, depth, out int outFace2, out int x2, out int y2, out float lx2, out float ly2);

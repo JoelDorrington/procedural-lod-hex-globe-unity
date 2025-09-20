@@ -20,9 +20,9 @@ namespace HexGlobeProject.Tests.Editor
                         {
                             if (!IcosphereTestHelpers.IsValidTileIndex(x, y, depth)) continue;
                             // Use canonical Bary center computation
-                            IcosphereMapping.GetTileBaryCenter(depth, x, y, out float u, out float v);
-                            Vector3 dir = IcosphereMapping.BaryToWorldDirection(face, u, v).normalized;
-                            IcosphereMapping.WorldDirectionToTileFaceIndex(dir, out int foundFace);
+                            var center = IcosphereMapping.GetTileBaryCenter(depth, x, y);
+                            Vector3 dir = IcosphereMapping.BaryToWorldDirection(face, center).normalized;
+                            IcosphereMapping.WorldDirectionToFaceIndex(dir, out int foundFace);
                             Assert.AreEqual(face, foundFace, $"Face mismatch at depth={depth} face={face} x={x} y={y}");
                         }
                     }
@@ -44,8 +44,8 @@ namespace HexGlobeProject.Tests.Editor
                         if (!IcosphereTestHelpers.IsValidTileIndex(x, y, depth)) continue;
                         var id = new TileId(face, x, y, depth);
                         // Use canonical Bary center computation
-                        IcosphereMapping.GetTileBaryCenter(depth, x, y, out float u, out float v);
-                        Vector3 expected = IcosphereMapping.BaryToWorldDirection(face, u, v).normalized;
+                        var center = IcosphereMapping.GetTileBaryCenter(depth, x, y);
+                        Vector3 expected = IcosphereMapping.BaryToWorldDirection(face, center).normalized;
                         Vector3 actual = id.faceNormal.normalized;
                         Assert.LessOrEqual(Vector3.Distance(expected, actual), 1e-6f, $"Face normal mismatch for {id}");
                     }

@@ -34,13 +34,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
         /// </summary>
         public TileId(int face, int x, int y, int depth)
         {
-            // Use the canonical Bary center computation
-            IcosphereMapping.GetTileBaryCenter(depth, x, y, out float u, out float v);
-            faceNormal = IcosphereMapping.BaryToWorldDirection(face, u, v).normalized;
             this.depth = depth;
             this.face = face;
             this.x = x;
             this.y = y;
+            faceNormal = IcosphereMapping.BaryToWorldDirection(face, IcosphereMapping.GetTileBaryCenter(depth, x, y)).normalized;
         }
 
         public override string ToString()

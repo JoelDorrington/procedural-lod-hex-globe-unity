@@ -13,17 +13,17 @@ namespace HexGlobeProject.Tests.Editor
         {
             // Sample a small set of Bary coordinates across face 0
             var dirs = new List<Vector3>();
-            var samples = new List<(float u, float v)>
+            var samples = new List<Barycentric>
             {
-                (0.25f, 0.25f),
-                (0.75f, 0.25f),
-                (0.25f, 0.75f),
-                (0.5f, 0.5f)
+                new (0.25f, 0.25f),
+                new (0.75f, 0.25f),
+                new (0.25f, 0.75f),
+                new (0.5f, 0.5f)
             };
 
             foreach (var s in samples)
             {
-                var d = IcosphereMapping.BaryToWorldDirection(0, s.u, s.v).normalized;
+                var d = IcosphereMapping.BaryToWorldDirection(0, s).normalized;
                 dirs.Add(d);
             }
 

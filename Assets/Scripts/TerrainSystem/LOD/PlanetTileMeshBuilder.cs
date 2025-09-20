@@ -201,13 +201,13 @@ namespace HexGlobeProject.TerrainSystem.LOD
             // We'll keep a mapping from (i,j) -> vertex index so triangle indices can be
             // constructed easily.
 
-            int[,] vertexIndexMap = new int[res+1, res+1];
+            int[,] _vertsMap = new int[res+1, res+1];
             // Initialize to -1 so unused slots are distinguishable when building triangles.
             for (int yy = 0; yy < res+1; yy++)
             {
                 for (int xx = 0; xx < res+1; xx++)
                 {
-                    vertexIndexMap[xx, yy] = -1;
+                    _vertsMap[xx, yy] = -1;
                 }
             }
 
@@ -225,12 +225,12 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
                 // Store canonical UV for texturing / consistent coordinates using the
                 // integer tile-local indices (this yields the same global bary mapping used below).
-                var globalUV = IcosphereMapping.BaryLocalToGlobal(data.id, (float)i, (float)j, res);
-                _uvs.Add(globalUV);
-
                 // Map Bary coords to world direction (IcosphereMapping returns a normalized direction)
-                Vector3 dir = IcosphereMapping.BaryToWorldDirection(entry.face, globalUV[0], globalUV[1]);
+                Barycentric global = IcosphereMapping.BaryLocalToGlobal(data.id, bary, res);
+                _uvs.Add((Vector2)global);
 
+                var dir = IcosphereMapping.BaryToWorldDirection(entry.face, bary);
+                
                 int tilesPerEdge = Math.Max(1, res - 1);
                 int globalI = data.id.x * tilesPerEdge + i;
                 int globalJ = data.id.y * tilesPerEdge + j;
@@ -249,7 +249,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 // No cache tracking; keep vertex as sampled.
                 _normals.Add(sampledNormal);
                 centerAccum += worldVertex;
-                vertexIndexMap[i, j] = _verts.Count - 1;
+                _vertsMap[i, j] = _verts.Count - 1;
                 int maxI = res - 1 - j; // ensure i+j <= res-1 (inside triangle)
                 i += 1;
                 if (i >= maxI)
@@ -259,28 +259,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     if(j >= res) break;
                 }
             }
-            
-            for (int yy2 = 0; yy2 < res; yy2++)
-            {
-                for (int xx2 = 0; xx2 < res; xx2++)
-                {
-                    if (xx2 + yy2 > res - 1) continue; // outside canonical triangle
-                    if (vertexIndexMap[xx2, yy2] >= 0) continue; // already present
-
-                    var globalUV = IcosphereMapping.BaryLocalToGlobal(data.id, (float)xx2, (float)yy2, res);
-                    Vector3 dir = IcosphereMapping.BaryToWorldDirection(entry.face, globalUV[0], globalUV[1]);
-
-                    float rawS = provider.Sample(in dir, res) * config.heightScale;
-
-                    Vector3 sampledWorld2 = dir * (radius + rawS) + planetCenter;
-                    Vector3 sampledNormal2 = dir;
-
-                    _verts.Add(sampledWorld2);
-                    _normals.Add(sampledNormal2);
-                    _uvs.Add(globalUV);
-                    vertexIndexMap[xx2, yy2] = _verts.Count - 1;
-                }
-            }
 
             // Build triangles from the triangular lattice using the vertexIndexMap.
             for (int jj = 0; jj < res - 1; jj++)
@@ -288,9 +266,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 int maxI = res - 2 - jj; // ii such that we have (ii+1,jj) and (ii,jj+1)
                 for (int ii = 0; ii <= maxI; ii++)
                 {
-                    int i0 = vertexIndexMap[ii, jj];
-                    int i1 = vertexIndexMap[ii + 1, jj];
-                    int i2 = vertexIndexMap[ii, jj + 1];
+                    int i0 = _vertsMap[ii, jj];
+                    int i1 = _vertsMap[ii + 1, jj];
+                    int i2 = _vertsMap[ii, jj + 1];
                     if (i0 < 0 || i1 < 0 || i2 < 0) continue;
 
                     Vector3 v0 = _verts[i0]; Vector3 v1 = _verts[i1]; Vector3 v2 = _verts[i2];
@@ -305,7 +283,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     // which is at (i+1, j+1) for interior cells.
                     if (ii + jj < res - 2)
                     {
-                        int i3 = vertexIndexMap[ii + 1, jj + 1];
+                        int i3 = _vertsMap[ii + 1, jj + 1];
                         if (i3 >= 0)
                         {
                             Vector3 u0 = _verts[i1]; Vector3 u1 = _verts[i3]; Vector3 u2 = _verts[i2];
@@ -356,35 +334,13 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 _verts[vrtIdx] = _verts[vrtIdx] - data.center;
             }
 
-            // Create a fresh mesh with corrected vertices
+            // Create mesh
             var mesh = new Mesh();
             mesh.name = $"Tile_{data.id.faceNormal}_d{data.id.depth}";
             mesh.indexFormat = (_verts.Count > 65000) ? UnityEngine.Rendering.IndexFormat.UInt32 : UnityEngine.Rendering.IndexFormat.UInt16;
             mesh.SetVertices(_verts);
             mesh.SetTriangles(_tris, 0);
             mesh.SetUVs(0, _uvs);
-
-            // Use the precomputed vertex normals collected during sampling instead of
-            // calling RecalculateNormals() which is expensive in native code.
-            // This keeps normals coherent with the sampling direction (dir) and
-            // avoids a costly recompute for each mesh build.
-            try
-            {
-                if (_normals.Count == _verts.Count)
-                {
-                    mesh.SetNormals(_normals);
-                }
-                else
-                {
-                    // Fallback to Unity's recalculation if counts don't match
-                    mesh.RecalculateNormals();
-                }
-            }
-            catch
-            {
-                // If SetNormals throws (unexpected), fallback to safe path
-                try { mesh.RecalculateNormals(); } catch { }
-            }
 
             // Avoid the heavy RecalculateBounds call; compute an approximate bounds
             // from the sampled min/max heights which we already track. This is
@@ -395,10 +351,24 @@ namespace HexGlobeProject.TerrainSystem.LOD
             var approxSize = Vector3.one * (maxExtent * 2f + 1f);
             mesh.bounds = new Bounds(Vector3.zero, approxSize);
 
-            // Hint that this mesh may be updated frequently to allow the engine to
-            // optimize memory and upload paths.
-            try { mesh.MarkDynamic(); } catch { }
-            // Debug: count normals deviating from radial
+            // Use the precomputed vertex normals collected during sampling instead of
+            // calling RecalculateNormals() which is expensive in native code.
+            // This keeps normals coherent with the sampling direction (dir) and
+            // avoids a costly recompute for each mesh build.
+            try
+            {
+                if (_normals.Count != _verts.Count)
+                {
+                    throw new Exception($"Normal count mismatch: {_normals.Count} != {_verts.Count}");
+                }
+                mesh.SetNormals(_normals);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning(e);
+                try { mesh.RecalculateNormals(); } catch { }
+            }
+
             data.mesh = mesh;
 
             // Cache the produced mesh and sampled range so subsequent builder invocations
