@@ -57,11 +57,11 @@ namespace HexGlobeProject.Tests.Editor
             int targetGJ = 1;
             float u = targetGlobalI / (float)globalPerEdge;
             float v = targetGJ / (float)globalPerEdge;
-            if (u + v > 1f) { u = 1f - u; v = 1f - v; }
+            if (u + v > 1f) { u = 1f - v; v = 1f - u; }
 
             Vector3 dir = IcosphereMapping.BaryToWorldDirection(entryA.face, u, v).normalized;
             var localProvider = (SimplePerlinHeightProvider)(config.heightProvider ?? new SimplePerlinHeightProvider());
-            float sampleHeight = (config.heightScale) * localProvider.Sample(in dir, dataA.resolution);
+            float sampleHeight = config.heightScale * localProvider.Sample(in dir, dataA.resolution);
             Vector3 sampleWorld = dir * (config.baseRadius + sampleHeight);
 
             Debug.Log($"[DiagSimplified] target globalI={targetGlobalI} gJ={targetGJ} u={u:0.000} v={v:0.000} sampleWorld={sampleWorld}");

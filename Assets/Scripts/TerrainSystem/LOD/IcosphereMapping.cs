@@ -96,8 +96,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
             // so boundary lattice coordinates remain stable and deterministic.
             if (uGlobal + vGlobal > 1f)
             {
-                uGlobal = 1f - uGlobal;
-                vGlobal = 1f - vGlobal;
+                uGlobal = 1f - vGlobal;
+                vGlobal = 1f - uGlobal;
             }
             return new Vector2(uGlobal, vGlobal);
         }
@@ -105,7 +105,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
         // Non-allocating overload to avoid per-vertex small array allocations.
         public static Vector2 BaryLocalToGlobal(TileId tileId, float localX, float localY, int res)
         {
-            if (tileId.face < 0 || tileId.x < 0 || tileId.y < 0)
+            if (tileId.x < 0 || tileId.y < 0)
             {
                 throw new Exception("BaryLocalToGlobal requires a TileId with positive integer face/x/y indices.");
             }
@@ -202,8 +202,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
             if (u + v >= 1f)
             {
-                u = 1f - u;
-                v = 1f - v;
+                u = 1f - v;
+                v = 1f - u;
             }
 
             if (depth < 0) depth = 0;
@@ -271,8 +271,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
             // Reflect only when the sum strictly exceeds 1 so boundary centers are stable.
             if (u + v > 1f)
             {
-                u = 1f - u;
-                v = 1f - v;
+                u = 1f - v;
+                v = 1f - u;
             }
         }
     }
