@@ -79,25 +79,35 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
         public static Vector2 BaryLocalToGlobal(TileId tileId, float[] localBary, int res)
         {
-            if (tileId.face < 0 || tileId.x < 0 || tileId.y < 0)
+            if (tileId.x < 0 || tileId.y < 0)
             {
                 throw new Exception("BaryLocalToGlobal requires a TileId with positive integer face/x/y indices.");
             }
-            int tilesPerFaceEdge = 1 << tileId.depth;
-            // The mesh lattice uses (res - 1) segments per tile edge (TileVertexBarys uses weight = 1/(res-1)).
-            // To produce a consistent global lattice we must use the same segment count here.
-            int subdivisionsPerTileEdge = Math.Max(1, res - 1);
-            float subdivisionsPerFaceEdge = tilesPerFaceEdge * subdivisionsPerTileEdge;
-            // tile-local subdivision index -> global bary across the face
-            // globalIndex = tileId.x * subdivisionsPerTileEdge + localBary.x
-            float uGlobal = (tileId.x * subdivisionsPerTileEdge + localBary[0]) / subdivisionsPerFaceEdge;
-            float vGlobal = (tileId.y * subdivisionsPerTileEdge + localBary[1]) / subdivisionsPerFaceEdge;
-            // Reflect strictly when the sum exceeds 1.0f. Do not reflect at exactly 1.0f
-            // so boundary lattice coordinates remain stable and deterministic.
+            // localBary is expected to be normalized bary coordinates across the tile
+            // (i.e. values in [0,1] produced by TileVertexBarys). Map these directly
+            // into the global face bary by scaling with the tile's global width.
+            float tileWidthGlobalWeight = 1f / Mathf.Pow(3, tileId.depth + 1);
+
+            float uGlobal = (tileId.x + localBary[0]) * tileWidthGlobalWeight;
+            float vGlobal = (tileId.y + localBary[1]) * tileWidthGlobalWeight;
+            
+            // Targeted diagnostic for known failing case; harmless when not running tests.
+            if (tileId.face == 0 && tileId.depth == 1 && tileId.x == 0 && tileId.y == 0)
+            {
+                Debug.Log($"[ICOSPHERE_DIAG] BaryLocalToGlobal pre-reflect tile={tileId} localBary={localBary[0]},{localBary[1]} uGlobal={uGlobal} vGlobal={vGlobal}");
+            }
+
             if (uGlobal + vGlobal > 1f)
             {
-                uGlobal = 1f - vGlobal;
-                vGlobal = 1f - uGlobal;
+                float oldU = uGlobal;
+                float oldV = vGlobal;
+                uGlobal = 1f - oldU;
+                vGlobal = 1f - oldV;
+            }
+
+            if (tileId.face == 0 && tileId.depth == 1 && tileId.x == 0 && tileId.y == 0)
+            {
+                Debug.Log($"[ICOSPHERE_DIAG] BaryLocalToGlobal post-reflect tile={tileId} uGlobal={uGlobal} vGlobal={vGlobal}");
             }
             return new Vector2(uGlobal, vGlobal);
         }
@@ -118,8 +128,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
             // expectation that sums equal to 1 are not reflected.
             if (uGlobal + vGlobal > 1f)
             {
-                uGlobal = 1f - vGlobal;
-                vGlobal = 1f - uGlobal;
+                float oldU2 = uGlobal;
+                float oldV2 = vGlobal;
+                uGlobal = 1f - oldU2;
+                vGlobal = 1f - oldV2;
             }
             return new Vector2(uGlobal, vGlobal);
         }
@@ -202,8 +214,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
             if (u + v >= 1f)
             {
-                u = 1f - v;
-                v = 1f - u;
+                float oldU3 = u;
+                float oldV3 = v;
+                u = 1f - oldU3;
+                v = 1f - oldV3;
             }
 
             if (depth < 0) depth = 0;
@@ -243,8 +257,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     float w = 1f - u - v;
                     if (w < 0f)
                     {
-                        v = 1f - u;
-                        u = 1f - v;
+                        // Preserve originals when reflecting across the diagonal
+                        float oldU4 = u;
+                        float oldV4 = v;
+                        u = 1f - oldU4;
+                        v = 1f - oldV4;
                     }
                     yield return new float[2] { u, v };
                 }
@@ -271,8 +288,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
             // Reflect only when the sum strictly exceeds 1 so boundary centers are stable.
             if (u + v > 1f)
             {
-                u = 1f - v;
-                v = 1f - u;
+                float oldU5 = u;
+                float oldV5 = v;
+                u = 1f - oldU5;
+                v = 1f - oldV5;
             }
         }
     }

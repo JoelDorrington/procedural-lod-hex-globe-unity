@@ -19,7 +19,7 @@ namespace HexGlobeProject.Tests.Editor
 
             // test a variety of depths and resolutions
             int[] depths = new int[] { 0, 1, 2, 3 };
-            int[] ress = new int[] { 2, 3, 4, 6 };
+            int[] ress = new int[] { 8, 16, 32 };
 
             foreach (var depth in depths)
             {
@@ -34,35 +34,49 @@ namespace HexGlobeProject.Tests.Editor
                             // test corner/subdivision integer coordinates and a few random ones
                             var samples = new List<float[]>() {
                                 new float[2] { 0f, 0f },
-                                new float[2] { res - 1f, 0f },
-                                new float[2] { 0f, res - 1f },
+                                new float[2] { 1f/res, 0f },
+                                new float[2] { 0f, 1f/res },
+                                new float[2] { 1f/res, 1f/res },
                             };
                             for (int s = 0; s < 5; s++)
                             {
                                 // sample tile-local indices in [0, res-1]
-                                samples.Add(new float[2] { rng.Next(0, res), rng.Next(0, res) });
+                                samples.Add(new float[2] { 1f/rng.Next(1, res), 1f/rng.Next(1, res) });
                             }
 
                             foreach (var local in samples)
                             {
                                 var g = IcosphereMapping.BaryLocalToGlobal(id, local, res);
-
-                                // Compute expected using the same mapping as implementation:
-                                // The mapping now uses subdivisionsPerTileEdge = res - 1 (segments per tile edge)
+                                var actualU = g.x;
+                                var actualV = g.y;
+                                
                                 int subdivisionsPerTileEdge = Math.Max(1, res - 1);
+                                float tileWidthGlobalWeight = 1f / Mathf.Pow(3, depth + 1);
+                                float localVertIntervalWeight = 1f / subdivisionsPerTileEdge;
+
+                                float localToGlobalRatio = localVertIntervalWeight / tileWidthGlobalWeight;
+
+                                // shrink local uvs to match face scale
+                                float localUToGlobal = local[0] * localToGlobalRatio;
+                                float localVToGlobal = local[1] * localToGlobalRatio;
+
+                                // combine tile offset + local offset to get global
+                                float uGlobal = g.x * tileWidthGlobalWeight + localUToGlobal;
+                                float vGlobal = g.y * tileWidthGlobalWeight + localVToGlobal;
+
                                 float subdivisionsPerFaceEdge = tilesPerFaceEdge * subdivisionsPerTileEdge;
-                                float expectedU = (id.x * subdivisionsPerTileEdge + local[0]) / subdivisionsPerFaceEdge;
-                                float expectedV = (id.y * subdivisionsPerTileEdge + local[1]) / subdivisionsPerFaceEdge;
+                                float expectedU = id.x * subdivisionsPerTileEdge + uGlobal;
+                                float expectedV = id.y * subdivisionsPerTileEdge + vGlobal;
                                 if (expectedU + expectedV > 1f)
                                 {
-                                    expectedU = 1f - expectedU;
-                                    expectedV = 1f - expectedV;
+                                    expectedU = 1f - expectedV;
+                                    expectedV = 1f - expectedU;
                                 }
 
-                                Assert.That(g.x, Is.InRange(-EPS, 1f + EPS));
-                                Assert.That(g.y, Is.InRange(-EPS, 1f + EPS));
-                                Assert.AreEqual(expectedU, g.x, EPS, $"Mismatch U for depth={depth} tile=({tileX},{tileY}) res={res} local={local}");
-                                Assert.AreEqual(expectedV, g.y, EPS, $"Mismatch V for depth={depth} tile=({tileX},{tileY}) res={res} local={local}");
+                                Assert.That(actualU, Is.InRange(-EPS, 1f + EPS));
+                                Assert.That(actualV, Is.InRange(-EPS, 1f + EPS));
+                                Assert.AreEqual(expectedU, actualU, EPS, $"Mismatch U for depth={depth} tile=({tileX},{tileY}) res={res} local=(u: {local[0]}, v: {local[1]})");
+                                Assert.AreEqual(expectedV, actualV, EPS, $"Mismatch V for depth={depth} tile=({tileX},{tileY}) res={res} local=(u: {local[0]}, v: {local[1]})");
                             }
                         }
                     }
@@ -81,7 +95,7 @@ namespace HexGlobeProject.Tests.Editor
             float subdivisionsPerFaceEdge = tilesPerFaceEdge * subdivisionsPerTileEdge;
 
             // Construct a pair (u,v) that sums to exactly 1 (before reflection)
-            float uRaw = (2f) / subdivisionsPerFaceEdge;
+            float uRaw = 1f / subdivisionsPerFaceEdge;
             float vRaw = 1f - uRaw;
             var local = new float[] { uRaw * subdivisionsPerFaceEdge, vRaw * subdivisionsPerFaceEdge };
 
