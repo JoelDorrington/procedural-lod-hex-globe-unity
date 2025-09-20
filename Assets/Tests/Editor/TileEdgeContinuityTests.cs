@@ -54,12 +54,9 @@ namespace HexGlobeProject.Tests.Editor
             var dataA = new TileData() { id = tileAId, resolution = res };
             var dataB = new TileData() { id = tileBId, resolution = res };
 
-            float minA = float.MaxValue, maxA = float.MinValue;
-            float minB = float.MaxValue, maxB = float.MinValue;
-
             // Act: build meshes
-            builder.BuildTileMesh(dataA, ref minA, ref maxA);
-            builder.BuildTileMesh(dataB, ref minB, ref maxB);
+            builder.BuildTileMesh(dataA);
+            builder.BuildTileMesh(dataB);
 
             Assert.IsNotNull(dataA.mesh, "mesh A should be created");
             Assert.IsNotNull(dataB.mesh, "mesh B should be created");
@@ -107,11 +104,9 @@ namespace HexGlobeProject.Tests.Editor
 
             int face = 0; int x = 1; int y = 1; int res = 8;
             var A = new TileData() { id = new TileId(face, x, y, depth), resolution = res };
-            var B = new TileData() { id = new TileId(face, x + 1, y, depth), resolution = res };
-            float ma = float.MaxValue, mb = float.MaxValue; float na = float.MinValue, nb = float.MinValue;
-            builder.BuildTileMesh(A, ref ma, ref na); builder.BuildTileMesh(B, ref mb, ref nb);
+            builder.BuildTileMesh(A);
 
-            var vertsA = A.mesh.vertices; var vertsB = B.mesh.vertices;
+            var vertsA = A.mesh.vertices;
 
             // threshold in degrees for considering quad non-coplanar
             const float angleThreshDeg = 10f;
@@ -168,12 +163,9 @@ namespace HexGlobeProject.Tests.Editor
             // Build the same tile multiple times - should get identical results
             var data1 = new TileData() { id = tileId, resolution = res };
             var data2 = new TileData() { id = tileId, resolution = res };
-
-            float min1 = float.MaxValue, max1 = float.MinValue;
-            float min2 = float.MaxValue, max2 = float.MinValue;
             
-            builder.BuildTileMesh(data1, ref min1, ref max1);
-            builder.BuildTileMesh(data2, ref min2, ref max2);
+            builder.BuildTileMesh(data1);
+            builder.BuildTileMesh(data2);
 
             var vertices1 = data1.mesh.vertices;
             var vertices2 = data2.mesh.vertices;

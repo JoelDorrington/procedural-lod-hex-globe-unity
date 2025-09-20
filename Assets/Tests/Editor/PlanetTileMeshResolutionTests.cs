@@ -53,12 +53,9 @@ namespace HexGlobeProject.Tests.Editor
                 var lowData = new TileData { id = tileId, resolution = lowRes };
                 var highData = new TileData { id = tileId, resolution = highRes };
 
-                float rawMinL = float.MaxValue, rawMaxL = float.MinValue;
-                float rawMinH = float.MaxValue, rawMaxH = float.MinValue;
-
                 // Build both meshes so we can inspect vertex counts
-                lowBuilder.BuildTileMesh(lowData, ref rawMinL, ref rawMaxL);
-                highBuilder.BuildTileMesh(highData, ref rawMinH, ref rawMaxH);
+                lowBuilder.BuildTileMesh(lowData);
+                highBuilder.BuildTileMesh(highData);
 
                 Assert.IsNotNull(lowData.mesh, "Low-res mesh should be generated");
                 Assert.IsNotNull(highData.mesh, "High-res mesh should be generated");
@@ -103,8 +100,8 @@ namespace HexGlobeProject.Tests.Editor
             // verify that the height provider returns the same value for the same
             // world directions regardless of the 'resolution' parameter.
 
-            // Obtain the canonical barycentric center used by the mesh builder
-            IcosphereMapping.GetTileBarycentricCenter(tileId.x, tileId.y, tileId.depth, out float centerU, out float centerV);
+            // Obtain the canonical Bary center used by the mesh builder
+            IcosphereMapping.GetTileBaryCenter(tileId.x, tileId.y, tileId.depth, out float centerU, out float centerV);
 
             var samplePoints = new List<(float u, float v)>
             {
@@ -117,7 +114,7 @@ namespace HexGlobeProject.Tests.Editor
             float sampleTolerance = 1e-6f; // very small tolerance since provider shouldn't depend on resolution
             foreach (var (u, v) in samplePoints)
             {
-                Vector3 dir = IcosphereMapping.BarycentricToWorldDirection(tileId.face, u, v).normalized;
+                Vector3 dir = IcosphereMapping.BaryToWorldDirection(tileId.face, u, v).normalized;
                 float valLow = heightProvider.Sample(in dir, lowRes);
                 float valHigh = heightProvider.Sample(in dir, highRes);
                 Assert.AreEqual(valLow, valHigh, sampleTolerance, $"Height provider must return same value for identical world position (u={u},v={v})");

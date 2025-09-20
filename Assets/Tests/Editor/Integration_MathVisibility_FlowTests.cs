@@ -57,11 +57,11 @@ namespace HexGlobeProject.Tests.Editor
                 var tileFromDir = selectorType.GetMethod("TileFromDirection", BindingFlags.Public | BindingFlags.Static);
                 Assert.IsNotNull(tileFromDir, "TileFromDirection must exist.");
 
-                // Pick a reliable direction (face 0 barycentric center)
+                // Pick a reliable direction (face 0 Bary center)
                 var icosType = FindType("IcosphereMapping");
                 Assert.IsNotNull(icosType, "IcosphereMapping must exist.");
-                var baryToWorld = icosType.GetMethod("BarycentricToWorldDirection", BindingFlags.Public | BindingFlags.Static);
-                Assert.IsNotNull(baryToWorld, "BarycentricToWorldDirection expected.");
+                var baryToWorld = icosType.GetMethod("BaryToWorldDirection", BindingFlags.Public | BindingFlags.Static);
+                Assert.IsNotNull(baryToWorld, "BaryToWorldDirection expected.");
 
                 var dirObj = baryToWorld.Invoke(null, new object[] { 0, 0.33f, 0.33f });
                 var dir = dirObj as Vector3? ?? Vector3.forward;

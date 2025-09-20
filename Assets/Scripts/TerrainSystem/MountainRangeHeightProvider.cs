@@ -110,7 +110,7 @@ namespace HexGlobeProject.TerrainSystem
                 double s = x1 * x1 + x2 * x2;
                 if (s >= 1.0) continue;
                 double z = 1 - 2 * s;
-                double t = 2 * Math.Sqrt(1 - s);
+                double t = 2 * Mathf.Sqrt((float)(1 - s));
                 double x = x1 * t;
                 double y = x2 * t;
                 return new Vector3((float)x, (float)y, (float)z).normalized;

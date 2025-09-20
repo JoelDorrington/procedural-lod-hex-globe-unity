@@ -22,6 +22,8 @@
 - Only proceed with edits when the user and copilot have reached a consensus.
 - Explain things in first principles before explaining the math and implementation.
 
+- See `Docs/GLOSSARY.md` for project-specific terms and canonical definitions used across mapping, registry, and builder.
+
 ## System Overview
 This project implements a Google Maps-style tile explorer for procedural planet terrain with seamless LOD transitions and fractal detail zoom. The system uses a 32hz update loop to calculate a mathematical ring of visibile tiles to build and spawn tiles at appropriate detail levels for the camera distance.
 
@@ -59,7 +61,7 @@ This project implements a Google Maps-style tile explorer for procedural planet 
 - Same world position = same height value, always
 
 ## Important runtime behaviors (current implementation)
-- Precomputed tile normals: `PlanetTileVisibilityManager` maintains a static registry of precomputed tile normals and barycentric centers for all depths to avoid recomputation
+- Precomputed tile normals: `PlanetTileVisibilityManager` maintains a static registry of precomputed tile normals and Bary centers for all depths to avoid recomputation
 - The number of `PlanetTerrainTile` must always be equal to the number of icosphere faces at the current depth (20 * 4^depth). These are created on demand and reused via lifecycle management method. 
 - Tile caching: `TileCache` manages the lifecycle of individual tile GameObjects, including creation, pooling, and destruction.
 - Tile lifecycle: a single `ManageTileLifecycle(HashSet<TileId> hitTiles, int depth)` call handles spawning/refreshing hit tiles and deactivating tiles not hit this pass.

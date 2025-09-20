@@ -11,18 +11,19 @@ namespace HexGlobeProject.TerrainSystem.LOD
     [Serializable]
     public struct TileId : IEquatable<TileId>
     {
-    public Vector3 faceNormal;
-    public int depth;
-    // Discrete identifiers when available (preferred for determinism)
-    public int face;
-    public int x;
-    public int y;
-    // Optional canonical registry index to avoid float equality issues
-    public int canonicalIndex;
+
+        public Vector3 faceNormal;
+        public int depth;
+        // Discrete identifiers when available (preferred for determinism)
+        public int face;
+        public int x;
+        public int y;
 
         public TileId(Vector3 faceNormal, int depth)
         {
-            this.faceNormal = faceNormal; this.depth = depth; this.face = -1; this.x = -1; this.y = -1; this.canonicalIndex = -1;
+            this.faceNormal = faceNormal;
+            this.depth = depth;
+            IcosphereMapping.WorldDirectionToTileIndex(depth, faceNormal, out this.face, out this.x, out this.y);
         }
 
         /// <summary>
@@ -33,14 +34,13 @@ namespace HexGlobeProject.TerrainSystem.LOD
         /// </summary>
         public TileId(int face, int x, int y, int depth)
         {
-            // Use the canonical barycentric center computation
-            IcosphereMapping.GetTileBarycentricCenter(x, y, depth, out float u, out float v);
-            this.faceNormal = IcosphereMapping.BarycentricToWorldDirection(face, u, v).normalized;
+            // Use the canonical Bary center computation
+            IcosphereMapping.GetTileBaryCenter(depth, x, y, out float u, out float v);
+            faceNormal = IcosphereMapping.BaryToWorldDirection(face, u, v).normalized;
             this.depth = depth;
             this.face = face;
             this.x = x;
             this.y = y;
-            this.canonicalIndex = -1;
         }
 
         public override string ToString()
@@ -57,12 +57,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 return face == other.face && x == other.x && y == other.y && depth == other.depth;
             }
 
-            // If discrete indices are not available, fall back to canonicalIndex only when both sides provide it
-            if (canonicalIndex >= 0 && other.canonicalIndex >= 0)
-            {
-                return canonicalIndex == other.canonicalIndex && depth == other.depth;
-            }
-
             // No reliable discrete or canonical identifiers -> consider unequal
             return false;
         }
@@ -70,12 +64,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
         public override bool Equals(object obj) => obj is TileId o && Equals(o);
 
         public override int GetHashCode()
-        {
-            // Prefer discrete indices for hashing when available
-            if (face >= 0) return ((face * 73856093) ^ (x * 19349663) ^ (y * 83492791) ^ (depth * 15485863));
-            if (canonicalIndex >= 0) return (canonicalIndex * 1000003) ^ depth;
-            // No discrete identifiers: fall back to depth-based hash only (faceNormal intentionally excluded)
-            return depth.GetHashCode();
+        { // all indices may be zero or negative, so offset by +1 to avoid zero multipliers
+           return ((face+1) * 73856093) ^ ((x+1) * 19349663) ^ ((y+1) * 83492791) ^ ((depth+1) * 15485863);
         }
     }
 }

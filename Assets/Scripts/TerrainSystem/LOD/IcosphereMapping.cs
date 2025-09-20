@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace HexGlobeProject.TerrainSystem.LOD
@@ -8,8 +9,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
     /// Replaces cube-sphere mapping to eliminate pole singularities and provide
     /// more regular tile distribution across the planet surface.
     /// </summary>
+    
+
     public static class IcosphereMapping
     {
+        private const float ONE_THIRD = 1f / 3f;
         // Golden ratio constant for icosahedron construction
         private const float PHI = 1.618033988749895f; // (1 + sqrt(5)) / 2
 
@@ -44,31 +48,26 @@ namespace HexGlobeProject.TerrainSystem.LOD
         };
 
         /// <summary>
-        /// Convert a 3D world direction to icosahedral face and barycentric coordinates.
+        /// Convert a 3D world direction to icosahedral face and Bary coordinates.
         /// </summary>
         /// <param name="worldDirection">Normalized direction vector from planet center</param>
         /// <param name="faceIndex">Output: icosphere face index</param>
         public static void WorldDirectionToTileFaceIndex(
-            Vector3 worldDirection,
+            Vector3 p,
             out int faceIndex)
         {
-            Vector3 p = worldDirection.normalized;
 
-            // Choose the face whose canonical barycentric center direction
+            // Choose the face whose canonical Bary center direction
             // aligns best with the input direction. This uses the same
-            // barycentric center computation used by the registry and the
+            // Bary center computation used by the registry and the
             // TileId constructor so face selection is consistent.
             float maxDot = float.MinValue;
             faceIndex = 0;
 
-            // Use the canonical depth-0 tile barycentric center so this routine
-            // matches the registry and TileId constructor which both use
-            // GetTileBarycentricCenter for the authoritative center point.
-            GetTileBarycentricCenter(0, 0, 0, out float centerU, out float centerV);
-
-            for (int face = 0; face < IcosahedronFaces.GetLength(0); face++)
+            for (int face = 0; face < 20; face++)
             {
-                Vector3 centroidDir = BarycentricToWorldDirection(face, centerU, centerV);
+                // Use barycentric center (u=v=1/3) for canonical face direction
+                Vector3 centroidDir = BaryToWorldDirection(face, ONE_THIRD, ONE_THIRD);
                 float dot = Vector3.Dot(p, centroidDir);
                 if (dot > maxDot)
                 {
@@ -78,38 +77,112 @@ namespace HexGlobeProject.TerrainSystem.LOD
             }
         }
 
+        public static Vector2 BaryLocalToGlobal(TileId tileId, float[] localBary, int res)
+        {
+            if (tileId.face < 0 || tileId.x < 0 || tileId.y < 0)
+            {
+                throw new Exception("BaryLocalToGlobal requires a TileId with positive integer face/x/y indices.");
+            }
+            int tilesPerFaceEdge = 1 << tileId.depth;
+            // The mesh lattice uses (res - 1) segments per tile edge (TileVertexBarys uses weight = 1/(res-1)).
+            // To produce a consistent global lattice we must use the same segment count here.
+            int subdivisionsPerTileEdge = Math.Max(1, res - 1);
+            float subdivisionsPerFaceEdge = tilesPerFaceEdge * subdivisionsPerTileEdge;
+            // tile-local subdivision index -> global bary across the face
+            // globalIndex = tileId.x * subdivisionsPerTileEdge + localBary.x
+            float uGlobal = (tileId.x * subdivisionsPerTileEdge + localBary[0]) / subdivisionsPerFaceEdge;
+            float vGlobal = (tileId.y * subdivisionsPerTileEdge + localBary[1]) / subdivisionsPerFaceEdge;
+            // Reflect strictly when the sum exceeds 1.0f. Do not reflect at exactly 1.0f
+            // so boundary lattice coordinates remain stable and deterministic.
+            if (uGlobal + vGlobal > 1f)
+            {
+                uGlobal = 1f - uGlobal;
+                vGlobal = 1f - vGlobal;
+            }
+            return new Vector2(uGlobal, vGlobal);
+        }
+
+        // Non-allocating overload to avoid per-vertex small array allocations.
+        public static Vector2 BaryLocalToGlobal(TileId tileId, float localX, float localY, int res)
+        {
+            if (tileId.face < 0 || tileId.x < 0 || tileId.y < 0)
+            {
+                throw new Exception("BaryLocalToGlobal requires a TileId with positive integer face/x/y indices.");
+            }
+            int tilesPerFaceEdge = 1 << tileId.depth;
+            int subdivisionsPerTileEdge = Math.Max(1, res - 1);
+            float subdivisionsPerFaceEdge = tilesPerFaceEdge * subdivisionsPerTileEdge;
+            float uGlobal = (tileId.x * subdivisionsPerTileEdge + localX) / subdivisionsPerFaceEdge;
+            float vGlobal = (tileId.y * subdivisionsPerTileEdge + localY) / subdivisionsPerFaceEdge;
+            // Reflect strictly when the sum exceeds 1.0f. This matches the test
+            // expectation that sums equal to 1 are not reflected.
+            if (uGlobal + vGlobal > 1f)
+            {
+                uGlobal = 1f - uGlobal;
+                vGlobal = 1f - vGlobal;
+            }
+            return new Vector2(uGlobal, vGlobal);
+        }
+
 
         /// <summary>
-        /// Convert barycentric coordinates back to world direction.
+        /// Convert Bary coordinates back to world direction.
         /// </summary>
-        public static Vector3 BarycentricToWorldDirection(int faceIndex, float u, float v)
-        {
+        public static Vector3 BaryToWorldDirection(int faceIndex, float u, float v)
+        {  // Depth is irrelevant. Converting straight from uv to world direction. no x, y subdivision indexing involved.
             Vector3 v0 = IcosahedronVertices[IcosahedronFaces[faceIndex, 0]];
             Vector3 v1 = IcosahedronVertices[IcosahedronFaces[faceIndex, 1]];
             Vector3 v2 = IcosahedronVertices[IcosahedronFaces[faceIndex, 2]];
 
-            // Third barycentric coordinate
+            // Third Bary coordinate
             float w = 1f - u - v;
 
-            // Interpolate position using barycentric coordinates
+            // Interpolate position using Bary coordinates
             Vector3 position = w * v0 + u * v1 + v * v2;
 
             return position.normalized;
         }
 
-        /// <summary>
-        /// Compute barycentric coordinates (u,v) inside the triangle face for a given world direction.
-        /// This inverts BarycentricToWorldDirection by projecting the direction into the triangle's
-        /// coordinate frame and solving the barycentric linear system.
-        /// </summary>
-        public static void BarycentricFromWorldDirection(int faceIndex, Vector3 worldDirection, out float u, out float v)
+        public static Vector3[] GetCorners(TileId id, float planetRadius, Vector3 planetCenter)
         {
+            // Defensive: ensure planetCenter is a valid vector (never null in Unity, but keep for API symmetry)
+            // Compute the three corner barycentrics for the discrete tile lattice. For tile (x,y) at given depth,
+            // the integer lattice corners are at (x, y), (x+1, y), (x, y+1). Convert these to normalized
+            // barycentric coordinates by dividing by tilesPerEdge, then reflect into the canonical triangle
+            // when u+v > 1. Finally convert to world-space directions via BaryToWorldDirection.
+            var corners = new Vector3[3];
+
+            float[][] localIndices = new float[3][] {
+                new float[2]{0f, 0f},
+                new float[2]{1f, 0f},
+                new float[2]{0f, 1f}
+            };
+
+            for (int k = 0; k < 3; k++)
+            {
+                Vector2 globalUV = BaryLocalToGlobal(id, localIndices[k], 1);
+                Vector3 dir = BaryToWorldDirection(id.face, globalUV.x, globalUV.y).normalized;
+                corners[k] = dir * planetRadius + planetCenter;
+            }
+
+            return corners;
+        }
+
+        /// <summary>
+        /// Compute Bary coordinates (u,v) inside the triangle face for a given world direction.
+        /// This inverts BaryToWorldDirection by projecting the direction into the triangle's
+        /// coordinate frame and solving the Bary linear system.
+        /// </summary>
+        public static void WorldDirectionToTileIndex(int depth, Vector3 worldDirection, out int faceIndex, out int x, out int y)
+        {
+
+            WorldDirectionToTileFaceIndex(worldDirection, out faceIndex);
             Vector3 p = worldDirection.normalized;
             Vector3 v0 = IcosahedronVertices[IcosahedronFaces[faceIndex, 0]];
             Vector3 v1 = IcosahedronVertices[IcosahedronFaces[faceIndex, 1]];
             Vector3 v2 = IcosahedronVertices[IcosahedronFaces[faceIndex, 2]];
 
-            // Solve for barycentric coordinates on the plane of the triangle using standard formula
+            // Solve for Bary coordinates on the plane of the triangle using standard formula
             Vector3 v0v1 = v1 - v0;
             Vector3 v0v2 = v2 - v0;
             Vector3 v0p = p - v0;
@@ -121,173 +194,87 @@ namespace HexGlobeProject.TerrainSystem.LOD
             float d21 = Vector3.Dot(v0p, v0v2);
 
             float denom = d00 * d11 - d01 * d01;
+            float u, v;
             if (Mathf.Abs(denom) < 1e-8f)
-            {
+            { // center
                 u = v = 0.3333f;
-                return;
             }
-
-            float a = (d11 * d20 - d01 * d21) / denom;
-            float b = (d00 * d21 - d01 * d20) / denom;
-
-            // a corresponds to weight for v1, b for v2 in our BarycentricToWorldDirection convention
-            u = Mathf.Clamp01(a);
-            v = Mathf.Clamp01(b);
-
-            // If numerically u+v > 1, push slightly inward to avoid edge ambiguity
-            if (u + v > 1f)
+            else
             {
-                float scale = 1f / (u + v + 1e-6f);
-                u *= scale;
-                v *= scale;
+                u = (d11 * d20 - d01 * d21) / denom;
+                v = (d00 * d21 - d01 * d20) / denom;
             }
-        }
 
-        /// <summary>
-        /// Convert tile indices back to barycentric coordinates for mesh generation.
-        /// </summary>
-        /// <param name="faceNormal">Icosahedral face index</param>
-        /// <param name="depth">Subdivision depth</param>
-        /// <param name="vertexI">Vertex i-index within tile mesh</param>
-        /// <param name="vertexJ">Vertex j-index within tile mesh</param>
-        /// <param name="resolution">Mesh resolution</param>
-        /// <param name="u">Output: barycentric u coordinate</param>
-        /// <param name="v">Output: barycentric v coordinate</param>
-        public static void TileVertexToBarycentricCoordinates(
-            TileId tileId,
-            int vertexI,
-            int vertexJ,
-            int resolution,
-            out float u,
-            out float v)
-        {
-            // Use a unified canonical global-integer grid mapping so adjacent tiles
-            // always compute identical barycentric coordinates for shared vertices.
-            // This avoids asymmetry between precomputed registry lookups and the
-            // fallback path which previously produced inconsistent results.
-
-            // Do not construct a registry here; rely on the discrete TileId indices
-            // supplied by callers. TileId should contain canonical (face,x,y) values
-            // for deterministic mapping. If discrete indices are not present, the
-            // caller is using a non-canonical TileId which this routine does not
-            // support.
-            if (tileId.face < 0 || tileId.x < 0 || tileId.y < 0)
+            if (u + v >= 1f)
             {
-                throw new Exception("TileVertexToBarycentricCoordinates requires a TileId with discrete face/x/y indices.");
+                u = 1f - u;
+                v = 1f - v;
             }
 
-            int tilesPerEdge = 1 << tileId.depth;
-
-            int resMinusOne = Mathf.Max(1, resolution - 1);
-            int globalPerEdge = tilesPerEdge * resMinusOne; // number of segments across the face
-
-            // Prefer discrete tile indices from the TileId when available. This
-            // avoids any floating-point lookup fragility and keeps the canonical
-            // integer grid arithmetic purely discrete and deterministic.
-            int tileX = tileId.x;
-            int tileY = tileId.y;
-
-            // Clamp vertex indices to valid range [0, resMinusOne]
-            int localI = Mathf.Clamp(vertexI, 0, resMinusOne);
-            int localJ = Mathf.Clamp(vertexJ, 0, resMinusOne);
-
-            int globalI = tileX * resMinusOne + localI;
-            int globalJ = tileY * resMinusOne + localJ;
-
-            u = globalI / (float)globalPerEdge;
-            v = globalJ / (float)globalPerEdge;
-
-            // Reflect across diagonal for points that lie in the mirrored half so
-            // that the integer grid remains consistent across the triangle seam.
-            const float edgeEpsilon = 1e-6f;
-            if (u + v >= 1f - edgeEpsilon)
-            {
-                if (Mathf.Abs(u + v - 1f) < edgeEpsilon)
-                {
-                    // tiny inward nudge to keep face selection stable
-                    u -= edgeEpsilon * 0.5f;
-                    v -= edgeEpsilon * 0.5f;
-                }
-                else
-                {
-                    globalI = globalPerEdge - globalI;
-                    globalJ = globalPerEdge - globalJ;
-                    u = globalI / (float)globalPerEdge;
-                    v = globalJ / (float)globalPerEdge;
-                }
-            }
-
-            u = Mathf.Clamp01(u);
-            v = Mathf.Clamp01(v);
-        }
-
-        /// <summary>
-        /// Get the number of valid tiles for a given icosahedral face at a specific depth.
-        /// <summary>
-        /// Get the number of valid tiles for a given icosahedral face at a specific depth.
-        /// Due to triangular geometry, only tiles whose barycentric centers fall within
-        /// the triangle (u + v ≤ 1) are considered valid.
-        /// </summary>
-        public static int GetValidTileCountForDepth(int depth)
-        {
-            if (depth == 0) return 1; // One tile per face at depth 0
-
+            if (depth < 0) depth = 0;
             int tilesPerEdge = 1 << depth;
-            int validCount = 0;
+            int maxSubdivisionIndex = tilesPerEdge - 1;
 
-            for (int x = 0; x < tilesPerEdge; x++)
+            x = Mathf.FloorToInt(Mathf.Lerp(0, maxSubdivisionIndex, u * tilesPerEdge));
+            y = Mathf.FloorToInt(Mathf.Lerp(0, maxSubdivisionIndex, v * tilesPerEdge));
+        }
+
+        /// <summary>
+        /// Convert tile indices back to Bary coordinates for mesh generation.
+        /// </summary>
+        /// <param name="tileId">Canonical face id object</param>
+        /// <param name="res">Mesh resolution</param>
+        public static IEnumerable<float[]> TileVertexBarys(int res)
+        {
+            if (res <= 1)
             {
-                for (int y = 0; y < tilesPerEdge; y++)
+                // Degenerate resolution: single vertex at the triangle center index 0
+                yield return new float[2] { 0f, 0f };
+                yield break;
+            }
+            // Use (res - 1) segments per tile edge. The triangular lattice contains
+            // exactly res*(res+1)/2 vertices when iterating rows with lengths
+            // res, res-1, ..., 1 (j = 0..res-1).
+            float weight = 1f / (res - 1);
+            for (int j = 0; j < res; j++)
+            {
+                // maxI such that i + j <= res - 1
+                int maxI = res - 1 - j;
+                for (int i = 0; i <= maxI; i++)
                 {
-                    if (IsValidTileIndex(x, y, depth))
-                        validCount++;
+                    float u = weight * i;
+                    float v = weight * j;
+
+                    float w = 1f - u - v;
+                    if (w < 0f)
+                    {
+                        v = 1f - u;
+                        u = 1f - v;
+                    }
+                    yield return new float[2] { u, v };
                 }
             }
-
-            return validCount;
+            yield break;
         }
 
         /// <summary>
-        /// Validate that tile indices are within the canonical subdivision grid.
-        /// For triangular faces, we exclude tiles where the barycentric center
-        /// would fall outside the triangle (u + v > 1).
-        /// </summary>
-        public static bool IsValidTileIndex(int tileX, int tileY, int depth)
-        {
-            int tilesPerEdge = 1 << depth;
-            if (tileX < 0 || tileY < 0 || tileX >= tilesPerEdge || tileY >= tilesPerEdge)
-                return false;
-            // For depth 0, there's only one tile per face
-            if (depth == 0) return true;
-
-            // Check if the barycentric center would be inside the triangle
-            float u = (tileX + 0.5f) / tilesPerEdge;
-            float v = (tileY + 0.5f) / tilesPerEdge;
-            return (u + v) <= 1.0f;
-        }
-
-        /// <summary>
-        /// Compute the canonical barycentric center for a tile at (x,y,depth).
+        /// Compute the canonical Bary center for a tile at (depth,x,y).
         /// This is the single source of truth for tile center computation used by
         /// TileId, precomputation, mesh builder, and tests.
         /// </summary>
-        public static void GetTileBarycentricCenter(int x, int y, int depth, out float u, out float v)
+        public static void GetTileBaryCenter(int depth, int x, int y, out float u, out float v)
         {
-            int tilesPerEdge = 1 << depth;
-            // Use the canonical triangular centroid offset (1/3) which lies
-            // strictly inside the triangle. Using 0.5 placed the center on the
-            // diagonal (u+v == 1) and produced ambiguous points shared by
-            // multiple faces (causing face-index collisions). 1/3 is the
-            // true barycentric centroid and provides a unique mapping.
-            const float centerOffset = 1f / 3f;
-            u = (x + centerOffset) / tilesPerEdge;
-            v = (y + centerOffset) / tilesPerEdge;
-
-            // If the barycentric center falls in the mirrored half (u+v > 1),
-            // reflect into the canonical triangle so the center is consistent
-            // with TileVertexToBarycentricCoordinates which mirrors grid vertices.
-            const float edgeEpsilon = 1e-6f;
-            if (u + v > 1f - edgeEpsilon)
+            /*
+                depth = 0: center weights at thirds
+                depth = 1: center weights at 9ths
+                depth = 2: center weights at 18ths
+                SOLUTION: weight = 1 / 3^(depth+1)
+            */
+            float weight = 1f / Mathf.Pow(3, depth + 1); // no possibility of divide by zero
+            u = (x + 1) * weight;
+            v = (y + 1) * weight;
+            // Reflect only when the sum strictly exceeds 1 so boundary centers are stable.
+            if (u + v > 1f)
             {
                 u = 1f - u;
                 v = 1f - v;

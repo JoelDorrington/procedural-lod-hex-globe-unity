@@ -45,10 +45,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     {
                         // Enumerate the full square grid per face. Tests expect exactly
                         // 20 * (tilesPerEdge^2) entries (no triangular filtering here).
-                        IcosphereMapping.GetTileBarycentricCenter(x, y, depth, out float u, out float v);
+                        IcosphereMapping.GetTileBaryCenter(depth, x, y, out float u, out float v);
 
                         var entry = new PrecomputedTileEntry();
-                        var normal = IcosphereMapping.BarycentricToWorldDirection(face, u, v).normalized;
+                        var normal = IcosphereMapping.BaryToWorldDirection(face, u, v).normalized;
                         entry.normal = normal;
                         entry.centerWorld = entry.normal * planetRadius + planetCenter;
 
@@ -62,20 +62,13 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
                         float u0 = (float)x / tilesPerEdge;
                         float v0 = (float)y / tilesPerEdge;
-                        float u1 = (float)(x + 1) / tilesPerEdge;
-                        float v1 = v0;
-                        float u2 = u0;
-                        float v2 = (float)(y + 1) / tilesPerEdge;
 
                         entry.tileOffsetU = u0;
                         entry.tileOffsetV = v0;
 
-                        entry.cornerWorldPositions = new Vector3[3];
-                        entry.cornerWorldPositions[0] = IcosphereMapping.BarycentricToWorldDirection(face, u0, v0).normalized * planetRadius + planetCenter;
-                        entry.cornerWorldPositions[1] = IcosphereMapping.BarycentricToWorldDirection(face, u1, v1).normalized * planetRadius + planetCenter;
-                        entry.cornerWorldPositions[2] = IcosphereMapping.BarycentricToWorldDirection(face, u2, v2).normalized * planetRadius + planetCenter;
-
                         var key = new TileId(face, x, y, depth);
+                        entry.cornerWorldPositions = IcosphereMapping.GetCorners(key, planetRadius, planetCenter);
+
                         _tiles.Add(key, entry);
                     }
                 }

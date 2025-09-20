@@ -29,7 +29,6 @@ namespace HexGlobeProject.Tests.Editor
 
             // Prepare TileData
             var data1 = new TileData { id = tileId, resolution = Mathf.Max(8, config.baseResolution << depth) };
-            float rawMin1 = float.MaxValue, rawMax1 = float.MinValue;
 
             // Access private static cache via reflection
             var builderType = typeof(PlanetTileMeshBuilder);
@@ -44,7 +43,7 @@ namespace HexGlobeProject.Tests.Editor
             }
 
             // Act: build first time
-            builder.BuildTileMesh(data1, ref rawMin1, ref rawMax1);
+            builder.BuildTileMesh(data1);
 
             // Assert cache now contains the entry
             var cacheAfterFirst = cacheField.GetValue(null) as System.Collections.IDictionary;
@@ -57,8 +56,7 @@ namespace HexGlobeProject.Tests.Editor
 
             // Act: build second time into a fresh TileData and ensure we get the same mesh instance
             var data2 = new TileData { id = tileId, resolution = data1.resolution };
-            float rawMin2 = float.MaxValue, rawMax2 = float.MinValue;
-            builder.BuildTileMesh(data2, ref rawMin2, ref rawMax2);
+            builder.BuildTileMesh(data2);
 
             var mesh2 = data2.mesh;
             Assert.IsNotNull(mesh2, "Second build should produce or return a mesh");

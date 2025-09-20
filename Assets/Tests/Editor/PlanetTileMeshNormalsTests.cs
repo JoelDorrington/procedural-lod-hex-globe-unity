@@ -36,10 +36,8 @@ namespace HexGlobeProject.Tests.Editor
             entry.centerWorld = entry.normal * (config.baseRadius * 1.01f);
             entry.cornerWorldPositions = new Vector3[3] { entry.centerWorld, entry.centerWorld, entry.centerWorld };
 
-            float rawMin = float.MaxValue, rawMax = float.MinValue;
-
             // Act
-            builder.BuildTileMesh(data, ref rawMin, ref rawMax);
+            builder.BuildTileMesh(data);
 
             // Assert: mesh created
             Assert.IsNotNull(data.mesh);

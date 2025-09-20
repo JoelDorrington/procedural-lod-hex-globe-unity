@@ -11,8 +11,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
     {
         public TileId id;
         public int resolution; // verts per edge - 1 quads per edge
-        public float minHeight;
-        public float maxHeight;
         public float error; // geometric error vs parent (screen-space later)
         public Vector3[] tileSlotCornerBounds; // corner positions of the tile slots on the ocean surface for pre-computed reasoning
         public Mesh mesh;
@@ -21,7 +19,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
         public Vector3[] normals;   // optional baked normals
         // Runtime spatial helpers
         public Vector3 center; // approximate tile center (world)
-        public float boundsRadius; // approximate tile bounding sphere radius (unused yet)
 
     }
 }

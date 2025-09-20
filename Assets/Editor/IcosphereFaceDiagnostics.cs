@@ -16,12 +16,12 @@ public static class IcosphereFaceDiagnostics
         for (int face = 0; face < faceCount; face++)
         {
             // Use the canonical center used by mapping utilities
-            IcosphereMapping.GetTileBarycentricCenter(0, 0, 0, out float u, out float v);
-            Vector3 centroidDir = IcosphereMapping.BarycentricToWorldDirection(face, u, v);
+            IcosphereMapping.GetTileBaryCenter(0, 0, 0, out float u, out float v);
+            Vector3 centroidDir = IcosphereMapping.BaryToWorldDirection(face, u, v);
 
             // Also compute a geometric centroid as a cross-check
             // (reflects triangle vertex average direction)
-            // We can't access IcosahedronVertices directly because it's internal, so rely on barycentric mapping only.
+            // We can't access IcosahedronVertices directly because it's internal, so rely on Bary mapping only.
 
             // Ask mapping to resolve this world direction back to a face index
             IcosphereMapping.WorldDirectionToTileFaceIndex(centroidDir, out int resolvedFace);

@@ -9,9 +9,9 @@ namespace HexGlobeProject.Tests.Editor
     public class PlanetTileMeshBuilderDiagnosticsTests
     {
         [Test]
-        public void IcosphereMapping_BarycentricToWorldDirection_ProducesDistinctDirections()
+        public void IcosphereMapping_BaryToWorldDirection_ProducesDistinctDirections()
         {
-            // Sample a small set of barycentric coordinates across face 0
+            // Sample a small set of Bary coordinates across face 0
             var dirs = new List<Vector3>();
             var samples = new List<(float u, float v)>
             {
@@ -23,7 +23,7 @@ namespace HexGlobeProject.Tests.Editor
 
             foreach (var s in samples)
             {
-                var d = IcosphereMapping.BarycentricToWorldDirection(0, s.u, s.v).normalized;
+                var d = IcosphereMapping.BaryToWorldDirection(0, s.u, s.v).normalized;
                 dirs.Add(d);
             }
 
@@ -33,7 +33,7 @@ namespace HexGlobeProject.Tests.Editor
             {
                 if (Vector3.Distance(dirs[0], dirs[i]) > 1e-6f) { allSame = false; break; }
             }
-            Assert.IsFalse(allSame, "IcosphereMapping.BarycentricToWorldDirection returned identical directions for different barycentric coordinates");
+            Assert.IsFalse(allSame, "IcosphereMapping.BaryToWorldDirection returned identical directions for different Bary coordinates");
         }
 
         [Test]
@@ -61,23 +61,6 @@ namespace HexGlobeProject.Tests.Editor
             }
 
             Assert.Greater(max, min, "SimplePerlinHeightProvider produced no variation across sampled directions");
-        }
-
-        [Test]
-        public void TileVertexToBarycentricCoordinates_ProducesDistinctUVsForGrid()
-        {
-            var id = new TileId(0, 0, 0, 0);
-            int res = 4;
-            var uvs = new HashSet<(float, float)>();
-            for (int j = 0; j < res; j++)
-            {
-                for (int i = 0; i < res; i++)
-                {
-                    IcosphereMapping.TileVertexToBarycentricCoordinates(id, i, j, res, out float u, out float v);
-                    uvs.Add((u, v));
-                }
-            }
-            Assert.Greater(uvs.Count, 1, "TileVertexToBarycentricCoordinates returned identical UVs for grid vertices");
         }
     }
 }

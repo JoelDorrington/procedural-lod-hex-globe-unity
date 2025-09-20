@@ -22,8 +22,7 @@ namespace HexGlobeProject.Tests.Editor
             var sw = System.Diagnostics.Stopwatch.StartNew();
             for (int i = 0; i < runs; i++)
             {
-                float min = float.MaxValue, max = float.MinValue;
-                builder.BuildTileMesh(data, ref min, ref max);
+                builder.BuildTileMesh(data);
                 // Clear mesh to avoid cache short-circuiting in this perf test
                 data.mesh = null;
             }

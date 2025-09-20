@@ -7,32 +7,67 @@ namespace HexGlobeProject.TerrainSystem.LOD
 {
     public class PlanetTileMeshBuilder
     {
-        // Diagnostic helper: when true, log a small number of seam-key events to help
-        // debug adjacent-tile continuity issues in editor tests. Keep logging tightly
-        // bounded to avoid spamming the test output.
-        private const bool s_enableSeamDiagnostics = true;
-        private int _diagnosticSeamLogs = 0;
-        private const int s_maxSeamLogs = 64;
+        // Cache sampled edge vertices so adjacent tiles reuse the exact same
+        // world-space vertex and normal. Keyed by a compact struct to avoid
+        // per-vertex string allocations which were hurting performance.
+        private struct EdgeSampleKey : IEquatable<EdgeSampleKey>
+        {
+            public int face;
+            public int gi;
+            public int gj;
+            public int depth;
+            public int res;
 
-        // Temporary per-builder shared-vertex map used to guarantee exact
-        // identical world-space vertex positions for canonical global grid
-        // indices when multiple tiles are built with the same builder instance.
-        // This is intentionally not a long-lived static cache — callers may
-        // call ClearSharedVertexMap() to reset between unrelated build passes.
-        private readonly Dictionary<string, Vector3> _passSharedVertexMap = new();
+            public EdgeSampleKey(int face, int gi, int gj, int depth, int res)
+            {
+                this.face = face; this.gi = gi; this.gj = gj; this.depth = depth; this.res = res;
+            }
+
+            public bool Equals(EdgeSampleKey other)
+            {
+                return face == other.face && gi == other.gi && gj == other.gj && depth == other.depth && res == other.res;
+            }
+
+            public override bool Equals(object obj) => obj is EdgeSampleKey k && Equals(k);
+
+            public override int GetHashCode()
+            {
+                // Pack fields into a single hash. Use primes to spread bits.
+                unchecked
+                {
+                    int h = 17;
+                    h = h * 31 + face;
+                    h = h * 31 + gi;
+                    h = h * 31 + gj;
+                    h = h * 31 + depth;
+                    h = h * 31 + res;
+                    return h;
+                }
+            }
+        }
+
+    // NOTE: edge sample cache removed to avoid timing/order-dependent seams.
+        // Toggle verbose per-vertex logging. Keep false by default to avoid perf hit; enable manually for debugging.
+        private static bool s_verboseEdgeSampleLogging = false;
 
         /// <summary>
-        /// Clear the temporary shared-vertex map. Tests and callers that perform
-        /// isolated builds may call this to avoid cross-build pollution.
+        /// Public accessor so editor scripts can toggle verbose edge-sample logging
+        /// without editing library code directly.
         /// </summary>
-        public void ClearSharedVertexMap()
+        public static bool VerboseEdgeSampleLogging
         {
-            _passSharedVertexMap.Clear();
+            get => s_verboseEdgeSampleLogging;
+            set => s_verboseEdgeSampleLogging = value;
         }
         // Simple cache so repeated builds for the same TileId return the same Mesh instance.
         // Cache both the Mesh and the sampled raw height range so callers that pass
         // ref rawMin/rawMax receive meaningful values even when the mesh is reused.
-        private struct CachedMeshEntry { public Mesh mesh; public float minH; public float maxH; public Vector3 centerUsed; public int resolutionUsed; }
+        private struct CachedMeshEntry
+        {
+            public Mesh mesh;
+            public Vector3 centerUsed;
+            public int resolutionUsed;
+        }
         private static readonly Dictionary<TileId, CachedMeshEntry> s_meshCache = new();
         private readonly TerrainConfig config;
         private readonly TerrainHeightProviderBase heightProvider;
@@ -59,10 +94,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
         /// Builds the tile mesh and allows caller to specify triangle winding direction.
         /// </summary>
         /// <param name="data">Tile data to populate</param>
-        /// <param name="rawMin">Minimum sampled height</param>
-        /// <param name="rawMax">Maximum sampled height</param>
-        public void BuildTileMesh(TileData data, ref float rawMin, ref float rawMax)
+        public void BuildTileMesh(TileData data)
         {
+            if (data == null) Debug.LogError("wtf bro");
+            if (data == null) throw new ArgumentNullException("data");
             // Note: cache lookup moved later after we obtain the precomputed 'entry'
             // so we can verify the cached mesh was built with the same center.
 
@@ -80,8 +115,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
             int res = data.resolution;
             float radius = config.baseRadius;
-            float minH = float.MaxValue;
-            float maxH = float.MinValue;
 
             // Resolve a height provider to use for sampling. If the injected provider is null
             // (for example a serialized reference couldn't be deserialized), fall back to
@@ -90,23 +123,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
             var provider = heightProvider ?? config.heightProvider ?? new SimplePerlinHeightProvider();
 
             Vector3 centerAccum = Vector3.zero; // Still accumulate for fallback/validation
-            int vertCounter = 0;
 
-            // Debug observability: measure time spent sampling vs building triangles and detect degenerate tris
-            System.Diagnostics.Stopwatch swTotal = null;
-            System.Diagnostics.Stopwatch swSampling = null;
-            System.Diagnostics.Stopwatch swTriBuild = null;
             int degenerateTriangleCount = 0;
-            if (Debug.isDebugBuild)
-            {
-                swTotal = System.Diagnostics.Stopwatch.StartNew();
-                swSampling = new System.Diagnostics.Stopwatch();
-                swTriBuild = new System.Diagnostics.Stopwatch();
-            }
-
-            bool measureSampling = swSampling != null;
-            bool measureTriBuild = swTriBuild != null;
-            const float minTriangleArea = 1e-7f;
+            const float minTriangleArea = 0.00000001f;
 
             var registry = new TerrainTileRegistry(data.id.depth, radius, planetCenter);
             var key = new TileId(data.id.face, data.id.x, data.id.y, data.id.depth);
@@ -114,58 +133,46 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 throw new Exception("Invalid TileId: " + data.id);
 
             // Return cached mesh instance when available to keep reference equality stable.
-            if (data != null && data.id.face >= 0)
+            if (s_meshCache.TryGetValue(data.id, out var existing))
             {
-                if (s_meshCache.TryGetValue(data.id, out var existing))
+                // Guard against Unity 'destroyed' objects being present in the static cache
+                // (happens in test runs where teardown can destroy created Meshes). If the
+                // cached Mesh has been destroyed, drop the cache entry and fall through to
+                // rebuilding a fresh mesh.
+                if (existing.mesh == null)
                 {
-                    // Guard against Unity 'destroyed' objects being present in the static cache
-                    // (happens in test runs where teardown can destroy created Meshes). If the
-                    // cached Mesh has been destroyed, drop the cache entry and fall through to
-                    // rebuilding a fresh mesh.
-                    if (existing.mesh == null)
-                    {
-                        try { s_meshCache.Remove(data.id); } catch { }
-                    }
-                    else if (existing.mesh.name != null && existing.mesh.name.EndsWith("_local"))
-                    {
-                        // Some older code paths created a "_local" clone and it may have been
-                        // cached accidentally; treat such cache entries as stale and rebuild.
-                        try { s_meshCache.Remove(data.id); } catch { }
-                    }
-                    else if ((existing.centerUsed - entry.centerWorld).sqrMagnitude > 1e-6f)
-                    {
-                        // Cached mesh was built with a different center than the current
-                        // precomputed registry entry. Discard stale cache so we rebuild
-                        // with the authoritative center and avoid doubled offsets.
-                        try { s_meshCache.Remove(data.id); } catch { }
-                    }
-                    else if (existing.resolutionUsed != data.resolution)
-                    {
-                        // Cached mesh was built with a different sampling resolution. Invalidate cache
-                        // so callers requesting a different density get a correctly sized mesh.
-                        try { s_meshCache.Remove(data.id); } catch { }
-                    }
-                    else
-                    {
-                        // Populate data and the ref outputs so callers relying on sampled
-                        // ranges (rawMin/rawMax) get correct values even when the mesh
-                        // was built earlier.
-                        data.mesh = existing.mesh;
-                        data.minHeight = existing.minH;
-                        data.maxHeight = existing.maxH;
-                        // Propagate into the caller's refs if they provided sentinel values
-                        // (keeps behavior stable for tests that expect variation).
-                        rawMin = existing.minH;
-                        rawMax = existing.maxH;
-                        return;
-                    }
+                    try { s_meshCache.Remove(data.id); } catch { }
+                }
+                else if (existing.mesh.name != null && existing.mesh.name.EndsWith("_local"))
+                {
+                    // Some older code paths created a "_local" clone and it may have been
+                    // cached accidentally; treat such cache entries as stale and rebuild.
+                    try { s_meshCache.Remove(data.id); } catch { }
+                }
+                else if ((existing.centerUsed - entry.centerWorld).sqrMagnitude > 1e-6f)
+                {
+                    // Cached mesh was built with a different center than the current
+                    // precomputed registry entry. Discard stale cache so we rebuild
+                    // with the authoritative center and avoid doubled offsets.
+                    try { s_meshCache.Remove(data.id); } catch { }
+                }
+                else if (existing.resolutionUsed != data.resolution)
+                {
+                    // Cached mesh was built with a different sampling resolution. Invalidate cache
+                    // so callers requesting a different density get a correctly sized mesh.
+                    try { s_meshCache.Remove(data.id); } catch { }
+                }
+                else
+                {
+                    // Populate data and the ref outputs so callers relying on sampled
+                    // ranges (rawMin/rawMax) get correct values even when the mesh
+                    // was built earlier.
+                    data.mesh = existing.mesh;
+                    return;
                 }
             }
 
-            int depthTiles = entry.tilesPerEdge;
-            float tileSize = 1f / depthTiles;
-
-            // Use direct barycentric->world mapping per-vertex to ensure consistent sampling
+            // Use direct Bary->world mapping per-vertex to ensure consistent sampling
             // (tangent-plane projection caused area distortion at high resolutions)
 
             // Generate vertices only inside the canonical triangle (u+v <= 1) by iterating
@@ -173,155 +180,99 @@ namespace HexGlobeProject.TerrainSystem.LOD
             // vertex counts minimal: res*(res+1)/2.
             // We'll keep a mapping from (i,j) -> vertex index so triangle indices can be
             // constructed easily.
-            int[,] vertexIndexMap = new int[res, res];
-            for (int jj = 0; jj < res; jj++) for (int ii = 0; ii < res; ii++) vertexIndexMap[ii, jj] = -1;
 
-            for (int j = 0; j < res; j++)
+            int[,] vertexIndexMap = new int[res+1, res+1];
+            // Initialize to -1 so unused slots are distinguishable when building triangles.
+            for (int yy = 0; yy < res+1; yy++)
             {
-                int maxI = res - 1 - j; // ensure i+j <= res-1 (inside triangle)
-                for (int i = 0; i <= maxI; i++)
+                for (int xx = 0; xx < res+1; xx++)
                 {
-                    // Compute canonical global integer indices for this lattice point so we can
-                    // derive a single authoritative barycentric (u,v) for seam vertices.
-                    int resMinusOneLocal = Mathf.Max(1, res - 1);
-                    int localI = Mathf.Clamp(i, 0, resMinusOneLocal);
-                    int localJ = Mathf.Clamp(j, 0, resMinusOneLocal);
-                    int globalPerEdgeLocal = entry.tilesPerEdge * resMinusOneLocal;
-                    int globalI = data.id.x * resMinusOneLocal + localI;
-                    int globalJ = data.id.y * resMinusOneLocal + localJ;
+                    vertexIndexMap[xx, yy] = -1;
+                }
+            }
 
-                    // Determine if this vertex lies on a seam (face/edge of the global grid
-                    // or on a local tile boundary). We must treat local tile boundaries as
-                    // seam vertices so adjacent tiles built with the same builder instance
-                    // will consult the same per-pass shared-vertex map and produce
-                    // identical world positions for shared vertices.
-                    bool isSeamVertex = (
-                        // local tile boundary within this tile
-                        localI == 0 || localJ == 0 || localI == resMinusOneLocal || localJ == resMinusOneLocal
-                        // global face/grid boundaries or diagonal seam
-                        || globalI == 0 || globalJ == 0 || globalI == globalPerEdgeLocal || globalJ == globalPerEdgeLocal || (globalI + globalJ) == globalPerEdgeLocal
-                    );
+            float minHeight = float.MaxValue;
+            float maxHeight = float.MinValue;
+            int j = 0;
+            int i = 0;
+            foreach (var bary in IcosphereMapping.TileVertexBarys(res))
+            {
+                // TileVertexBarys yields barycentric coordinates across the canonical triangle.
+                // The implementation emits normalized u/v values corresponding to the triangular
+                // lattice. The mesh builder expects to pass tile-local subdivision indices
+                // into BaryLocalToGlobal (i.e. values in range [0, res-1]). Convert the
+                // normalized bary back into tile-local integer indices before mapping.
 
-                    float globalU, globalV;
-                    if (isSeamVertex)
-                    {
-                        // For seam vertices, compute barycentric coords from the global integer grid
-                        // using double precision division to avoid tiny float rounding differences
-                        // across different tile builds. Apply the same diagonal reflection and
-                        // tiny-nudge logic used in TileVertexToBarycentricCoordinates so the
-                        // canonical (u,v) and integer indices match across code paths.
-                        double dGlobalI = (double)globalI;
-                        double dGlobalJ = (double)globalJ;
-                        double dGlobalPerEdge = (double)globalPerEdgeLocal;
-                        globalU = (float)(dGlobalI / dGlobalPerEdge);
-                        globalV = (float)(dGlobalJ / dGlobalPerEdge);
+                // Store canonical UV for texturing / consistent coordinates using the
+                // integer tile-local indices (this yields the same global bary mapping used below).
+                var globalUV = IcosphereMapping.BaryLocalToGlobal(data.id, (float)i, (float)j, res);
+                _uvs.Add(globalUV);
 
-                        const float edgeEpsilon = 1e-6f;
-                        if (globalU + globalV >= 1f - edgeEpsilon)
-                        {
-                            if (Mathf.Abs(globalU + globalV - 1f) < edgeEpsilon)
-                            {
-                                // tiny inward nudge to keep face selection stable
-                                globalU -= edgeEpsilon * 0.5f;
-                                globalV -= edgeEpsilon * 0.5f;
-                            }
-                            else
-                            {
-                                // reflect indices to canonical triangle
-                                globalI = globalPerEdgeLocal - globalI;
-                                globalJ = globalPerEdgeLocal - globalJ;
-                                dGlobalI = (double)globalI;
-                                dGlobalJ = (double)globalJ;
-                                globalU = (float)(dGlobalI / dGlobalPerEdge);
-                                globalV = (float)(dGlobalJ / dGlobalPerEdge);
-                            }
-                        }
-                    }
-                    else
-                    {
-                        // Non-seam vertices may use the per-tile helper which follows the
-                        // canonical mapping for interior lattice points.
-                        IcosphereMapping.TileVertexToBarycentricCoordinates(
-                            data.id, i, j, res,
-                            out globalU, out globalV);
-                    }
+                // Map Bary coords to world direction (IcosphereMapping returns a normalized direction)
+                Vector3 dir = IcosphereMapping.BaryToWorldDirection(entry.face, globalUV[0], globalUV[1]);
 
-                    // Store canonical UV for texturing / consistent coordinates
-                    _uvs.Add(new Vector2(globalU, globalV));
+                int tilesPerEdge = Math.Max(1, res - 1);
+                int globalI = data.id.x * tilesPerEdge + i;
+                int globalJ = data.id.y * tilesPerEdge + j;
+                float rawSample = provider.Sample(in dir, res);
+                float rawScaled = rawSample * config.heightScale;
 
-                    // Map barycentric coords to world direction (IcosphereMapping returns a normalized direction)
-                    Vector3 dir = IcosphereMapping.BarycentricToWorldDirection(entry.face, globalU, globalV);
+                if (rawScaled < minHeight) minHeight = rawScaled;
+                if (rawScaled > maxHeight) maxHeight = rawScaled;
 
-                    // Sample height using the consistent world direction, with resolution passed for detail control
-                    if (measureSampling) swSampling.Start();
-                    float raw = provider.Sample(in dir, res);
-                    if (measureSampling) swSampling.Stop();
+                Vector3 sampledWorld = dir * (radius + rawScaled) + planetCenter;
+                Vector3 sampledNormal = dir;
 
-                    raw *= config.heightScale;
-                    if (raw < rawMin) rawMin = raw;
-                    if (raw > rawMax) rawMax = raw;
+                Vector3 worldVertex = sampledWorld;
+                _verts.Add(worldVertex);
+                int assignedIndex = _verts.Count - 1;
+                // No cache tracking; keep vertex as sampled.
+                _normals.Add(sampledNormal);
+                centerAccum += worldVertex;
+                vertexIndexMap[i, j] = _verts.Count - 1;
+                int maxI = res - 1 - j; // ensure i+j <= res-1 (inside triangle)
+                i += 1;
+                if (i >= maxI)
+                {
+                    i = 0;
+                    j += 1;
+                    if(j >= res) break;
+                }
+            }
+            
+            for (int yy2 = 0; yy2 < res; yy2++)
+            {
+                for (int xx2 = 0; xx2 < res; xx2++)
+                {
+                    if (xx2 + yy2 > res - 1) continue; // outside canonical triangle
+                    if (vertexIndexMap[xx2, yy2] >= 0) continue; // already present
 
-                    float hSample = raw;
-                    float finalR = radius + hSample;
+                    var globalUV = IcosphereMapping.BaryLocalToGlobal(data.id, (float)xx2, (float)yy2, res);
+                    Vector3 dir = IcosphereMapping.BaryToWorldDirection(entry.face, globalUV[0], globalUV[1]);
 
-                    minH = Mathf.Min(minH, hSample);
-                    maxH = Mathf.Max(maxH, hSample);
+                    float rawS = provider.Sample(in dir, res) * config.heightScale;
 
-                    Vector3 worldVertex = dir * finalR + planetCenter;
+                    Vector3 sampledWorld2 = dir * (radius + rawS) + planetCenter;
+                    Vector3 sampledNormal2 = dir;
 
-                    // For seam vertices, consult the per-builder pass-local shared-vertex map
-                    // so adjacent tiles built with the same builder instance get identical
-                    // world vertex positions. The key is constructed from face/globalI/globalJ
-                    // which is canonical across tiles.
-                    if (isSeamVertex)
-                    {
-                        // Include depth and mesh resolution in the key so vertices sampled
-                        // at different LODs or depths don't collide in the per-pass map.
-                        // This prevents reuse of a canonical vertex from a previous build
-                        // with a different sampling density which would otherwise corrupt
-                        // geometry when the builder is reused across unrelated passes.
-                        string sharedKey = $"D{data.id.depth}:R{res}:F{entry.face}:I{globalI}:J{globalJ}";
-                        if (_passSharedVertexMap.TryGetValue(sharedKey, out var canonical))
-                        {
-                            // replace with canonical world vertex previously stored
-                            if (s_enableSeamDiagnostics && _diagnosticSeamLogs < s_maxSeamLogs)
-                            {
-                                UnityEngine.Debug.Log($"[SeamDiag] Reusing key={sharedKey} existing={canonical} newCandidate={worldVertex}");
-                                _diagnosticSeamLogs++;
-                            }
-                            worldVertex = canonical;
-                        }
-                        else
-                        {
-                            if (s_enableSeamDiagnostics && _diagnosticSeamLogs < s_maxSeamLogs)
-                            {
-                                UnityEngine.Debug.Log($"[SeamDiag] Registering key={sharedKey} world={worldVertex}");
-                                _diagnosticSeamLogs++;
-                            }
-                            _passSharedVertexMap[sharedKey] = worldVertex;
-                        }
-                    }
-
-                    _verts.Add(worldVertex);
-                    _normals.Add(dir);
-                    centerAccum += worldVertex;
-                    vertexIndexMap[i, j] = vertCounter;
-                    vertCounter++;
+                    _verts.Add(sampledWorld2);
+                    _normals.Add(sampledNormal2);
+                    _uvs.Add(globalUV);
+                    vertexIndexMap[xx2, yy2] = _verts.Count - 1;
                 }
             }
 
             // Build triangles from the triangular lattice using the vertexIndexMap.
-            for (int j = 0; j < res - 1; j++)
+            for (int jj = 0; jj < res - 1; jj++)
             {
-                int maxI = res - 2 - j; // i such that we have (i+1,j) and (i,j+1)
-                for (int i = 0; i <= maxI; i++)
+                int maxI = res - 2 - jj; // ii such that we have (ii+1,jj) and (ii,jj+1)
+                for (int ii = 0; ii <= maxI; ii++)
                 {
-                    int i0 = vertexIndexMap[i, j];
-                    int i1 = vertexIndexMap[i + 1, j];
-                    int i2 = vertexIndexMap[i, j + 1];
+                    int i0 = vertexIndexMap[ii, jj];
+                    int i1 = vertexIndexMap[ii + 1, jj];
+                    int i2 = vertexIndexMap[ii, jj + 1];
                     if (i0 < 0 || i1 < 0 || i2 < 0) continue;
 
-                    if (measureTriBuild) swTriBuild.Start();
                     Vector3 v0 = _verts[i0]; Vector3 v1 = _verts[i1]; Vector3 v2 = _verts[i2];
                     float area0 = Vector3.Cross(v1 - v0, v2 - v0).magnitude * 0.5f;
                     if (area0 > minTriangleArea)
@@ -332,9 +283,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
                     // Add second triangle in the cell when the upper-right vertex exists
                     // which is at (i+1, j+1) for interior cells.
-                    if (i + j < res - 2)
+                    if (ii + jj < res - 2)
                     {
-                        int i3 = vertexIndexMap[i + 1, j + 1];
+                        int i3 = vertexIndexMap[ii + 1, jj + 1];
                         if (i3 >= 0)
                         {
                             Vector3 u0 = _verts[i1]; Vector3 u1 = _verts[i3]; Vector3 u2 = _verts[i2];
@@ -346,8 +297,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
                             else degenerateTriangleCount++;
                         }
                     }
-
-                    if (measureTriBuild) swTriBuild.Stop();
                 }
             }
 
@@ -376,41 +325,16 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 }
             }
 
-            if (swTotal != null)
-            {
-                swTotal.Stop();
-                // Timing logs removed in production; keep stopwatch usage for local profiling if needed.
-            }
-
-            // Use the precomputed registry center as the authoritative tile center.
-            // Using the registry's `entry.centerWorld` avoids small per-tile centroid
-            // differences introduced by sampling (which grow with resolution) and
-            // are the likely cause of tiny seams at higher depths. Keeping the
-            // GameObject transform at the registry center ensures adjacent tiles
-            // use the same reference when converting world vertices to local-space.
-            Vector3 sampledCenter = vertCounter > 0 ? (centerAccum / vertCounter) : entry.centerWorld;
             data.center = entry.centerWorld;
-
-            if (vertCounter > 0)
-            {
-                data.boundsRadius = 0.5f * ((radius + maxH) - (radius + minH)) + (radius + (minH + maxH) * 0.5f);
-            }
 
             // Convert mesh vertices from world-space to local-space relative to the tile center.
             // Using data.center (the precomputed registry center) as the authoritative
             // GameObject position ensures that TransformPoint(localVerts) == original world verts
             // and adjacent tiles will share exact world-space edge vertices.
-            for (int i = 0; i < _verts.Count; i++)
+            for (int vrtIdx = 0; vrtIdx < _verts.Count; vrtIdx++)
             {
-                _verts[i] = _verts[i] - data.center;
+                _verts[vrtIdx] = _verts[vrtIdx] - data.center;
             }
-
-            // Note: Do NOT perform an additional centroid recentering here.
-            // We already converted vertices to local-space by subtracting data.center above.
-            // Any further global shift would change the final world-space vertex positions
-            // after the spawned GameObject is placed at data.center and thus break edge continuity
-            // between adjacent tiles. Keeping vertices = worldVertex - data.center preserves
-            // the exact sampled world positions when the GameObject transform.position == data.center.
 
             // Create a fresh mesh with corrected vertices
             var mesh = new Mesh();
@@ -445,8 +369,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
             // Avoid the heavy RecalculateBounds call; compute an approximate bounds
             // from the sampled min/max heights which we already track. This is
             // sufficient to keep the mesh renderable and avoids another native pass.
-            float maxRad = radius + (maxH == float.MinValue ? 0f : maxH);
-            float minRad = radius + (minH == float.MaxValue ? 0f : minH);
+            float maxRad = radius + (maxHeight == float.MinValue ? 0f : maxHeight);
+            float minRad = radius + (minHeight == float.MaxValue ? 0f : minHeight);
             float maxExtent = Mathf.Max(Mathf.Abs(maxRad), Mathf.Abs(minRad));
             var approxSize = Vector3.one * (maxExtent * 2f + 1f);
             mesh.bounds = new Bounds(Vector3.zero, approxSize);
@@ -457,22 +381,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
             // Debug: count normals deviating from radial
             data.mesh = mesh;
 
-            // Populate sampled height ranges so callers and cache entries are correct
-            data.minHeight = minH == float.MaxValue ? 0f : minH;
-            data.maxHeight = maxH == float.MinValue ? 0f : maxH;
-            rawMin = data.minHeight;
-            rawMax = data.maxHeight;
-
             // Cache the produced mesh and sampled range so subsequent builder invocations
             // for the same TileId return the same instance and meaningful rawMin/rawMax.
-            try
-            {
-                if (data != null && data.id.face >= 0)
-                {
-                    s_meshCache[data.id] = new CachedMeshEntry { mesh = mesh, minH = data.minHeight, maxH = data.maxHeight, centerUsed = data.center, resolutionUsed = data.resolution };
-                }
-            }
-            catch { }
+            s_meshCache[data.id] = new CachedMeshEntry { mesh = mesh, centerUsed = data.center, resolutionUsed = data.resolution };
         }
         /// <summary>
         /// Flips the winding order of triangles in the index list (in-place).

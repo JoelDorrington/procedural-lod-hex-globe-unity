@@ -32,17 +32,40 @@ namespace HexGlobeProject.Tests.Editor
         [Test]
         public void SharedCornerVertices_AreIdenticalBetweenAdjacentTiles()
         {
-            // Choose two adjacent tiles that share a corner. We'll pick face 0, tiles (0,0) and (1,0)
-            // which share the corner at (u=1/tilesPerEdge, v=0) after mirroring rules. Use depth=1.
-            var tileAId = new TileId(0, 0, 0, 1);
-            var tileBId = new TileId(0, 1, 0, 1);
+            // Find two actually adjacent tiles from the registry (share a corner)
+            int depth = 1;
+            var registry = new TerrainTileRegistry(depth, config.baseRadius, Vector3.zero);
+            TileId chosenA = default; TileId chosenB = default;
+            Vector3? matchedCorner = null;
+            float cornerMatchEps = 1e-4f;
 
-            var dataA = new TileData { id = tileAId, resolution = config.baseResolution };
-            var dataB = new TileData { id = tileBId, resolution = config.baseResolution };
+            var keys = new System.Collections.Generic.List<TileId>(registry.tiles.Keys);
+            for (int a = 0; a < keys.Count && matchedCorner == null; a++)
+            {
+                for (int b = a + 1; b < keys.Count && matchedCorner == null; b++)
+                {
+                    var ea = registry.tiles[keys[a]];
+                    var eb = registry.tiles[keys[b]];
+                    foreach (var ca in ea.cornerWorldPositions)
+                    {
+                        foreach (var cb in eb.cornerWorldPositions)
+                        {
+                            if ((ca - cb).sqrMagnitude <= cornerMatchEps * cornerMatchEps)
+                            {
+                                chosenA = keys[a]; chosenB = keys[b]; matchedCorner = ca; break;
+                            }
+                        }
+                        if (matchedCorner != null) break;
+                    }
+                }
+            }
+            Assert.IsTrue(matchedCorner.HasValue, "Could not find two adjacent tiles that share a corner in the registry");
 
-            float rawMin = float.MaxValue, rawMax = float.MinValue;
-            builder.BuildTileMesh(dataA, ref rawMin, ref rawMax);
-            builder.BuildTileMesh(dataB, ref rawMin, ref rawMax);
+            var dataA = new TileData { id = chosenA, resolution = config.baseResolution };
+            var dataB = new TileData { id = chosenB, resolution = config.baseResolution };
+
+            builder.BuildTileMesh(dataA);
+            builder.BuildTileMesh(dataB);
 
             Assert.IsNotNull(dataA.mesh, "Tile A mesh should be generated");
             Assert.IsNotNull(dataB.mesh, "Tile B mesh should be generated");
@@ -52,34 +75,6 @@ namespace HexGlobeProject.Tests.Editor
             Vector3[] vertsA = dataA.mesh.vertices;
             Vector3[] vertsB = dataB.mesh.vertices;
 
-            // Extract candidate world positions for corners from registry for tileA
-            var registry = new TerrainTileRegistry(1, config.baseRadius, Vector3.zero);
-            registry.tiles.TryGetValue(tileAId, out var entryA);
-            registry.tiles.TryGetValue(tileBId, out var entryB);
-
-            Assert.IsNotNull(entryA.cornerWorldPositions, "Precomputed registry should provide corner positions");
-            Assert.IsNotNull(entryB.cornerWorldPositions, "Precomputed registry should provide corner positions");
-
-            // We'll check the shared corner between these tiles. Determine which corner is shared.
-            // Locate the shared corner by checking which corner from tile A appears in tile B's corner list.
-            Vector3 sharedA = entryA.cornerWorldPositions[1];
-            Vector3? matchedInB = null;
-            float eps = 1e-5f;
-            foreach (var cb in entryB.cornerWorldPositions)
-            {
-                if ((cb - sharedA).sqrMagnitude <= eps * eps)
-                {
-                    matchedInB = cb;
-                    break;
-                }
-            }
-            Assert.IsTrue(matchedInB.HasValue, "Registry entries should share a corner position between adjacent tiles");
-
-            // Compare world-space positions (redundant but clearer failure messages)
-            Assert.AreEqual(sharedA.x, matchedInB.Value.x, eps, "Registry shared corner X should match");
-            Assert.AreEqual(sharedA.y, matchedInB.Value.y, eps, "Registry shared corner Y should match");
-            Assert.AreEqual(sharedA.z, matchedInB.Value.z, eps, "Registry shared corner Z should match");
-
             // Find the nearest mesh vertex (in world-space) to the registry corner for each tile,
             // then assert those two world positions are equal within tolerance. This is robust
             // when heights are non-zero (we assert alignment between tiles, not equality to the
@@ -88,7 +83,7 @@ namespace HexGlobeProject.Tests.Editor
             for (int idx = 0; idx < vertsA.Length; idx++)
             {
                 var w = vertsA[idx] + dataA.center;
-                float d = (w - sharedA).sqrMagnitude;
+                float d = (w - matchedCorner.Value).sqrMagnitude;
                 if (d < bestA) { bestA = d; bestApos = w; anyA = true; }
             }
 
@@ -96,7 +91,7 @@ namespace HexGlobeProject.Tests.Editor
             for (int idx = 0; idx < vertsB.Length; idx++)
             {
                 var w = vertsB[idx] + dataB.center;
-                float d = (w - sharedA).sqrMagnitude;
+                float d = (w - matchedCorner.Value).sqrMagnitude;
                 if (d < bestB) { bestB = d; bestBpos = w; anyB = true; }
             }
 

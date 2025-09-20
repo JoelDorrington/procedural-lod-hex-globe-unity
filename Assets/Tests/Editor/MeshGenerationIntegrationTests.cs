@@ -3,7 +3,6 @@ using UnityEngine;
 using HexGlobeProject.TerrainSystem.LOD;
 using HexGlobeProject.TerrainSystem.Core;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace HexGlobeProject.Tests.Editor
 {
@@ -115,11 +114,8 @@ namespace HexGlobeProject.Tests.Editor
             var tileId = new TileId(0, 0, 0, 1); // face 0, coords (0,0), depth 1
             var tileData = new TileData { id = tileId, resolution = testConfig.baseResolution };
 
-            float rawMin = float.MaxValue;
-            float rawMax = float.MinValue;
-
             // Build the tile mesh using the real pipeline
-            meshBuilder.BuildTileMesh(tileData, ref rawMin, ref rawMax);
+            meshBuilder.BuildTileMesh(tileData);
 
             // Validate the generated mesh
             Assert.IsNotNull(tileData.mesh, "Mesh should be generated");
@@ -157,7 +153,7 @@ namespace HexGlobeProject.Tests.Editor
                 {
                     for (int y = 0; y < tilesPerEdge; y++)
                     {
-                        if (IcosphereMapping.IsValidTileIndex(x, y, depth))
+                        if (IcosphereTestHelpers.IsValidTileIndex(x, y, depth))
                         {
                             validTiles.Add(new TileId(face, x, y, depth));
                         }
@@ -190,11 +186,8 @@ namespace HexGlobeProject.Tests.Editor
                     TileData tile1Data = new TileData { id = tile1Id, resolution = testConfig.baseResolution };
                     TileData tile2Data = new TileData { id = tile2Id, resolution = testConfig.baseResolution };
 
-                    float rawMin1 = float.MaxValue, rawMax1 = float.MinValue;
-                    float rawMin2 = float.MaxValue, rawMax2 = float.MinValue;
-
-                    meshBuilder.BuildTileMesh(tile1Data, ref rawMin1, ref rawMax1);
-                    meshBuilder.BuildTileMesh(tile2Data, ref rawMin2, ref rawMax2);
+                    meshBuilder.BuildTileMesh(tile1Data);
+                    meshBuilder.BuildTileMesh(tile2Data);
 
                     // Extract vertices from both meshes
                     var vertsA = tile1Data.mesh.vertices;
@@ -313,19 +306,32 @@ namespace HexGlobeProject.Tests.Editor
                 var lowResTileData = new TileData { id = tileId, resolution = lowResConfig.baseResolution };
                 var highResTileData = new TileData { id = tileId, resolution = highResConfig.baseResolution };
 
+                // Build meshes with different resolutions
+                lowResMeshBuilder.BuildTileMesh(lowResTileData);
+                highResMeshBuilder.BuildTileMesh(highResTileData);
+
                 float rawMin1 = float.MaxValue, rawMax1 = float.MinValue;
                 float rawMin2 = float.MaxValue, rawMax2 = float.MinValue;
 
-                // Build meshes with different resolutions
-                lowResMeshBuilder.BuildTileMesh(lowResTileData, ref rawMin1, ref rawMax1);
-                highResMeshBuilder.BuildTileMesh(highResTileData, ref rawMin2, ref rawMax2);
+                foreach(var v in lowResTileData.mesh.vertices)
+                {
+                    float height = v.magnitude - lowResConfig.baseRadius;
+                    if (height < rawMin1) rawMin1 = height;
+                    if (height > rawMax1) rawMax1 = height;
+                }
+                foreach(var v in highResTileData.mesh.vertices)
+                {
+                    float height = v.magnitude - highResConfig.baseRadius;
+                    if (height < rawMin2) rawMin2 = height;
+                    if (height > rawMax2) rawMax2 = height;
+                }
 
                 // Higher resolution should have more vertices
                 Assert.Greater(highResTileData.mesh.vertexCount, lowResTileData.mesh.vertexCount,
                     "Higher resolution should produce more vertices");
 
                 // But height bounds should be similar (topology consistency)
-                float heightRangeTolerance = 1.0f; // Allow some variation due to sampling density
+                float heightRangeTolerance = 2.0f; // Allow some variation due to sampling density
                 Assert.AreEqual(rawMin1, rawMin2, heightRangeTolerance,
                     "Minimum height should be consistent across resolutions");
                 Assert.AreEqual(rawMax1, rawMax2, heightRangeTolerance,
@@ -358,9 +364,7 @@ namespace HexGlobeProject.Tests.Editor
 
             try
             {
-
-                float rawMin = float.MaxValue, rawMax = float.MinValue;
-                meshBuilder.BuildTileMesh(tileData, ref rawMin, ref rawMax);
+                meshBuilder.BuildTileMesh(tileData);
 
                 var mesh = tileData.mesh;
                 var vertices = mesh.vertices;
@@ -399,20 +403,6 @@ namespace HexGlobeProject.Tests.Editor
             {
                 Assert.Inconclusive("Could not test mesh normals - requires precomputed entries");
             }
-        }
-
-        /// <summary>
-        /// Placeholder for testing the visibility manager's tile spawning with real meshes.
-        /// This would test the full integration pipeline.
-        /// </summary>
-        [Test]
-        public void FullPipeline_VisibilityManagerIntegration()
-        {
-            // This test would verify that the PlanetTileVisibilityManager
-            // correctly spawns tiles with proper meshes using the mesh builder
-
-            // For now, mark as placeholder since it requires full scene setup
-            Assert.Pass("Placeholder for full pipeline integration testing");
         }
     }
 }

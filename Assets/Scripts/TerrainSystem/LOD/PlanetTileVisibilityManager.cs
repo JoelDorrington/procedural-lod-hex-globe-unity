@@ -298,8 +298,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			try
 			{
 				var data = tile.tileData ?? new TileData { id = id, resolution = resolutionForBuilder(id) };
-				float rawMin = float.MaxValue, rawMax = float.MinValue;
-				_meshBuilder.BuildTileMesh(data, ref rawMin, ref rawMax);
+				_meshBuilder.BuildTileMesh(data);
 				// Assign into tile and meshFilter using the tile helper so assignment time is recorded
 				tile.tileData = data;
 				if (tile.meshFilter != null && data.mesh != null)
@@ -732,7 +731,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
 		// Placeholder stub for the new math-based visibility selector.
 		// The real implementation will compute visible TileIds using spherical
-		// geometry (camera direction -> face/barycentric -> k-ring) and schedule
+		// geometry (camera direction -> face/Bary -> k-ring) and schedule
 		// builds via TileMeshCache/ Scheduler. Present to satisfy tests and to
 		// act as the integration point for the MathSelector.
 		private void UpdateVisibilityMathBased()
@@ -754,7 +753,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			{
 				float planetRadius = _planetRadius;
 				float dist = (camPos - planetCenter).magnitude;
-				float angularRadius = Mathf.Asin(Mathf.Min(1f, planetRadius / Mathf.Max(1e-6f, dist)));
+				float angularRadius = Mathf.Asin(Mathf.Min(1f, planetRadius / Mathf.Max(float.MinValue, dist)));
 				planetFillsView = angularRadius > (Mathf.PI / 4f);
 			}
 
@@ -820,7 +819,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
 				{
 					foreach (var e in reg.tiles.Values)
 					{
-						// Use the tile centroid direction only — barycentric corner checks are unnecessary
+						// Use the tile centroid direction only — Bary corner checks are unnecessary
 						Vector3 centerDir = (e.centerWorld - planetCenter).normalized;
 						if (Vector3.Dot(centerDir, camDir) > centerDotThreshold)
 						{

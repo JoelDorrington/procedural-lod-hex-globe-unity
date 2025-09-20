@@ -393,7 +393,7 @@ namespace HexGlobeProject.HexMap
                 }
                 double mean = sum / m;
                 double var = sumSq / m - mean * mean;
-                double std = var > 0 ? System.Math.Sqrt(var) : 0;
+                double std = var > 0 ? (double)Mathf.Sqrt((float)var) : 0;
                 double cv = mean > 1e-9 ? std / mean : 0;
             }
 

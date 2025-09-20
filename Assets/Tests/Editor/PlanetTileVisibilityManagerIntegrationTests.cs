@@ -50,7 +50,7 @@ namespace HexGlobeProject.Tests.Editor
                 method.Invoke(manager, null);
 
                 // Assert: the manager should not have spawned all tiles for the depth
-                int perFace = IcosphereMapping.GetValidTileCountForDepth(targetDepth);
+                int perFace = HexGlobeProject.Tests.Editor.IcosphereTestHelpers.GetValidTileCountForDepth(targetDepth);
                 int expectedTotal = 20 * perFace;
 
                 var activeTiles = manager.GetActiveTiles();

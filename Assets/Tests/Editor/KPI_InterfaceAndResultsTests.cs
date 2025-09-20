@@ -33,8 +33,8 @@ namespace HexGlobeProject.Tests.Editor
             Assert.IsNotNull(tileFromDir, "TileFromDirection must be a public static method.");
 
             int depth = 2;
-            // Use a reliable canonical direction (face 0 barycentric center)
-            var dir = FindType("IcosphereMapping").GetMethod("BarycentricToWorldDirection", BindingFlags.Public | BindingFlags.Static)
+            // Use a reliable canonical direction (face 0 Bary center)
+            var dir = FindType("IcosphereMapping").GetMethod("BaryToWorldDirection", BindingFlags.Public | BindingFlags.Static)
                 .Invoke(null, new object[] { 0, 0.5f, 0.5f }) as Vector3? ?? Vector3.forward;
 
             var tile = tileFromDir.Invoke(null, new object[] { dir, depth });

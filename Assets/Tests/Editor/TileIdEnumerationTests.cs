@@ -35,7 +35,7 @@ namespace HexGlobeProject.Tests.Editor
                 
                 // Assert: Enumeration should terminate and return finite list
                 Assert.IsNotNull(tileIds, "Method should return a list");
-                int expectedPerFace = IcosphereMapping.GetValidTileCountForDepth(0);
+                int expectedPerFace = HexGlobeProject.Tests.Editor.IcosphereTestHelpers.GetValidTileCountForDepth(0);
                 int expectedTotal = 20 * expectedPerFace;
                 Assert.AreEqual(expectedTotal, tileIds.Count, $"Depth 0 should generate exactly {expectedTotal} TileIds");
                 
