@@ -23,6 +23,7 @@ namespace HexGlobeProject.Tests.Editor
         [SetUp]
         public void SetUp()
         {
+            PlanetTileMeshBuilder.ClearCache();
             // Create test terrain config
             testConfig = ScriptableObject.CreateInstance<TerrainConfig>();
             testConfig.baseRadius = 100f;

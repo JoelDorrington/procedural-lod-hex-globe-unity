@@ -118,8 +118,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
             // expectation that sums equal to 1 are not reflected.
             if (uGlobal + vGlobal > 1f)
             {
-                uGlobal = 1f - uGlobal;
-                vGlobal = 1f - vGlobal;
+                uGlobal = 1f - vGlobal;
+                vGlobal = 1f - uGlobal;
             }
             return new Vector2(uGlobal, vGlobal);
         }
@@ -145,11 +145,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
         public static Vector3[] GetCorners(TileId id, float planetRadius, Vector3 planetCenter)
         {
-            // Defensive: ensure planetCenter is a valid vector (never null in Unity, but keep for API symmetry)
-            // Compute the three corner barycentrics for the discrete tile lattice. For tile (x,y) at given depth,
-            // the integer lattice corners are at (x, y), (x+1, y), (x, y+1). Convert these to normalized
-            // barycentric coordinates by dividing by tilesPerEdge, then reflect into the canonical triangle
-            // when u+v > 1. Finally convert to world-space directions via BaryToWorldDirection.
             var corners = new Vector3[3];
 
             float[][] localIndices = new float[3][] {

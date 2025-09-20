@@ -86,7 +86,7 @@ Material:
     - _OcclusionStrength: 1
     - _OverlayAAScale: 1
     - _OverlayEdgeThreshold: 0.15
-    - _OverlayEnabled: 1
+    - _OverlayEnabled: 0
     - _OverlayGlowIntensity: 0.8
     - _OverlayGlowLOD: 2
     - _OverlayGlowSpread: 0.06

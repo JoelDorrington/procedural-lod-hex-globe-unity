@@ -148,7 +148,7 @@ namespace HexGlobeProject.HexMap
                 var m = mats[i];
                 if (m == null) continue;
 
-                // If the material doesn't use the overlay shader, replace it with one that does
+                // If the material doesn't use the overlay shader, replace it with one that does so the ComputeBuffer can be bound and read by the shader.
                 // This is an intentional, visible-playtest convenience: overlay will appear by default.
                 var overlayShader = Shader.Find("HexGlobe/PlanetTerrain");
                 if (overlayShader != null && (m.shader == null || m.shader.name != "HexGlobe/PlanetTerrain"))
@@ -393,7 +393,7 @@ namespace HexGlobeProject.HexMap
                 }
                 double mean = sum / m;
                 double var = sumSq / m - mean * mean;
-                double std = var > 0 ? (double)Mathf.Sqrt((float)var) : 0;
+                double std = var > 0 ? System.Math.Sqrt(var) : 0;
                 double cv = mean > 1e-9 ? std / mean : 0;
             }
 

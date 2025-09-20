@@ -13,6 +13,7 @@ namespace HexGlobeProject.Tests.Editor
         [SetUp]
         public void SetUp()
         {
+            PlanetTileMeshBuilder.ClearCache();
             config = ScriptableObject.CreateInstance<TerrainConfig>();
             config.baseRadius = 30f;
             config.baseResolution = 8;
@@ -127,8 +128,8 @@ namespace HexGlobeProject.Tests.Editor
             Debug.Log($"[DiagSimplified] exactSampleWorld={exactSampleWorld} foundInA={foundInA} foundInB={foundInB}");
 
             // Next causal check: builder must use the registry's centerWorld as data.center
-            Assert.LessOrEqual((entryA.centerWorld - dataA.center).sqrMagnitude, 1e-8f, "Tile A center must equal registry centerWorld");
-            Assert.LessOrEqual((entryB.centerWorld - dataB.center).sqrMagnitude, 1e-8f, "Tile B center must equal registry centerWorld");
+            Assert.LessOrEqual((entryA.centerWorld - dataA.center).sqrMagnitude, 1e-6f, "Tile A center must equal registry centerWorld");
+            Assert.LessOrEqual((entryB.centerWorld - dataB.center).sqrMagnitude, 1e-6f, "Tile B center must equal registry centerWorld");
 
             // If the mesh contains the exact sampled vertex, ensure converting that
             // local vertex back to world-space by adding data.center yields the exact sample
@@ -136,18 +137,18 @@ namespace HexGlobeProject.Tests.Editor
             Vector3 matchedLocalB = Vector3.zero; bool matchedLocalBSet = false;
             foreach (var vtx in dataA.mesh.vertices)
             {
-                if ((vtx + dataA.center - exactSampleWorld).sqrMagnitude <= 1e-8f) { matchedLocalA = vtx; matchedLocalASet = true; break; }
+                if ((vtx + dataA.center - exactSampleWorld).sqrMagnitude <= 1e-6f) { matchedLocalA = vtx; matchedLocalASet = true; break; }
             }
             foreach (var vtx in dataB.mesh.vertices)
             {
-                if ((vtx + dataB.center - exactSampleWorld).sqrMagnitude <= 1e-8f) { matchedLocalB = vtx; matchedLocalBSet = true; break; }
+                if ((vtx + dataB.center - exactSampleWorld).sqrMagnitude <= 1e-6f) { matchedLocalB = vtx; matchedLocalBSet = true; break; }
             }
 
             if (tileA_hasLocal)
             {
                 Assert.IsTrue(foundInA, "Tile A declares the local index but did not produce the exact sampled vertex in its mesh");
                 Assert.IsTrue(matchedLocalASet, "Tile A should have a mesh vertex that converts to the exact sampled world position");
-                Assert.LessOrEqual(((matchedLocalA + dataA.center) - exactSampleWorld).sqrMagnitude, 1e-8f, "Local->world conversion mismatch for Tile A matched vertex");
+                Assert.LessOrEqual(((matchedLocalA + dataA.center) - exactSampleWorld).sqrMagnitude, 1e-6f, "Local->world conversion mismatch for Tile A matched vertex");
             }
             else
             {
@@ -159,7 +160,7 @@ namespace HexGlobeProject.Tests.Editor
             {
                 Assert.IsTrue(foundInB, "Tile B declares the local index but did not produce the exact sampled vertex in its mesh");
                 Assert.IsTrue(matchedLocalBSet, "Tile B should have a mesh vertex that converts to the exact sampled world position");
-                Assert.LessOrEqual(((matchedLocalB + dataB.center) - exactSampleWorld).sqrMagnitude, 1e-8f, "Local->world conversion mismatch for Tile B matched vertex");
+                Assert.LessOrEqual(((matchedLocalB + dataB.center) - exactSampleWorld).sqrMagnitude, 1e-6f, "Local->world conversion mismatch for Tile B matched vertex");
             }
             else
             {

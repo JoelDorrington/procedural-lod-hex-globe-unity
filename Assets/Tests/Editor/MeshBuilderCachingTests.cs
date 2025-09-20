@@ -30,6 +30,8 @@ namespace HexGlobeProject.Tests.Editor
             // Prepare TileData
             var data1 = new TileData { id = tileId, resolution = Mathf.Max(8, config.baseResolution << depth) };
 
+            // Ensure cache cleared via public API first
+            PlanetTileMeshBuilder.ClearCache();
             // Access private static cache via reflection
             var builderType = typeof(PlanetTileMeshBuilder);
             var cacheField = builderType.GetField("s_meshCache", BindingFlags.Static | BindingFlags.NonPublic);

@@ -69,6 +69,26 @@ namespace HexGlobeProject.TerrainSystem.LOD
             public int resolutionUsed;
         }
         private static readonly Dictionary<TileId, CachedMeshEntry> s_meshCache = new();
+
+        /// <summary>
+        /// Clears the static mesh cache. Public so editor code or tests may call it.
+        /// The cache is also cleared automatically on game start by the
+        /// <see cref="ClearCacheOnGameStart"/> method which is decorated with
+        /// RuntimeInitializeOnLoadMethod.
+        /// </summary>
+        public static void ClearCache()
+        {
+            try { s_meshCache.Clear(); } catch { }
+        }
+
+        // Ensure the cache is empty when the game begins. This prevents stale
+        // cached Mesh objects from tests, editor scripts, or previous runs from
+        // leaking into a fresh play session where a new planet center may be used.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void ClearCacheOnGameStart()
+        {
+            ClearCache();
+        }
         private readonly TerrainConfig config;
         private readonly TerrainHeightProviderBase heightProvider;
         private readonly Vector3 planetCenter = default;

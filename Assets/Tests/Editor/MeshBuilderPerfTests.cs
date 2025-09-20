@@ -14,6 +14,7 @@ namespace HexGlobeProject.Tests.Editor
             config.baseRadius = 1f;
             config.baseResolution = 8;
 
+            PlanetTileMeshBuilder.ClearCache();
             var builder = new PlanetTileMeshBuilder(config, null, Vector3.zero);
             var id = new TileId(0, 0, 0, 2);
             var data = new TileData { id = id, resolution = Mathf.Max(8, config.baseResolution << id.depth) };

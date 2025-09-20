@@ -23,6 +23,7 @@ namespace HexGlobeProject.Tests.Editor
             // ensure a concrete provider that produces non-zero variation
             config.heightProvider = new SimplePerlinHeightProvider();
 
+            PlanetTileMeshBuilder.ClearCache();
             var builder = new PlanetTileMeshBuilder(config);
 
             var tileId = new TileId(0, 0, 0, 0);

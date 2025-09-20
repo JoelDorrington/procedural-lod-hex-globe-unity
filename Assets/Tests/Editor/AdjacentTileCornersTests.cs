@@ -13,6 +13,7 @@ namespace HexGlobeProject.Tests.Editor
         [SetUp]
         public void SetUp()
         {
+            PlanetTileMeshBuilder.ClearCache();
             config = ScriptableObject.CreateInstance<TerrainConfig>();
             config.baseRadius = 30f;
             config.baseResolution = 8;

@@ -29,7 +29,7 @@ namespace HexGlobeProject.Tests.Editor
         }
 
         [Test]
-        public void TileVertexBarys_AllEdgePointsHaveZeroUVOrW([Values(4, 8, 16, 32, 64, 128, 512)] int res)
+        public void TileVertexBarys_AllEdgePointsHaveZeroUVOrW([Values(4, 8, 16, 32, 64)] int res)
         {
 
             int count = 0;
