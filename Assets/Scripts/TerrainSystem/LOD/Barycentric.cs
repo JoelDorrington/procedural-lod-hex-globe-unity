@@ -46,10 +46,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
             if (uGlobal + vGlobal > 1f)
             {
-                float oldU = uGlobal;
-                float oldV = vGlobal;
-                uGlobal = 1f - oldU;
-                vGlobal = 1f - oldV;
+                var uOld = uGlobal;
+                uGlobal = 1f - vGlobal;
+                vGlobal = 1f - uOld;
             }
             return new Barycentric(uGlobal, vGlobal);
         }

@@ -13,12 +13,12 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
     public static class IcosphereMapping
     {
-        private const float ONE_THIRD = 1f / 3f;
+        public const float ONE_THIRD = 1f / 3f;
         // Golden ratio constant for icosahedron construction
-        private const float PHI = 1.618033988749895f; // (1 + sqrt(5)) / 2
+        public const float PHI = 1.618033988749895f; // (1 + sqrt(5)) / 2
 
         // Standard icosahedron vertices (12 vertices)
-        private static readonly Vector3[] IcosahedronVertices =
+        public static readonly Vector3[] IcosahedronVertices =
         {
             new Vector3(-1,  PHI, 0).normalized,  // 0
             new Vector3( 1,  PHI, 0).normalized,  // 1  
@@ -35,7 +35,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
         };
 
         // 20 triangular faces of the icosahedron  
-        private static readonly int[,] IcosahedronFaces =
+        public static readonly int[,] IcosahedronFaces =
         {
             // 5 faces around point 0
             {0, 11, 5}, {0, 5, 1}, {0, 1, 7}, {0, 7, 10}, {0, 10, 11},
@@ -180,7 +180,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             return position.normalized;
         }
 
-        public static Vector3[] GetCorners(TileId id, float planetRadius, Vector3 planetCenter)
+        public static Vector3[] GetCorners(TileId id, float planetRadius, Vector3 planetCenter = default)
         {
             var corners = new Vector3[3];
 
@@ -239,9 +239,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
             if (u + v > 1f)
             {
-                var oldU = u;
+                var uOld = u;
                 u = 1f - v;
-                v = 1f - oldU;
+                v = 1f - uOld;
             }
 
             if (depth < 0) depth = 0;
@@ -292,6 +292,27 @@ namespace HexGlobeProject.TerrainSystem.LOD
         }
 
         /// <summary>
+        /// Compute the canonical bary zero point for a tile at (depth,x,y).
+        /// This is the single source of truth for tile center computation used by
+        /// TileId, precomputation, mesh builder, and tests.
+        /// </summary>
+        public static Barycentric GetLocalBary(int depth, int x, int y)
+        {
+            /*
+                depth = 0: center weights at thirds
+                depth = 1: center weights at 9ths
+                depth = 2: center weights at 18ths
+                SOLUTION: weight = 1 / 3^(depth+1)
+            */
+            float weight = 1f / Mathf.Pow(3, depth + 1); // no possibility of divide by zero
+            float u = x * weight;
+            float v = y * weight;
+            // Reflect only when the sum strictly exceeds 1 so boundary centers are stable.
+            if (u + v > 1f) return new(1f - v, 1f - u);
+            return new(u, v);
+        }
+
+        /// <summary>
         /// Compute the canonical Bary center for a tile at (depth,x,y).
         /// This is the single source of truth for tile center computation used by
         /// TileId, precomputation, mesh builder, and tests.
@@ -305,8 +326,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 SOLUTION: weight = 1 / 3^(depth+1)
             */
             float weight = 1f / Mathf.Pow(3, depth + 1); // no possibility of divide by zero
-            float u = (x + 1) * weight;
-            float v = (y + 1) * weight;
+            float u = x * weight;
+            float v = y * weight;
             // Reflect only when the sum strictly exceeds 1 so boundary centers are stable.
             if (u + v > 1f) return new(1f - v, 1f - u);
             return new(u, v);

@@ -33,7 +33,7 @@ namespace HexGlobeProject.Tests.Editor
                     {
                         if (!IcosphereTestHelpers.IsValidTileIndex(x, y, depth)) continue;
                         // compute Bary center for this tile
-                        var center = IcosphereMapping.GetTileBaryCenter(depth, x, y);
+                        var center = IcosphereMapping.GetLocalBary(depth, x, y);
                         Vector3 dir = IcosphereMapping.BaryToWorldDirection(face, center).normalized;
                         IcosphereMapping.WorldDirectionToFaceIndex(dir, out int foundFace);
                         Assert.AreEqual(face, foundFace, $"Depth {depth} tile center round-trip failed for face {face} x={x} y={y} (found {foundFace})");

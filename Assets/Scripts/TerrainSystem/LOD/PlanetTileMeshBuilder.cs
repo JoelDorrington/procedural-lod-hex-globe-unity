@@ -95,14 +95,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
             try { s_meshCache.Clear(); } catch { }
         }
 
-        // Ensure the cache is empty when the game begins. This prevents stale
-        // cached Mesh objects from tests, editor scripts, or previous runs from
-        // leaking into a fresh play session where a new planet center may be used.
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        private static void ClearCacheOnGameStart()
-        {
-            ClearCache();
-        }
         private readonly TerrainConfig config;
         private readonly TerrainHeightProviderBase heightProvider;
         private readonly Vector3 planetCenter = default;
@@ -232,7 +224,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 _uvs.Add((Vector2)global);
 
                 // Sample height at this vertex
-                var dir = IcosphereMapping.BaryToWorldDirection(entry.face, bary);
+                var dir = IcosphereMapping.BaryToWorldDirection(entry.face, global);
                 float rawSample = provider.Sample(in dir, res);
                 float rawScaled = rawSample * config.heightScale;
                 if (rawScaled < minHeight) minHeight = rawScaled;
