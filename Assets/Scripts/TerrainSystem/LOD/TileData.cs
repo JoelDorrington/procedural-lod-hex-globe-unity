@@ -18,7 +18,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
         public Vector3[] tempVerts; // transient during build (can be cleared)
         public Vector3[] normals;   // optional baked normals
         // Runtime spatial helpers
-        public Vector3 center; // approximate tile center (world)
+        public Vector3 center; // approximate tile center (world position)
 
     }
 }

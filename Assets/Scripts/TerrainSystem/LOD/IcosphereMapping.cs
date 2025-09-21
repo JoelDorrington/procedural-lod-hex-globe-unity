@@ -116,9 +116,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
             Vector3 v1 = IcosahedronVertices[IcosahedronFaces[face, 1]];
             Vector3 v2 = IcosahedronVertices[IcosahedronFaces[face, 2]];
 
-            // Interpolate position using Bary coordinates
-            Vector3 position = bary.W * v0 + bary.U * v1 + bary.V * v2;
-            return position.normalized;
+            // Interpolate dir using Bary coordinates
+            Vector3 dir = bary.W * v0 + bary.U * v1 + bary.V * v2;
+            return dir.normalized;
         }
 
         public static Vector3[] GetCorners(TileId id, float planetRadius, Vector3 planetCenter = default)

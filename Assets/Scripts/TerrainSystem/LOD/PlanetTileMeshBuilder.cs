@@ -181,7 +181,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
         /// Builds the tile mesh and allows caller to specify triangle winding direction.
         /// </summary>
         /// <param name="data">Tile data to populate</param>
-        public void BuildTileMesh(TileData data)
+        public void BuildTileMesh(TileData data, TerrainTileRegistry registry = null)
         {
             if (data == null) Debug.LogError("wtf bro");
             if (data == null) throw new ArgumentNullException("data");
@@ -192,7 +192,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             var planetCenter = this.planetCenter;
             var depth = data.id.depth;
 
-            var registry = new TerrainTileRegistry(depth, radius, planetCenter);
+            if(registry == null) registry = new TerrainTileRegistry(depth, radius, planetCenter);
             if (!registry.tiles.ContainsKey(data.id))
             {
                 throw new ArgumentException($"TileId {data.id} not found in precomputed registry at depth {depth}");
@@ -233,7 +233,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 // Add vert
                 Vector3 worldVert = dir * (radius + rawScaled) + planetCenter;
                 _verts.Add(worldVert);
-                _normals.Add(dir);
                 _vertsMap[i, j] = _verts.Count - 1; // stash index in lattice
                 int maxI = res - 1 - j; // ensure i+j <= res-1 (inside triangle)
                 i += 1;
@@ -297,7 +296,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 Vector3 bPos = _verts[bIdx];
                 Vector3 cPos = _verts[cIdx];
                 Vector3 triNormal = Vector3.Cross(bPos - aPos, cPos - aPos).normalized;
-                Vector3 avgVertNormal = (_normals[aIdx] + _normals[bIdx] + _normals[cIdx]).normalized;
+                Vector3 avgVertNormal = (aPos.normalized + bPos.normalized + cPos.normalized).normalized;
 
                 // dot > 0 => triangle geometric normal points roughly same direction as vertex normals
                 float dot = Vector3.Dot(triNormal, avgVertNormal);
@@ -308,17 +307,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 { // just in case
                     FlipTriangleWinding(_tris);
                 }
-            }
-
-            data.center = entry.centerWorld;
-
-            // Convert mesh vertices from world-space to local-space relative to the tile center.
-            // Using data.center (the precomputed registry center) as the authoritative
-            // GameObject position ensures that TransformPoint(localVerts) == original world verts
-            // and adjacent tiles will share exact world-space edge vertices.
-            for (int vrtIdx = 0; vrtIdx < _verts.Count; vrtIdx++)
-            {
-                _verts[vrtIdx] = _verts[vrtIdx] - data.center;
             }
 
             // Create mesh

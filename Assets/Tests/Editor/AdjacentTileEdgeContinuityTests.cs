@@ -107,7 +107,7 @@ namespace HexGlobeProject.Tests.Editor
                 }
             }
 
-            Assert.AreEqual(matchedVerts, config.baseResolution, $"Expected {config.baseResolution} matching edge vertices, found {matchedVerts}");
+            Assert.AreEqual(config.baseResolution, matchedVerts, $"Expected {config.baseResolution} matching edge vertices, found {matchedVerts}");
         }
     }
 }
