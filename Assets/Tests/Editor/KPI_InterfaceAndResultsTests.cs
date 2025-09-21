@@ -35,7 +35,7 @@ namespace HexGlobeProject.Tests.Editor
             int depth = 2;
             // Use a reliable canonical direction (face 0 Bary center)
             var dir = FindType("IcosphereMapping").GetMethod("BaryToWorldDirection", BindingFlags.Public | BindingFlags.Static)
-                .Invoke(null, new object[] { 0, 0.5f, 0.5f }) as Vector3? ?? Vector3.forward;
+                .Invoke(null, new object[] { 0, new Barycentric(0.5f, 0.5f) }) as Vector3? ?? Vector3.forward;
 
             var tile = tileFromDir.Invoke(null, new object[] { dir, depth });
             Assert.IsNotNull(tile, "TileFromDirection returned null.");

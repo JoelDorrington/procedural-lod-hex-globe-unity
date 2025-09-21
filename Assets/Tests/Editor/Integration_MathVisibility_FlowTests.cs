@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using HexGlobeProject.TerrainSystem.LOD;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -63,7 +64,7 @@ namespace HexGlobeProject.Tests.Editor
                 var baryToWorld = icosType.GetMethod("BaryToWorldDirection", BindingFlags.Public | BindingFlags.Static);
                 Assert.IsNotNull(baryToWorld, "BaryToWorldDirection expected.");
 
-                var dirObj = baryToWorld.Invoke(null, new object[] { 0, 0.33f, 0.33f });
+                var dirObj = baryToWorld.Invoke(null, new object[] { 0, new Barycentric(0.33f, 0.33f) });
                 var dir = dirObj as Vector3? ?? Vector3.forward;
 
                 var centerTile = tileFromDir.Invoke(null, new object[] { dir, 2 });

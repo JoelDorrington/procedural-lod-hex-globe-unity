@@ -30,6 +30,7 @@ namespace HexGlobeProject.Tests.Editor
             var data = new TileData { id = tileId, resolution = 8 };
 
             var entry = new PrecomputedTileEntry();
+            entry.depth = 0;
             entry.normal = new Vector3(0f, 0f, 1f);
             entry.face = 0; entry.x = 0; entry.y = 0;
             entry.centerWorld = entry.normal * (config.baseRadius * 1.01f);

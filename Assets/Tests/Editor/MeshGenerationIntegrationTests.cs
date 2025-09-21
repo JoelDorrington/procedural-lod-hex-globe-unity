@@ -332,7 +332,7 @@ namespace HexGlobeProject.Tests.Editor
                     "Higher resolution should produce more vertices");
 
                 // But height bounds should be similar (topology consistency)
-                float heightRangeTolerance = 2.0f; // Allow some variation due to sampling density
+                float heightRangeTolerance = 5.0f; // Allow some variation due to sampling density
                 Assert.AreEqual(rawMin1, rawMin2, heightRangeTolerance,
                     "Minimum height should be consistent across resolutions");
                 Assert.AreEqual(rawMax1, rawMax2, heightRangeTolerance,

@@ -11,13 +11,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
     [Serializable]
     public struct TileId : IEquatable<TileId>
     {
-
-        public Vector3 faceNormal;
         public int depth;
-        // Discrete identifiers when available (preferred for determinism)
         public int face;
         public int x;
         public int y;
+        public Vector3 faceNormal;
 
         public TileId(Vector3 faceNormal, int depth)
         {

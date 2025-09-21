@@ -29,8 +29,8 @@ namespace HexGlobeProject.Tests.Editor
             return map;
         }
 
-    [Test, Ignore("Temporarily ignored: triangular-lattice adjacency checks will be re-enabled after placement fixes")]
-    public void AdjacentTilesSharedEdgeVerticesMatch()
+        [Test, Ignore("Temporarily ignored: triangular-lattice adjacency checks will be re-enabled after placement fixes")]
+        public void AdjacentTilesSharedEdgeVerticesMatch()
         {
             // Arrange: create a simple TerrainConfig asset in-memory
             var config = ScriptableObject.CreateInstance<TerrainConfig>();

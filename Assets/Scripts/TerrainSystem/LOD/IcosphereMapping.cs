@@ -122,12 +122,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
         float uGlobal = (tileId.x * subdivisionsPerTileEdge + localBary.U) / subdivisionsPerFaceEdge;
         float vGlobal = (tileId.y * subdivisionsPerTileEdge + localBary.V) / subdivisionsPerFaceEdge;
-        
-        // Targeted diagnostic for known failing case; harmless when not running tests.
-        if (tileId.face == 0 && tileId.depth == 1 && tileId.x == 0 && tileId.y == 0)
-        {
-            Debug.Log($"[ICOSPHERE_DIAG] BaryLocalToGlobal pre-reflect tile={tileId} localBary={localBary} uGlobal={uGlobal} vGlobal={vGlobal}");
-        }
 
         if (uGlobal + vGlobal > 1f)
         {

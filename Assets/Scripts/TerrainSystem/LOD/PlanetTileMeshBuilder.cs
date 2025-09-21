@@ -7,6 +7,20 @@ namespace HexGlobeProject.TerrainSystem.LOD
 {
     public class PlanetTileMeshBuilder
     {
+        private static int[,] EmptyVertexLattice(int res) {
+            // init lattice for triangle construction
+            int[,] lattice = new int[res + 1, res + 1];
+            // Initialize to -1 so unused slots are distinguishable when building triangles.
+            for (int yy = 0; yy < res + 1; yy++)
+            {
+                for (int xx = 0; xx < res + 1; xx++)
+                {
+                    lattice[xx, yy] = -1;
+                }
+            }
+            return lattice;
+        }
+
         // Cache sampled edge vertices so adjacent tiles reuse the exact same
         // world-space vertex and normal. Keyed by a compact struct to avoid
         // per-vertex string allocations which were hurting performance.
@@ -110,6 +124,67 @@ namespace HexGlobeProject.TerrainSystem.LOD
             this.planetCenter = planetCenter;
         }
 
+        private void Init(int resolution)
+        {
+            _verts.Clear();
+            _tris.Clear();
+            _normals.Clear();
+            _uvs.Clear();
+
+            // Reserve capacity to avoid repeated reallocations for large resolutions
+            // Use triangular lattice vertex count: res * (res + 1) / 2
+            int expectedVertsCap = resolution * (resolution + 1) / 2;
+            if (_verts.Capacity < expectedVertsCap) _verts.Capacity = expectedVertsCap;
+            if (_normals.Capacity < expectedVertsCap) _normals.Capacity = expectedVertsCap;
+            if (_uvs.Capacity < expectedVertsCap) _uvs.Capacity = expectedVertsCap;
+        }
+
+        private bool TryGetExistingMesh(PrecomputedTileEntry entry, int resolution, out CachedMeshEntry foundEntry)
+        {
+            // Return cached mesh instance when available to keep reference equality stable.
+            var id = new TileId(entry.face, entry.x, entry.y, entry.depth);
+            if (s_meshCache.TryGetValue(id, out var existing))
+            {
+                // Guard against Unity 'destroyed' objects being present in the static cache
+                // (happens in test runs where teardown can destroy created Meshes). If the
+                // cached Mesh has been destroyed, drop the cache entry and fall through to
+                // rebuilding a fresh mesh.
+                if (existing.mesh == null)
+                {
+                    try { s_meshCache.Remove(id); } catch { }
+                }
+                else if (existing.mesh.name != null && existing.mesh.name.EndsWith("_local"))
+                {
+                    // Some older code paths created a "_local" clone and it may have been
+                    // cached accidentally; treat such cache entries as stale and rebuild.
+                    try { s_meshCache.Remove(id); } catch { }
+                }
+                else if ((existing.centerUsed - entry.centerWorld).sqrMagnitude > 1e-6f)
+                {
+                    // Cached mesh was built with a different center than the current
+                    // precomputed registry entry. Discard stale cache so we rebuild
+                    // with the authoritative center and avoid doubled offsets.
+                    try { s_meshCache.Remove(id); } catch { }
+                }
+                else if (existing.resolutionUsed != resolution)
+                {
+                    // Cached mesh was built with a different sampling resolution. Invalidate cache
+                    // so callers requesting a different density get a correctly sized mesh.
+                    try { s_meshCache.Remove(id); } catch { }
+                }
+                else
+                {
+                    // Populate data and the ref outputs so callers relying on sampled
+                    // ranges (rawMin/rawMax) get correct values even when the mesh
+                    // was built earlier.
+                    foundEntry = existing;
+                    return true;
+                }
+            }
+            foundEntry = default;
+            return false;
+        }
+
         /// <summary>
         /// Builds the tile mesh and allows caller to specify triangle winding direction.
         /// </summary>
@@ -120,150 +195,68 @@ namespace HexGlobeProject.TerrainSystem.LOD
             if (data == null) throw new ArgumentNullException("data");
             // Note: cache lookup moved later after we obtain the precomputed 'entry'
             // so we can verify the cached mesh was built with the same center.
+            var res = data.resolution;
+            var radius = config.baseRadius;
+            var planetCenter = this.planetCenter;
+            var depth = data.id.depth;
 
-            _verts.Clear();
-            _tris.Clear();
-            _normals.Clear();
-            _uvs.Clear();
+            var registry = new TerrainTileRegistry(depth, radius, planetCenter);
+            if (!registry.tiles.ContainsKey(data.id))
+            {
+                throw new ArgumentException($"TileId {data.id} not found in precomputed registry at depth {depth}");
+            }
+            var entry = registry.tiles[data.id];
 
-            // Reserve capacity to avoid repeated reallocations for large resolutions
-            // Use triangular lattice vertex count: res * (res + 1) / 2
-            int expectedVertsCap = data.resolution * (data.resolution + 1) / 2;
-            if (_verts.Capacity < expectedVertsCap) _verts.Capacity = expectedVertsCap;
-            if (_normals.Capacity < expectedVertsCap) _normals.Capacity = expectedVertsCap;
-            if (_uvs.Capacity < expectedVertsCap) _uvs.Capacity = expectedVertsCap;
+            if (TryGetExistingMesh(entry, res, out var cached))
+            {
+                data.mesh = cached.mesh;
+                data.center = cached.centerUsed;
+                return;
+            }
 
-            int res = data.resolution;
-            float radius = config.baseRadius;
-
-            // Resolve a height provider to use for sampling. If the injected provider is null
-            // (for example a serialized reference couldn't be deserialized), fall back to
-            // the config's provider or a new default SimplePerlinHeightProvider so terrain
-            // is still generated instead of flat tiles.
-            var provider = heightProvider ?? config.heightProvider ?? new SimplePerlinHeightProvider();
-
-            Vector3 centerAccum = Vector3.zero; // Still accumulate for fallback/validation
+            Init(res);
 
             int degenerateTriangleCount = 0;
             const float minTriangleArea = 0.00000001f;
+            var provider = heightProvider ?? config.heightProvider ?? new SimplePerlinHeightProvider();
 
-            var registry = new TerrainTileRegistry(data.id.depth, radius, planetCenter);
-            var key = new TileId(data.id.face, data.id.x, data.id.y, data.id.depth);
-            if (!registry.tiles.TryGetValue(key, out var entry))
-                throw new Exception("Invalid TileId: " + data.id);
-
-            // Return cached mesh instance when available to keep reference equality stable.
-            if (s_meshCache.TryGetValue(data.id, out var existing))
-            {
-                // Guard against Unity 'destroyed' objects being present in the static cache
-                // (happens in test runs where teardown can destroy created Meshes). If the
-                // cached Mesh has been destroyed, drop the cache entry and fall through to
-                // rebuilding a fresh mesh.
-                if (existing.mesh == null)
-                {
-                    try { s_meshCache.Remove(data.id); } catch { }
-                }
-                else if (existing.mesh.name != null && existing.mesh.name.EndsWith("_local"))
-                {
-                    // Some older code paths created a "_local" clone and it may have been
-                    // cached accidentally; treat such cache entries as stale and rebuild.
-                    try { s_meshCache.Remove(data.id); } catch { }
-                }
-                else if ((existing.centerUsed - entry.centerWorld).sqrMagnitude > 1e-6f)
-                {
-                    // Cached mesh was built with a different center than the current
-                    // precomputed registry entry. Discard stale cache so we rebuild
-                    // with the authoritative center and avoid doubled offsets.
-                    try { s_meshCache.Remove(data.id); } catch { }
-                }
-                else if (existing.resolutionUsed != data.resolution)
-                {
-                    // Cached mesh was built with a different sampling resolution. Invalidate cache
-                    // so callers requesting a different density get a correctly sized mesh.
-                    try { s_meshCache.Remove(data.id); } catch { }
-                }
-                else
-                {
-                    // Populate data and the ref outputs so callers relying on sampled
-                    // ranges (rawMin/rawMax) get correct values even when the mesh
-                    // was built earlier.
-                    data.mesh = existing.mesh;
-                    return;
-                }
-            }
-
-            // Use direct Bary->world mapping per-vertex to ensure consistent sampling
-            // (tangent-plane projection caused area distortion at high resolutions)
-
-            // Generate vertices only inside the canonical triangle (u+v <= 1) by iterating
-            // a triangular lattice. This prevents mirrored/duplicated vertices and keeps
-            // vertex counts minimal: res*(res+1)/2.
-            // We'll keep a mapping from (i,j) -> vertex index so triangle indices can be
-            // constructed easily.
-
-            int[,] _vertsMap = new int[res+1, res+1];
-            // Initialize to -1 so unused slots are distinguishable when building triangles.
-            for (int yy = 0; yy < res+1; yy++)
-            {
-                for (int xx = 0; xx < res+1; xx++)
-                {
-                    _vertsMap[xx, yy] = -1;
-                }
-            }
+            // init lattice for triangle construction
+            int[,] _vertsMap = EmptyVertexLattice(res);
 
             float minHeight = float.MaxValue;
             float maxHeight = float.MinValue;
-            int j = 0;
-            int i = 0;
+            int j = 0; int i = 0;
             foreach (var bary in IcosphereMapping.TileVertexBarys(res))
             {
-                // TileVertexBarys yields barycentric coordinates across the canonical triangle.
-                // The implementation emits normalized u/v values corresponding to the triangular
-                // lattice. The mesh builder expects to pass tile-local subdivision indices
-                // into BaryLocalToGlobal (i.e. values in range [0, res-1]). Convert the
-                // normalized bary back into tile-local integer indices before mapping.
-
-                // Store canonical UV for texturing / consistent coordinates using the
-                // integer tile-local indices (this yields the same global bary mapping used below).
-                // Map Bary coords to world direction (IcosphereMapping returns a normalized direction)
                 Barycentric global = IcosphereMapping.BaryLocalToGlobal(data.id, bary, res);
                 _uvs.Add((Vector2)global);
 
+                // Sample height at this vertex
                 var dir = IcosphereMapping.BaryToWorldDirection(entry.face, bary);
-                
-                int tilesPerEdge = Math.Max(1, res - 1);
-                int globalI = data.id.x * tilesPerEdge + i;
-                int globalJ = data.id.y * tilesPerEdge + j;
                 float rawSample = provider.Sample(in dir, res);
                 float rawScaled = rawSample * config.heightScale;
-
                 if (rawScaled < minHeight) minHeight = rawScaled;
                 if (rawScaled > maxHeight) maxHeight = rawScaled;
 
-                Vector3 sampledWorld = dir * (radius + rawScaled) + planetCenter;
-                Vector3 sampledNormal = dir;
-
-                Vector3 worldVertex = sampledWorld;
-                _verts.Add(worldVertex);
-                int assignedIndex = _verts.Count - 1;
-                // No cache tracking; keep vertex as sampled.
-                _normals.Add(sampledNormal);
-                centerAccum += worldVertex;
-                _vertsMap[i, j] = _verts.Count - 1;
+                // Add vert
+                Vector3 worldVert = dir * (radius + rawScaled) + planetCenter;
+                _verts.Add(worldVert);
+                _normals.Add(dir);
+                _vertsMap[i, j] = _verts.Count - 1; // stash index in lattice
                 int maxI = res - 1 - j; // ensure i+j <= res-1 (inside triangle)
                 i += 1;
-                if (i >= maxI)
+                if (i > maxI)
                 {
                     i = 0;
                     j += 1;
-                    if(j >= res) break;
+                    if (j >= res) break;
                 }
             }
 
-            // Build triangles from the triangular lattice using the vertexIndexMap.
+            // Build triangles from the lattice using the vertexIndexMap.
             for (int jj = 0; jj < res - 1; jj++)
             {
-                int maxI = res - 2 - jj; // ii such that we have (ii+1,jj) and (ii,jj+1)
+                int maxI = res - 1 - jj; // ii such that we have (ii+1,jj) and (ii,jj+1)
                 for (int ii = 0; ii <= maxI; ii++)
                 {
                     int i0 = _vertsMap[ii, jj];
@@ -297,6 +290,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     }
                 }
             }
+
+            if(degenerateTriangleCount > 0) Debug.Log($"Degenerate triangle count: {degenerateTriangleCount} (out of {_tris.Count / 3} total)");
 
             // Ensure triangle winding matches vertex normals (so triangles naturally face away from sphere)
             // Check the geometric normal of the first triangle against the averaged vertex normal;
@@ -351,10 +346,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
             var approxSize = Vector3.one * (maxExtent * 2f + 1f);
             mesh.bounds = new Bounds(Vector3.zero, approxSize);
 
-            // Use the precomputed vertex normals collected during sampling instead of
-            // calling RecalculateNormals() which is expensive in native code.
-            // This keeps normals coherent with the sampling direction (dir) and
-            // avoids a costly recompute for each mesh build.
+            // Use the normals collected during sampling instead of calling RecalculateNormals() 
+            // which is expensive in native code. This keeps normals coherent with the sampling
+            //  direction (dir) and avoids a costly recompute for each mesh build.
             try
             {
                 if (_normals.Count != _verts.Count)
@@ -371,8 +365,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
             data.mesh = mesh;
 
-            // Cache the produced mesh and sampled range so subsequent builder invocations
-            // for the same TileId return the same instance and meaningful rawMin/rawMax.
+            // Cache the produced mesh
             s_meshCache[data.id] = new CachedMeshEntry { mesh = mesh, centerUsed = data.center, resolutionUsed = data.resolution };
         }
         /// <summary>

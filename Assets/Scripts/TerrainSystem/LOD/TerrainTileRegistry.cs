@@ -55,6 +55,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
                         entry.centerWorld = entry.normal * planetRadius + planetCenter;
 
                         // Populate metadata fields for callers
+                        entry.depth = depth;
                         entry.face = face;
                         entry.x = x;
                         entry.y = y;
@@ -71,6 +72,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
     public struct PrecomputedTileEntry
     {
+        public int depth; // LOD value, 0=root
         public int face; // Canonical face index 0..19
         public int x; // x index of subdivision
         public int y; // y index of subdivision
