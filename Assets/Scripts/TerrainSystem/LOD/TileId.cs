@@ -36,7 +36,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             this.face = face;
             this.x = x;
             this.y = y;
-            faceNormal = IcosphereMapping.BaryToWorldDirection(face, IcosphereMapping.GetTileBaryCenter(depth, x, y)).normalized;
+            faceNormal = IcosphereMapping.BaryToWorldDirection(face, IcosphereMapping.TileIndexToBaryCenter(depth, x, y)).normalized;
         }
 
         public override string ToString()

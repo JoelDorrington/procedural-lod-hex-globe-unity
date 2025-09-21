@@ -45,7 +45,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     {
                         // Enumerate the full square grid per face. Tests expect exactly
                         // 20 * (tilesPerEdge^2) entries (no triangular filtering here).
-                        var center = IcosphereMapping.GetTileBaryCenter(depth, x, y);
+                        var center = IcosphereMapping.TileIndexToBaryCenter(depth, x, y);
                         var normal = IcosphereMapping.BaryToWorldDirection(face, center).normalized;
 
                         var key = new TileId(face, x, y, depth);

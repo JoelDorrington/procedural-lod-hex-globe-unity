@@ -77,92 +77,33 @@ namespace HexGlobeProject.TerrainSystem.LOD
             }
         }
 
-    /// <summary>
-    /// Map a tile-local index array into the global barycentric coordinates on
-    /// the icosphere face.
-    ///
-    /// Important semantics (disambiguation):
-    /// - The incoming <paramref name="localBary"/> is treated as a pair of
-    ///   tile-local subdivision indices (not normalized barycentric fractions).
-    ///   Example: for a single tile with <c>subdivisionsPerTileEdge</c> = 4,
-    ///   the lower-left corner is <c>[0,0]</c>, the right-most tile index on
-    ///   the first row is <c>[4,0]</c>, etc.
-    /// - The method computes global (u,v) by converting tile indices and
-    ///   local subdivision offsets into fractional coordinates across the
-    ///   full face, then applying the mirror/reflection rule when u+v &gt; 1.
-    ///
-    /// Use <see cref="VertexMapIndexToGlobal"/> when you have scalar localX/localY
-    /// values (non-allocating) for hot paths. The name <c>BaryLocalToGlobal</c>
-    /// is preserved for historical reasons and because several test helpers and
-    /// callers pass small float[] indices. Future callers should prefer the
-    /// non-allocating API when possible.
-    ///
-    /// New code should prefer the immutable <see cref="Barycentric"/> ADT for
-    /// expressing normalized barycentric coordinates in APIs. Use
-    /// <c>Barycentric.FromTileIndices(...)</c> or
-    /// <c>Barycentric.FromTileIndexArray(...)</c> to convert tile-local indices
-    /// into normalized bary fractions.
-    /// </summary>
-    /// <param name="tileId">Canonical tile identifier (face, x, y, depth).</param>
-    /// <param name="localBary">Two-element array of tile-local subdivision indices (float values allowed).</param>
-    /// <param name="res">Mesh resolution; used to derive subdivisions per tile edge (res - 1).</param>
-    /// <returns>Global barycentric (u,v) coordinates across the icosphere face.</returns>
+        /// <summary>
+        /// Map a tile-local index array into the global barycentric coordinates on
+        /// the icosphere face.
+        /// </summary>
+        /// <param name="tileId">Canonical tile identifier (face, x, y, depth).</param>
+        /// <param name="localBary">Two-element array of tile-local subdivision indices (float values allowed).</param>
+        /// <param name="res">Mesh resolution; used to derive subdivisions per tile edge (res - 1).</param>
+        /// <returns>Global barycentric (u,v) coordinates across the icosphere face.</returns>
     public static Barycentric BaryLocalToGlobal(TileId tileId, Barycentric localBary, int res)
-    {
-        if (tileId.x < 0 || tileId.y < 0)
-        {
-            throw new Exception("BaryLocalToGlobal requires a TileId with positive integer face/x/y indices.");
-        }
-        // Treat the incoming float[] as local tile indices (matching other
-        // callsites such as GetCorners, TileMesh tests and the non-alloc overload).
-        // Compute using the same subdivision math to avoid mismatches.
-        int tilesPerFaceEdge = 1 << tileId.depth;
-        int subdivisionsPerTileEdge = Math.Max(1, res - 1);
-        float subdivisionsPerFaceEdge = tilesPerFaceEdge * subdivisionsPerTileEdge;
-
-        float uGlobal = (tileId.x * subdivisionsPerTileEdge + localBary.U) / subdivisionsPerFaceEdge;
-        float vGlobal = (tileId.y * subdivisionsPerTileEdge + localBary.V) / subdivisionsPerFaceEdge;
-
-        if (uGlobal + vGlobal > 1f)
-        {
-            return new Barycentric(1f - vGlobal, 1f - uGlobal);
-        }
-        return new Barycentric(uGlobal, vGlobal);
-    }
-
-    /// <summary>
-    /// Convert tile-local scalar subdivision indices into global face barycentric coordinates.
-    ///
-    /// This is the preferred, non-allocating API for hot paths (mesh builder).
-    /// Inputs <paramref name="localX"/> and <paramref name="localY"/> represent
-    /// the tile-local subdivision offsets (0..subdivisionsPerTileEdge) measured
-    /// in the same units as produced by <see cref="TileVertexBarys(int)"/>.
-    /// The method computes fractional (u,v) across the face and applies the
-    /// mirror/reflection step when u+v &gt; 1.
-    /// </summary>
-    /// <param name="tileId">Canonical tile identifier (face, x, y, depth).</param>
-    /// <param name="localX">Tile-local subdivision offset along the u axis.</param>
-    /// <param name="localY">Tile-local subdivision offset along the v axis.</param>
-    /// <param name="res">Mesh resolution; used to derive subdivisions per tile edge (res - 1).</param>
-    /// <returns>Global barycentric (u,v) coordinates across the icosphere face.</returns>
-    public static Barycentric VertexMapIndexToGlobal(TileId tileId, float localX, float localY, int res)
         {
             if (tileId.x < 0 || tileId.y < 0)
             {
                 throw new Exception("BaryLocalToGlobal requires a TileId with positive integer face/x/y indices.");
             }
-            int tilesPerFaceEdge = 1 << tileId.depth;
+            // Treat the incoming float[] as local tile indices (matching other
+            // callsites such as GetCorners, TileMesh tests and the non-alloc overload).
+            // Compute using the same subdivision math to avoid mismatches.
             int subdivisionsPerTileEdge = Math.Max(1, res - 1);
-            float subdivisionsPerFaceEdge = tilesPerFaceEdge * subdivisionsPerTileEdge;
-            float uGlobal = (tileId.x * subdivisionsPerTileEdge + localX) / subdivisionsPerFaceEdge;
-            float vGlobal = (tileId.y * subdivisionsPerTileEdge + localY) / subdivisionsPerFaceEdge;
-            // Reflect strictly when the sum exceeds 1.0f. This matches the test
-            // expectation that sums equal to 1 are not reflected.
-            if (uGlobal + vGlobal > 1f)
-            {
-                return new Barycentric(1f - vGlobal, 1f - uGlobal);
-            }
-            return new Barycentric(uGlobal, vGlobal);
+
+            var origin = TileIndexToBaryOrigin(tileId.depth, tileId.x, tileId.y);
+            var localScaled = localBary / subdivisionsPerTileEdge;
+            var global = origin + localScaled;
+
+            // If the point lies in the mirrored triangle half, return the
+            // centralized reflected barycentric form.
+            if (global.IsMirrored()) return global.Reflected();
+            return global;
         }
 
 
@@ -237,19 +178,15 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 v = (d00 * d21 - d01 * d20) / denom;
             }
 
-            if (u + v > 1f)
-            {
-                var uOld = u;
-                u = 1f - v;
-                v = 1f - uOld;
-            }
+            var bary = new Barycentric(u, v);
+            if (bary.IsMirrored()) bary = bary.Reflected();
 
             if (depth < 0) depth = 0;
             int tilesPerEdge = 1 << depth;
-            int maxSubdivisionIndex = tilesPerEdge - 1;
+            int maxTileIndex = tilesPerEdge - 1;
 
-            x = Mathf.FloorToInt(Mathf.Lerp(0, maxSubdivisionIndex, u * tilesPerEdge));
-            y = Mathf.FloorToInt(Mathf.Lerp(0, maxSubdivisionIndex, v * tilesPerEdge));
+            x = Mathf.FloorToInt(Mathf.Lerp(0, maxTileIndex, bary.U * tilesPerEdge));
+            y = Mathf.FloorToInt(Mathf.Lerp(0, maxTileIndex, bary.V * tilesPerEdge));
         }
 
         /// <summary>
@@ -278,25 +215,20 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     float u = weight * i;
                     float v = weight * j;
 
-                    if (u+v > 1f)
-                    {
-                        yield return new(1f - v, 1f - u);
-                    }
-                    else
-                    {
-                        yield return new (u,v);
-                    }
+                    var uv = new Barycentric(u, v);
+                    if (uv.IsMirrored()) yield return uv.Reflected();
+                    else yield return uv;
                 }
             }
             yield break;
         }
 
         /// <summary>
-        /// Compute the canonical bary zero point for a tile at (depth,x,y).
+        /// Compute the canonical global bary zero point for a tile at (depth,x,y).
         /// This is the single source of truth for tile center computation used by
         /// TileId, precomputation, mesh builder, and tests.
         /// </summary>
-        public static Barycentric GetLocalBary(int depth, int x, int y)
+        public static Barycentric TileIndexToBaryOrigin(int depth, int x, int y)
         {
             /*
                 depth = 0: center weights at thirds
@@ -304,20 +236,21 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 depth = 2: center weights at 18ths
                 SOLUTION: weight = 1 / 3^(depth+1)
             */
-            float weight = 1f / Mathf.Pow(3, depth + 1); // no possibility of divide by zero
+            float weight = 1f / Mathf.Pow(3, depth); // no possibility of divide by zero
             float u = x * weight;
             float v = y * weight;
             // Reflect only when the sum strictly exceeds 1 so boundary centers are stable.
-            if (u + v > 1f) return new(1f - v, 1f - u);
+            var uv = new Barycentric(u, v);
+            if (uv.IsMirrored()) return uv.Reflected();
             return new(u, v);
         }
 
         /// <summary>
-        /// Compute the canonical Bary center for a tile at (depth,x,y).
+        /// Compute the canonical global Bary center for a tile at (depth,x,y).
         /// This is the single source of truth for tile center computation used by
         /// TileId, precomputation, mesh builder, and tests.
         /// </summary>
-        public static Barycentric GetTileBaryCenter(int depth, int x, int y)
+        public static Barycentric TileIndexToBaryCenter(int depth, int x, int y)
         {
             /*
                 depth = 0: center weights at thirds
@@ -326,11 +259,12 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 SOLUTION: weight = 1 / 3^(depth+1)
             */
             float weight = 1f / Mathf.Pow(3, depth + 1); // no possibility of divide by zero
-            float u = x * weight;
-            float v = y * weight;
+            float u = (x + 1) * weight;
+            float v = (y + 1) * weight;
             // Reflect only when the sum strictly exceeds 1 so boundary centers are stable.
-            if (u + v > 1f) return new(1f - v, 1f - u);
-            return new(u, v);
+            var uv = new Barycentric(u, v);
+            if (uv.IsMirrored()) return uv.Reflected();
+            return uv;
         }
     }
 }

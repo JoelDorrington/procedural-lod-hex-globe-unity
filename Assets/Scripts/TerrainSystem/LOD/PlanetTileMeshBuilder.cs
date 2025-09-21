@@ -221,7 +221,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             foreach (var bary in IcosphereMapping.TileVertexBarys(res))
             {
                 Barycentric global = IcosphereMapping.BaryLocalToGlobal(data.id, bary, res);
-                _uvs.Add((Vector2)global);
+                _uvs.Add(global);
 
                 // Sample height at this vertex
                 var dir = IcosphereMapping.BaryToWorldDirection(entry.face, global);

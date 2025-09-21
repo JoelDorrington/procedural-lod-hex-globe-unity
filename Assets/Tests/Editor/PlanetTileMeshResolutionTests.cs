@@ -97,7 +97,7 @@ namespace HexGlobeProject.Tests.Editor
             };
 
             // Obtain the canonical Bary center used by the mesh builder
-            var center = IcosphereMapping.GetTileBaryCenter(tileId.x, tileId.y, tileId.depth);
+            var center = IcosphereMapping.TileIndexToBaryCenter(tileId.x, tileId.y, tileId.depth);
 
             var samplePoints = new List<(float u, float v)>
             {
