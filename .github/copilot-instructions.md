@@ -25,19 +25,19 @@
 - See `Docs/GLOSSARY.md` for project-specific terms and canonical definitions used across mapping, registry, and builder.
 
 ## System Overview
-This project implements a Google Maps-style tile explorer for procedural planet terrain with seamless LOD transitions and fractal detail zoom. The system uses a 32hz update loop to calculate a mathematical ring of visibile tiles to build and spawn tiles at appropriate detail levels for the camera distance.
+This project implements a Google Maps-style tile explorer for procedural planet terrain with seamless LOD transitions and fractal detail zoom. The runtime uses a 32Hz update loop to calculate a mathematical ring of visible tiles and to build/spawn tiles at appropriate detail levels for the camera distance. Recent development migrated the mapping math from the earlier cube-sphere approach to an icosphere-based mapping; the canonical implementation and formulas live in `Assets/Scripts/TerrainSystem/LOD/IcosphereMapping.cs`.
 
 ## Core Architecture
 - **Primary Components:**
   - `PlanetTileVisibilityManager.cs`: Main terrain LOD manager. Computes visible tiles using spherical geometry and manages tile lifecycle.
-  - `PlanetTileMeshBuilder.cs`: Procedural mesh generation with resolution-aware height sampling for icosphere faces by TileId
+  - `PlanetTileMeshBuilder.cs`: Procedural mesh generation with resolution-aware height sampling for icosphere faces by `TileId`.
   - `PlanetTerrainTile.cs`: MonoBehaviour for individual terrain tile GameObjects encapsulating visual mesh. Not to be confused with the future game model tiles. 
   - `CameraController.cs`: Orbit camera with zoom-based depth control. The zoom is currently logarithmically scaled to be slower at lower depths. Soon I want this logarithmic slowing to be applied to all move axes.
   - `TileCache.cs`: Manages pooling and lifecycle of individual tile GameObjects
   - `TerrainConfig.cs`: Configuration for heightmap/terrain generation parameters
 
 - **Data Types:**
-  - `TileId`: Unique identifier for cube-sphere tiles
+  - `TileId`: Unique identifier for icosphere tiles (face, x, y, depth)
   - `TileData`: Canonical tile data: corner direction normals(3), mesh, resolution, height bounds, and spatial metadata
   - `TileFade` & `TileFadeAnimator`: Experimental animation system for smooth tile transitions. Abandoned for now.
 
@@ -49,36 +49,35 @@ This project implements a Google Maps-style tile explorer for procedural planet 
 
 ## Terrain Consistency & Progressive Detail
 **CRITICAL:** The system ensures seamless terrain consistency across all depth levels:
-- **Global Coordinate System:** All tiles use consistent global normalized coordinates that map the same world positions to identical height samples regardless of tile depth
-- **Height Consistency:** Height providers must return IDENTICAL height values for the same world position regardless of the resolution parameter. This should be enforced by the heightmap generator/sampler.
+- **Global Coordinate System:** All tiles use consistent global normalized coordinates that map the same world positions to identical height samples regardless of tile depth.
+- **Height Consistency:** Height providers must return IDENTICAL height values for the same world position (normalized direction) regardless of the mesh `resolution` parameter. This is enforced by the heightmap generator/sampler and is critical for seam-free LOD transitions.
 - **Progressive Mesh Detail:** Higher depth tiles get exponentially more mesh resolution to show geometric detail of the SAME underlying terrain
 - **Seamless Transitions:** No terrain popping or discontinuities when changing depth levels - only mesh density changes. No animations for now.
 
 ### Height Provider Requirements (CRITICAL)
-- The `resolution` parameter should **NOT** affect the actual height values returned
-- Height providers must return consistent terrain topology regardless of resolution
-- Resolution is only used internally for mesh density calculations, not for terrain generation
-- Same world position = same height value, always
+- The `resolution` parameter must NOT affect the actual height values returned.
+- Height providers must return identical height values for the same normalized world direction regardless of the mesh `resolution` parameter. This enforces topology determinism across LODs.
+- Resolution is only used for mesh density and vertex placement; it must not change sampling semantics.
+- Same world position = same height value, always.
 
 ## Important runtime behaviors (current implementation)
-- Precomputed tile normals: `PlanetTileVisibilityManager` maintains a static registry of precomputed tile normals and Bary centers for all depths to avoid recomputation
-- The number of `PlanetTerrainTile` must always be equal to the number of icosphere faces at the current depth (20 * 4^depth). These are created on demand and reused via lifecycle management method. 
-- Tile caching: `TileCache` manages the lifecycle of individual tile GameObjects, including creation, pooling, and destruction.
-- Tile lifecycle: a single `ManageTileLifecycle(HashSet<TileId> hitTiles, int depth)` call handles spawning/refreshing hit tiles and deactivating tiles not hit this pass.
+- Precomputed tile normals and canonical bary centers: `PlanetTileVisibilityManager` and `TerrainTileRegistry` maintain precomputed tile centers, corner directions, and normals for all depths to avoid recomputation. Use `IcosphereMapping.TileIndexToBaryCenter` and `IcosphereMapping.TileIndexToBaryOrigin` as the single source of truth for tile centers.
+- Tile counts and reuse: The number of `PlanetTerrainTile` instances for a given depth must equal the number of tiles at that depth (20 * 4^depth). Tiles are created on demand and reused via lifecycle management.
+- Tile caching: `TileCache` manages the lifecycle of tile GameObjects (creation, pooling, activation/deactivation). Mesh instance caching lives in `PlanetTileMeshBuilder` and may be cleared via `PlanetTileMeshBuilder.ClearCache()` (useful for editor tooling and tests).
+- Tile lifecycle: `ManageTileLifecycle(HashSet<TileId> hitTiles, int depth)` handles spawning/refreshing hit tiles and deactivating tiles not hit this pass.
 
 Developer guidance and common pitfalls
 - SOLID principles apply.
-- Also YAGNI: avoid overengineering. Implement only what is necessary.
-- Dry code... bla bla bla all the clean code buzzwords. We're professionals here but we wont take ourselves too seriously.
-- This is not legacy code. Refactor fearlessly. Everything is under version control and automated unit and integration tests.
-- Avoid letting files get much larger than 500 lines. Split into multiple files if needed.
-- Avoid monolithic classes. Each class should have a single responsibility.
-- Height providers: never modify topology based on mesh resolution. Write deterministic sampling code: same direction → same height.
+- YAGNI: avoid overengineering. Implement only what is necessary.
+- Keep files focused and prefer splitting files that grow beyond ~500 lines.
+- Prefer small, single-responsibility classes over monoliths.
+- Height providers: never modify topology based on mesh resolution. Write deterministic sampling code: same normalized direction → same height.
+- Barycentric vs Tile index confusion: prefer the `Barycentric` ADT (`Assets/Scripts/TerrainSystem/LOD/Barycentric.cs`) across APIs to avoid mixing tile-local integer indices with normalized bary fractions. Use `IcosphereMapping.TileIndexToBaryOrigin` and `IcosphereMapping.BaryLocalToGlobal` for conversions. Historical bugs arose from mixing index vs bary expectations — be explicit and add tests when changing mapping code.
 
 This document is the source of truth for the system architecture. Keep it updated with any changes to aid future development and maintenance. Do not change this document to match existing code. Only change this document to reflect intentional design changes made during the session.
 
 Stay focused on the human engineer's goals. Ask questions if needed. Proceed only with consensus. Don't be afraid to tell the human engineer they are incorrect about their intuition. It's always the same guy this is a one man project. The human engineer will be dilligently resisting complexity creep. Do not allow them to veto necessary complexity. Always explain things in first principles before explaining the math and implementation.
 
 The exchanges should be short and focused on one action item at a time.
-Code edits must be made in a test driven manner. Always suggest new tests if needed.
-NO EDITOR ONLY WORKAROUNDS ALLOWED. TESTS MUST EXPOSE PROBLEM CAUSES. CODE MUST FULFIL TESTS IN GOOD FAITH.
+Code edits must be made in a test driven manner. Add or update unit tests where appropriate (see `Assets/Tests/` folders). Editor-only workarounds are discouraged; unit or playmode tests should expose the issue before adding non-testable hacks.
+When changing mapping or barycentric math, include small tests asserting that `IcosphereMapping.TileIndexToBaryCenter` <-> `WorldDirectionToTileIndex` are consistent for canonical centers.

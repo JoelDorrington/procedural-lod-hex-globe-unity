@@ -198,6 +198,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 throw new ArgumentException($"TileId {data.id} not found in precomputed registry at depth {depth}");
             }
             var entry = registry.tiles[data.id];
+            // Set canonical tile center on the TileData so callers (and cache) have
+            // the authoritative center available. Mesh vertices will be stored in
+            // local space relative to this center.
+            data.center = entry.centerWorld;
 
             if (TryGetExistingMesh(entry, res, out var cached))
             {
@@ -230,9 +234,15 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 if (rawScaled < minHeight) minHeight = rawScaled;
                 if (rawScaled > maxHeight) maxHeight = rawScaled;
 
-                // Add vert
+                // Add vert (store as local position relative to tile center)
                 Vector3 worldVert = dir * (radius + rawScaled) + planetCenter;
-                _verts.Add(worldVert);
+                Vector3 localVert = worldVert - data.center;
+                _verts.Add(localVert);
+                // Store an outward-pointing normal (world space relative to planet center).
+                // Since the mesh will be placed at `data.center` with identity rotation,
+                // this world-space normal is valid as the mesh-local normal. If the
+                // GameObject gains rotation/scale, Unity will transform the normal.
+                _normals.Add((worldVert - planetCenter).normalized);
                 _vertsMap[i, j] = _verts.Count - 1; // stash index in lattice
                 int maxI = res - 1 - j; // ensure i+j <= res-1 (inside triangle)
                 i += 1;
@@ -295,22 +305,21 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 Vector3 aPos = _verts[aIdx];
                 Vector3 bPos = _verts[bIdx];
                 Vector3 cPos = _verts[cIdx];
+                // Compute triangle geometric normal in mesh-local space (aPos/bPos/cPos are local verts)
                 Vector3 triNormal = Vector3.Cross(bPos - aPos, cPos - aPos).normalized;
-                Vector3 avgVertNormal = (aPos.normalized + bPos.normalized + cPos.normalized).normalized;
 
-                // dot > 0 => triangle geometric normal points roughly same direction as vertex normals
+                // Compute the averaged vertex normal using the per-vertex normals we sampled earlier.
+                // Convert the sampled outward normals to mesh-local frame is unnecessary here because
+                // we sampled them consistently with mesh-local axes (no rotation assumed). Use them directly.
+                Vector3 avgVertNormal = (_normals[aIdx] + _normals[bIdx] + _normals[cIdx]).normalized;
+
+                // If triangle geometric normal points opposite to averaged vertex normal,
+                // flip triangle winding and invert all normals so they remain outward-facing.
                 float dot = Vector3.Dot(triNormal, avgVertNormal);
-
-                bool triFacesSameAsVertexNormals = dot >= 0f;
-
-                if (!triFacesSameAsVertexNormals)
-                { // just in case
-                    FlipTriangleWinding(_tris);
-                    _normals.Add(-avgVertNormal);
-                }
-                else
+                if (dot < 0f)
                 {
-                    _normals.Add(avgVertNormal);
+                    FlipTriangleWinding(_tris);
+                    for (int ni = 0; ni < _normals.Count; ni++) _normals[ni] = -_normals[ni];
                 }
             }
 
