@@ -250,8 +250,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
 					Debug.LogError("Failed to build visual mesh for tile: " + tileId);
 				}
 
-				go.transform.position = tile.tileData.center;
-
 				// Place GameObject at final position
 				go.transform.position = tile.tileData.center;
 

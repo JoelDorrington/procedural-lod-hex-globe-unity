@@ -9,7 +9,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
     /// Replaces cube-sphere mapping to eliminate pole singularities and provide
     /// more regular tile distribution across the planet surface.
     /// </summary>
-    
+
 
     public static class IcosphereMapping
     {
@@ -67,7 +67,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             for (int face = 0; face < 20; face++)
             {
                 // Use barycentric center (u=v=1/3) for canonical face direction
-                Vector3 centroidDir = BaryToWorldDirection(face, new (ONE_THIRD, ONE_THIRD));
+                Vector3 centroidDir = BaryToWorldDirection(face, new(ONE_THIRD, ONE_THIRD));
                 float dot = Vector3.Dot(p, centroidDir);
                 if (dot > maxDot)
                 {
@@ -85,7 +85,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
         /// <param name="localBary">Two-element array of tile-local subdivision indices (float values allowed).</param>
         /// <param name="res">Mesh resolution; used to derive subdivisions per tile edge (res - 1).</param>
         /// <returns>Global barycentric (u,v) coordinates across the icosphere face.</returns>
-    public static Barycentric BaryLocalToGlobal(TileId tileId, Barycentric localBary, int res)
+        public static Barycentric BaryLocalToGlobal(TileId tileId, Barycentric localBary, int res)
         {
             if (tileId.x < 0 || tileId.y < 0)
             {
@@ -199,7 +199,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             if (res <= 1)
             {
                 // Degenerate resolution: single vertex at the triangle center index 0
-                yield return new (0,0);
+                yield return new(0, 0);
                 yield break;
             }
             // Use (res - 1) segments per tile edge. The triangular lattice contains

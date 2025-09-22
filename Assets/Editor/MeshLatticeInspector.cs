@@ -53,16 +53,12 @@ namespace HexGlobeProject.Editor
             _showWorldCoords = EditorGUILayout.ToggleLeft("World coords", _showWorldCoords, GUILayout.Width(120));
             EditorGUILayout.EndHorizontal();
 
-            int expected = (_res * (_res + 1)) / 2;
-            if (_mesh.vertexCount != expected)
-            {
-                EditorGUILayout.HelpBox($"Expected lattice vertex count for res={_res} is {expected}. Mesh has {_mesh.vertexCount}. Mapping will still attempt row/col layout.", MessageType.Warning);
-            }
+            _res = Mathf.FloorToInt(Mathf.Sqrt(2 * _mesh.vertexCount));
 
             EditorGUILayout.Space();
             _scroll = EditorGUILayout.BeginScrollView(_scroll);
 
-            // Render matrix as [j,i] rows
+            // Render matrix as [j,i] rows in a compact, read-only table (no buttons)
             var verts = _mesh.vertices;
             int idx = 0;
             for (int j = 0; j < _res; j++)
@@ -76,17 +72,16 @@ namespace HexGlobeProject.Editor
                     {
                         Vector3 local = verts[idx];
                         Vector3 world = (_selectedGO != null && _showWorldCoords) ? _selectedGO.transform.TransformPoint(local) : local;
-                        string btnLabel = $"{j},{i}\n#{idx}";
-                        if (_showWorldCoords) btnLabel += $"\n{world.x:F3},{world.y:F3},{world.z:F3}";
-                        if (GUILayout.Button(btnLabel, GUILayout.Width(140), GUILayout.Height(36)))
-                        {
-                            _highlightIndex = idx;
-                            SceneView.RepaintAll();
-                        }
+
+                        // Build a compact label with index, lattice coords, local and optional world coordinates.
+                        string label = $"#{idx} ({j},{i})\nL: {local.x:F3},{local.y:F3},{local.z:F3}";
+
+                        // Render as a non-interactive box to form a table-like grid.
+                        GUILayout.Box(label, GUILayout.Width(180), GUILayout.Height(44));
                     }
                     else
                     {
-                        GUILayout.Label($"[{j},{i}]\n- - -", GUILayout.Width(140), GUILayout.Height(36));
+                        GUILayout.Box($"[{j},{i}]\n- - -", GUILayout.Width(180), GUILayout.Height(44));
                     }
                     idx++;
                 }
@@ -96,8 +91,7 @@ namespace HexGlobeProject.Editor
             EditorGUILayout.EndScrollView();
 
             EditorGUILayout.Space();
-            if (GUILayout.Button("Ping Mesh")) EditorGUIUtility.PingObject(_mesh);
-            if (GUILayout.Button("Clear Highlight")) { _highlightIndex = -1; SceneView.RepaintAll(); }
+            EditorGUILayout.LabelField("Note:", "Vertex entries are read-only. Use the Scene view to inspect vertices visually.");
         }
 
         private void OnSceneGUI(SceneView sceneView)

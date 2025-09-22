@@ -287,7 +287,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             // Ensure triangle winding matches vertex normals (so triangles naturally face away from sphere)
             // Check the geometric normal of the first triangle against the averaged vertex normal;
             // flip winding only when necessary to satisfy the requested outwardNormals parameter.
-            if (_tris.Count >= 3 && _normals.Count > 0)
+            if (_tris.Count >= 3)
             {
                 int aIdx = _tris[0];
                 int bIdx = _tris[1];
@@ -306,6 +306,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 if (!triFacesSameAsVertexNormals)
                 { // just in case
                     FlipTriangleWinding(_tris);
+                    _normals.Add(-avgVertNormal);
+                }
+                else
+                {
+                    _normals.Add(avgVertNormal);
                 }
             }
 
