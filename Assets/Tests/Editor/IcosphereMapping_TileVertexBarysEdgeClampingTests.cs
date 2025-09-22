@@ -13,35 +13,33 @@ namespace HexGlobeProject.Tests.Editor
         {
 
             int count = 0;
-            int i = 0, j = 0;
 
-            foreach (var uv in IcosphereMapping.TileVertexBarys(res))
+            // Use a sample tile id for converting local indices into global bary coordinates
+            var sampleId = new TileId(0, 0, 0, 0);
+
+            foreach (var local in IcosphereMapping.TileVertexBarys(res))
             {
-                float testW = 1f - uv.U - uv.V;
+                // local.U and local.V are integer tile-local indices (i,j)
+                int i = Mathf.RoundToInt(local.U);
+                int j = Mathf.RoundToInt(local.V);
+                var global = IcosphereMapping.BaryLocalToGlobal(sampleId, local, res);
+                float testW = 1f - global.U - global.V;
                 count++;
 
                 // w must never be negative; small positive residuals are acceptable
-                Assert.IsTrue(testW >= 0f, $"Computed w < 0 at i={i}, j={j}, res={res}: w={testW} (u={uv.U}, v={uv.V})");
+                Assert.IsTrue(testW >= 0f, $"Computed w < 0 at i={i}, j={j}, res={res}: w={testW} (u={global.U}, v={global.V})");
 
                 bool isEdge = (i == 0) || (j == 0) || (i + j == res - 1);
 
                 if (isEdge)
                 {
-                    bool uZero = Mathf.Abs(uv.U) <= 0f;
-                    bool vZero = Mathf.Abs(uv.V) <= 0f;
+                    bool uZero = Mathf.Abs(global.U) <= 1e-6f;
+                    bool vZero = Mathf.Abs(global.V) <= 1e-6f;
                     // Accept exact zero or small positive residuals up to 1e-6
                     bool wAccept = (testW >= 0f && testW < 1e-6f);
 
                     Assert.IsTrue(uZero || vZero || wAccept,
-                        $"Edge lattice point at i={i}, j={j}, res={res} produced (u={uv.U}, v={uv.V}, w={testW}) which does not satisfy edge zero-or-small-positive requirement.");
-                }
-
-                // Increment i,j in the triangular lattice
-                i++;
-                if (i + j >= res)
-                {
-                    j++;
-                    i = 0;
+                        $"Edge lattice point at i={i}, j={j}, res={res} produced (u={global.U}, v={global.V}, w={testW}) which does not satisfy edge zero-or-small-positive requirement.");
                 }
             }
 

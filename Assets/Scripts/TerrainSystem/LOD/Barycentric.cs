@@ -80,8 +80,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
         /// expression at call sites so behavior remains centralized.
         /// </summary>
         public Barycentric Reflected() {
-            var u = 1f - V;
-            return new Barycentric(u, 1f - u);
+            // Proper reflection across the triangle diagonal: (U,V) -> (1 - V, 1 - U)
+            return new Barycentric(1f - V, 1f - U);
         }
 
         /// <summary>

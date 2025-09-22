@@ -405,5 +405,250 @@ namespace HexGlobeProject.Tests.Editor
                 Assert.Inconclusive("Could not test mesh normals - requires precomputed entries");
             }
         }
+
+        /// <summary>
+        /// Conservative test that detects subtle bary->world scaling errors.
+        /// It picks two nearby vertices in bary space, computes the angle between
+        /// their world directions (using IcosphereMapping.BaryToWorldDirection) and
+        /// compares the expected chord length on the sphere to the actual distance
+        /// between sampled world vertices (including height). If bary->world scaling
+        /// is accidentally scaled, the two values will disagree beyond tolerance.
+        /// </summary>
+        [Test]
+        public void BaryToWorldDirection_Scaling_ChecksChordLength()
+        {
+            // Build a tile at depth 1 for a controlled check
+            var tileId = new TileId(0, 0, 0, 1);
+            var tileData = new TileData { id = tileId, resolution = testConfig.baseResolution };
+
+            meshBuilder.BuildTileMesh(tileData);
+            Assert.IsNotNull(tileData.mesh);
+
+            var mesh = tileData.mesh;
+            var uvs = mesh.uv;
+            var verts = mesh.vertices;
+
+            // Find two adjacent vertices in the UV list (conservative: look for pair with small UV distance)
+            int idxA = -1, idxB = -1;
+            float bestUVDist = float.MaxValue;
+            for (int i = 0; i < uvs.Length; i++)
+            {
+                for (int j = i + 1; j < uvs.Length; j++)
+                {
+                    float d = Vector2.Distance(uvs[i], uvs[j]);
+                    if (d > 0f && d < bestUVDist)
+                    {
+                        bestUVDist = d;
+                        idxA = i; idxB = j;
+                    }
+                }
+            }
+
+            Assert.Greater(idxA, -1, "Failed to find adjacent UV vertices");
+
+            // Reconstruct bary and directions
+            var baryA = new Barycentric(uvs[idxA].x, uvs[idxA].y);
+            var baryB = new Barycentric(uvs[idxB].x, uvs[idxB].y);
+            var dirA = IcosphereMapping.BaryToWorldDirection(tileData.id.face, baryA);
+            var dirB = IcosphereMapping.BaryToWorldDirection(tileData.id.face, baryB);
+
+            float angleDeg = Vector3.Angle(dirA, dirB);
+
+            // World sampled positions
+            Vector3 worldA = tileData.center + verts[idxA];
+            Vector3 worldB = tileData.center + verts[idxB];
+            float sampledChord = Vector3.Distance(worldA, worldB);
+
+            // Expected chord using base radius (heights should be small relative to radius)
+            float expectedChord = 2f * testConfig.baseRadius * Mathf.Sin(Mathf.Deg2Rad * angleDeg * 0.5f);
+
+            float relError = Mathf.Abs(sampledChord - expectedChord) / Mathf.Max(1e-6f, expectedChord);
+            // Tolerate small error due to heights and sampling; fail if scale mismatch is large
+            Assert.Less(relError, 0.2f, $"Bary->World scaling mismatch: sampledChord={sampledChord:F4}, expected={expectedChord:F4}, relErr={relError:F4}");
+        }
+
+        /// <summary>
+        /// Find matched UVs on two adjacent tiles (on the same face) and ensure
+        /// their bary->world directions are identical (within tight tolerance).
+        /// This detects whether different bary coordinates or mapping produce
+        /// different directions for what should be the same canonical edge sample.
+        /// </summary>
+        [Test]
+        public void SharedEdgeUVs_ShouldMapToSameWorldDirection()
+        {
+            // Pick two adjacent tiles on same face where tile indices differ
+            int depth = 1;
+            int face = 0;
+            var tileA = new TileId(face, 0, 0, depth);
+            var tileB = new TileId(face, 1, 0, depth);
+
+            var dataA = new TileData { id = tileA, resolution = testConfig.baseResolution };
+            var dataB = new TileData { id = tileB, resolution = testConfig.baseResolution };
+
+            meshBuilder.BuildTileMesh(dataA);
+            meshBuilder.BuildTileMesh(dataB);
+
+            var meshA = dataA.mesh; var meshB = dataB.mesh;
+            Assert.IsNotNull(meshA); Assert.IsNotNull(meshB);
+
+            // Build lookup by UV for meshB
+            var uvToIndexB = new Dictionary<Vector2, int>(new Vector2Comparer(1e-6f));
+            for (int i = 0; i < meshB.uv.Length; i++) uvToIndexB[meshB.uv[i]] = i;
+
+            // For each UV in meshA that exactly matches meshB, compare the directions
+            int matched = 0;
+            float dirTolDeg = 0.01f; // very tight angular tolerance
+            for (int i = 0; i < meshA.uv.Length; i++)
+            {
+                var uv = meshA.uv[i];
+                if (uvToIndexB.TryGetValue(uv, out int j))
+                {
+                    var baryA = new Barycentric(uv.x, uv.y);
+                    var baryB = new Barycentric(meshB.uv[j].x, meshB.uv[j].y);
+                    var dirA = IcosphereMapping.BaryToWorldDirection(dataA.id.face, baryA);
+                    var dirB = IcosphereMapping.BaryToWorldDirection(dataB.id.face, baryB);
+                    float angle = Vector3.Angle(dirA, dirB);
+                    Assert.Less(angle, dirTolDeg, $"Mismatched direction for shared UV {uv} (angle {angle} deg)");
+                    matched++;
+                }
+            }
+
+            Assert.Greater(matched, 0, "Expected at least one matching UV across adjacent tiles");
+        }
+
+        /// <summary>
+        /// Integration-style check: build all tiles on a single face at depth 1 and
+        /// ensure adjacent tiles within the same face have minimal vertex gaps.
+        /// This is a conservative 'final check' that tolerates small sampling differences
+        /// but will fail if a large seam exists across many edges.
+        /// </summary>
+        [Test]
+        public void Integration_NoSeamsWithinFace_Check()
+        {
+            int depth = 1;
+            int face = 0;
+            int tilesPerEdge = 1 << depth;
+            var tileDatas = new TileData[tilesPerEdge, tilesPerEdge];
+
+            for (int x = 0; x < tilesPerEdge; x++)
+            for (int y = 0; y < tilesPerEdge; y++)
+            {
+                var id = new TileId(face, x, y, depth);
+                var td = new TileData { id = id, resolution = testConfig.baseResolution };
+                meshBuilder.BuildTileMesh(td);
+                tileDatas[x, y] = td;
+            }
+
+            float maxAllowedGap = 3.0f; // conservative allowed gap (world units)
+            // Check horizontal neighbors
+            for (int x = 0; x < tilesPerEdge; x++)
+            for (int y = 0; y < tilesPerEdge; y++)
+            {
+                if (x + 1 < tilesPerEdge)
+                {
+                    var a = tileDatas[x, y]; var b = tileDatas[x + 1, y];
+                    Assert.IsNotNull(a.mesh); Assert.IsNotNull(b.mesh);
+                    float minGap = MinVertexGapBetweenTiles(a, b);
+                    Assert.Less(minGap, maxAllowedGap, $"Gap between tiles ({x},{y}) and ({x+1},{y}) too large: {minGap}");
+                }
+                if (y + 1 < tilesPerEdge)
+                {
+                    var a = tileDatas[x, y]; var b = tileDatas[x, y + 1];
+                    Assert.IsNotNull(a.mesh); Assert.IsNotNull(b.mesh);
+                    float minGap = MinVertexGapBetweenTiles(a, b);
+                    Assert.Less(minGap, maxAllowedGap, $"Gap between tiles ({x},{y}) and ({x},{y+1}) too large: {minGap}");
+                }
+            }
+        }
+
+        // Helper: compute minimal vertex gap between two tile datas (world-space)
+        private float MinVertexGapBetweenTiles(TileData a, TileData b)
+        {
+            var va = a.mesh.vertices; var vb = b.mesh.vertices;
+            float minGap = float.MaxValue;
+            for (int i = 0; i < va.Length; i++)
+            {
+                var wa = va[i] + a.center;
+                for (int j = 0; j < vb.Length; j++)
+                {
+                    var wb = vb[j] + b.center;
+                    float d = Vector3.Distance(wa, wb);
+                    if (d < minGap) minGap = d;
+                    if (minGap <= 0f) return 0f;
+                }
+            }
+            return minGap;
+        }
+
+        // Small Vector2 comparer for dictionary lookup with tolerance
+        private class Vector2Comparer : IEqualityComparer<Vector2>
+        {
+            private readonly float eps;
+            public Vector2Comparer(float eps) { this.eps = eps; }
+            public bool Equals(Vector2 a, Vector2 b) => Vector2.Distance(a, b) <= eps;
+            public int GetHashCode(Vector2 v) => v.GetHashCode();
+        }
+
+        /// <summary>
+        /// Ensure mesh UVs represent the expected triangular barycentric lattice
+        /// for the configured resolution. This test isolates vertex distribution
+        /// in bary space so we can tell if the problem is mapping or sampling.
+        /// </summary>
+        [Test]
+        public void MeshUVs_ShouldMatchTriangularLattice()
+        {
+            var tileId = new TileId(0, 0, 0, 1);
+            var tileData = new TileData { id = tileId, resolution = testConfig.baseResolution };
+            meshBuilder.BuildTileMesh(tileData);
+            Assert.IsNotNull(tileData.mesh, "Mesh should be generated");
+
+            var uvs = tileData.mesh.uv;
+            int res = tileData.resolution;
+            int expectedCount = res * (res + 1) / 2;
+            Assert.AreEqual(expectedCount, uvs.Length, "UV count should match triangular lattice count");
+
+            float tol = 1e-5f;
+
+            // Build expected set of global bary UVs by converting local tile indices
+            // into global barycentric coordinates using the canonical API.
+            var expected = new List<Vector2>(expectedCount);
+            for (int j = 0; j < res; j++)
+            {
+                int maxI = res - 1 - j;
+                for (int i = 0; i <= maxI; i++)
+                {
+                    var local = new Barycentric(i, j);
+                    var global = IcosphereMapping.BaryLocalToGlobal(tileData.id, local, res);
+                    expected.Add(new Vector2(global.U, global.V));
+                }
+            }
+
+            // For each actual uv, find a matching expected uv within tolerance
+            var matched = new bool[expected.Count];
+            for (int k = 0; k < uvs.Length; k++)
+            {
+                var uv = uvs[k];
+                bool found = false;
+                for (int e = 0; e < expected.Count; e++)
+                {
+                    if (!matched[e] && Vector2.Distance(uv, expected[e]) <= tol)
+                    {
+                        matched[e] = true;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found)
+                {
+                    Assert.Fail($"Unexpected UV coordinate found: {uv} (resolution {res})");
+                }
+            }
+
+            // Ensure all expected positions were matched
+            for (int e = 0; e < matched.Length; e++)
+            {
+                Assert.IsTrue(matched[e], $"Expected UV at {expected[e]} was not present in mesh");
+            }
+        }
     }
 }

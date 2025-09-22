@@ -205,19 +205,15 @@ namespace HexGlobeProject.TerrainSystem.LOD
             // Use (res - 1) segments per tile edge. The triangular lattice contains
             // exactly res*(res+1)/2 vertices when iterating rows with lengths
             // res, res-1, ..., 1 (j = 0..res-1).
-            float weight = 1f / (res - 1);
+            // Yield local tile indices (i, j) as integers packed into Barycentric.
+            // The caller should convert these local indices to global barycentric
+            // coordinates using BaryLocalToGlobal(tileId, new Barycentric(i,j), res).
             for (int j = 0; j < res; j++)
             {
-                // maxI such that i + j <= res - 1
                 int maxI = res - 1 - j;
                 for (int i = 0; i <= maxI; i++)
                 {
-                    float u = weight * i;
-                    float v = weight * j;
-
-                    var uv = new Barycentric(u, v);
-                    if (uv.IsMirrored()) yield return uv.Reflected();
-                    else yield return uv;
+                    yield return new Barycentric(i, j);
                 }
             }
             yield break;
