@@ -37,6 +37,14 @@ an icosphere face. Confusing these leads to subtle off-by-factor mapping bugs.
 	the full triangular face. These are the canonical coordinates used by
 	`BaryToWorldDirection(face, bary)` and the `TerrainTileRegistry`.
 
+	Note: `IcosphereMapping.TileVertexBarys(res)` yields tile-local lattice indices (i,j)
+	encoded in the `Barycentric` ADT. Callers should convert these local indices
+	to global normalized barycentric coordinates using `IcosphereMapping.BaryLocalToGlobal(tileId, localBary, res)` before using them as UVs or directions.
+
+	Important: Treat the values returned by `TileVertexBarys` as integer lattice
+	indices (0..res-1) encoded in `Barycentric` — they are not normalized UVs. Use
+	`BaryLocalToGlobal` to obtain normalized barycentric (u,v) for sampling.
+
 Recommendation and canonical APIs:
 
 - For hot paths and mesh building, use the non-allocating API

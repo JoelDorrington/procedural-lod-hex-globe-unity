@@ -194,7 +194,14 @@ namespace HexGlobeProject.TerrainSystem.LOD
         /// </summary>
         /// <param name="tileId">Canonical face id object</param>
         /// <param name="res">Mesh resolution</param>
-        public static IEnumerable<Barycentric> TileVertexBarys(int res)
+    /// <summary>
+    /// Enumerate tile-local vertex indices for a triangular lattice of resolution `res`.
+    /// NOTE: This yields tile-local integer lattice indices (i,j) packed into a <see cref="Barycentric"/> struct.
+    /// Callers must convert these local indices to global normalized barycentric coordinates
+    /// via <see cref="BaryLocalToGlobal(TileId, Barycentric, int)"/> before using them as UVs
+    /// or passing to <see cref="BaryToWorldDirection"/>.
+    /// </summary>
+    public static IEnumerable<Barycentric> TileVertexBarys(int res)
         {
             if (res <= 1)
             {

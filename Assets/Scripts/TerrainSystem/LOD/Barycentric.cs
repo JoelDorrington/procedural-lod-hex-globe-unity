@@ -79,6 +79,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
         /// triangular lattice folding logic. Use this instead of inlining the
         /// expression at call sites so behavior remains centralized.
         /// </summary>
+        /// <summary>
+        /// Return the barycentric coordinate reflected across the triangle diagonal.
+        /// This maps coordinates from the mirrored half to the canonical half: (U,V) -> (1-V, 1-U).
+        /// </summary>
         public Barycentric Reflected() {
             // Proper reflection across the triangle diagonal: (U,V) -> (1 - V, 1 - U)
             return new Barycentric(1f - V, 1f - U);

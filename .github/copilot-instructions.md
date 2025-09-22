@@ -73,6 +73,9 @@ Developer guidance and common pitfalls
 - Prefer small, single-responsibility classes over monoliths.
 - Height providers: never modify topology based on mesh resolution. Write deterministic sampling code: same normalized direction → same height.
 - Barycentric vs Tile index confusion: prefer the `Barycentric` ADT (`Assets/Scripts/TerrainSystem/LOD/Barycentric.cs`) across APIs to avoid mixing tile-local integer indices with normalized bary fractions. Use `IcosphereMapping.TileIndexToBaryOrigin` and `IcosphereMapping.BaryLocalToGlobal` for conversions. Historical bugs arose from mixing index vs bary expectations — be explicit and add tests when changing mapping code.
+  - NOTE: As of recent changes, `IcosphereMapping.TileVertexBarys(int res)` yields tile-local integer indices encoded in the `Barycentric` ADT (i,j). Callers must convert these local indices into global normalized barycentric coordinates via `IcosphereMapping.BaryLocalToGlobal(tileId, localBary, res)` before using them as UVs or passing to `BaryToWorldDirection`. This avoids semantic confusion and ensures canonical edge behavior.
+  - Important: Treat `TileVertexBarys(int res)` as returning integer lattice coordinates packed in `Barycentric` (NOT normalized UVs). If you need normalized barycentric UVs for mesh UVs or for calling `BaryToWorldDirection`, always call:
+    `IcosphereMapping.BaryLocalToGlobal(tileId, localBary, res)`
 
 This document is the source of truth for the system architecture. Keep it updated with any changes to aid future development and maintenance. Do not change this document to match existing code. Only change this document to reflect intentional design changes made during the session.
 
