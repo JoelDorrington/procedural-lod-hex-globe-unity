@@ -97,8 +97,13 @@ namespace HexGlobeProject.TerrainSystem.LOD
             int subdivisionsPerTileEdge = Math.Max(1, res - 1);
 
             var origin = TileIndexToBaryOrigin(tileId.depth, tileId.x, tileId.y);
-            var localScaled = localBary / subdivisionsPerTileEdge;
-            var global = origin + localScaled;
+            var localScaled = localBary / subdivisionsPerTileEdge; // normalized 0..1 across tile
+
+            // Tile span (how much barycentric space this tile occupies across the face)
+            float tileSpan = 1f / Mathf.Pow(3f, tileId.depth);
+
+            // Map local normalized coordinates into the tile footprint using the canonical origin
+            var global = origin + (localScaled * tileSpan);
 
             // If the point lies in the mirrored triangle half, return the
             // centralized reflected barycentric form.

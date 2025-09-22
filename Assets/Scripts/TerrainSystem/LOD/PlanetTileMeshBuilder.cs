@@ -202,11 +202,20 @@ namespace HexGlobeProject.TerrainSystem.LOD
             // the authoritative center available. Mesh vertices will be stored in
             // local space relative to this center.
             data.center = entry.centerWorld;
+            Debug.Log($"[DIAGNOSTIC] Tile {data.id}: Set data.center = {data.center} from registry");
+            
+            // DIAGNOSTIC: Compare registry center with what we'd compute for tile center
+            var tileCenterBary = IcosphereMapping.TileIndexToBaryCenter(data.id.depth, data.id.x, data.id.y);
+            var tileCenterDir = IcosphereMapping.BaryToWorldDirection(entry.face, tileCenterBary);
+            var computedCenter = tileCenterDir * radius + planetCenter;
+            Debug.Log($"[DIAGNOSTIC] Tile {data.id}: Registry center={data.center}, computed center={computedCenter}, diff={(data.center - computedCenter).magnitude:F6}");
+            Debug.Log($"[DIAGNOSTIC] Tile {data.id}: tileCenterBary={tileCenterBary}, tileCenterDir={tileCenterDir}");
 
             if (TryGetExistingMesh(entry, res, out var cached))
             {
                 data.mesh = cached.mesh;
                 data.center = cached.centerUsed;
+                Debug.Log($"[DIAGNOSTIC] Tile {data.id}: Using cached mesh, data.center changed to {data.center}");
                 return;
             }
 
@@ -221,7 +230,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
             float minHeight = float.MaxValue;
             float maxHeight = float.MinValue;
-            int j = 0; int i = 0;
             foreach (var bary in IcosphereMapping.TileVertexBarys(res))
             {
                 Barycentric global = IcosphereMapping.BaryLocalToGlobal(data.id, bary, res);
@@ -229,6 +237,13 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
                 // Sample height at this vertex
                 var dir = IcosphereMapping.BaryToWorldDirection(entry.face, global);
+                
+                // DIAGNOSTIC: Log first few vertices to see barycentric coords
+                if (_verts.Count < 3)
+                {
+                    Debug.Log($"[BARY] Tile {data.id} vertex {_verts.Count}: local={bary}, global={global}, dir={dir}");
+                }
+
                 float rawSample = provider.Sample(in dir, res);
                 float rawScaled = rawSample * config.heightScale;
                 if (rawScaled < minHeight) minHeight = rawScaled;
@@ -238,19 +253,24 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 Vector3 worldVert = dir * (radius + rawScaled) + planetCenter;
                 Vector3 localVert = worldVert - data.center;
                 _verts.Add(localVert);
+                
+                // DIAGNOSTIC: Log first few vertices to verify local vs world computation
+                if (_verts.Count <= 3)
+                {
+                    Debug.Log($"[VERTEX] Tile {data.id} vertex {_verts.Count-1}: worldVert={worldVert}, data.center={data.center}, localVert={localVert}, addedToList={_verts[_verts.Count-1]}");
+                }
                 // Store an outward-pointing normal (world space relative to planet center).
                 // Since the mesh will be placed at `data.center` with identity rotation,
                 // this world-space normal is valid as the mesh-local normal. If the
                 // GameObject gains rotation/scale, Unity will transform the normal.
                 _normals.Add((worldVert - planetCenter).normalized);
-                _vertsMap[i, j] = _verts.Count - 1; // stash index in lattice
-                int maxI = res - 1 - j; // ensure i+j <= res-1 (inside triangle)
-                i += 1;
-                if (i > maxI)
+                // Use the bary's integer lattice indices (i,j) as returned by TileVertexBarys
+                int gi = Mathf.RoundToInt(bary.U);
+                int gj = Mathf.RoundToInt(bary.V);
+                // stash index in lattice keyed by the local integer coordinates
+                if (gi >= 0 && gj >= 0 && gi < _vertsMap.GetLength(0) && gj < _vertsMap.GetLength(1))
                 {
-                    i = 0;
-                    j += 1;
-                    if (j >= res) break;
+                    _vertsMap[gi, gj] = _verts.Count - 1;
                 }
             }
 
@@ -293,6 +313,53 @@ namespace HexGlobeProject.TerrainSystem.LOD
             }
 
             if(degenerateTriangleCount > 0) Debug.Log($"Degenerate triangle count: {degenerateTriangleCount} (out of {_tris.Count / 3} total)");
+
+            // DIAGNOSTIC: Check if vertices are mesh-local (average should be near zero)
+            if (_verts.Count > 0)
+            {
+                Vector3 avgVert = Vector3.zero;
+                foreach (var v in _verts) avgVert += v;
+                avgVert /= _verts.Count;
+                Debug.Log($"[DIAGNOSTIC] Tile {data.id}: Built {_verts.Count} vertices, average position = {avgVert}, magnitude = {avgVert.magnitude:F6}");
+                Debug.Log($"[DIAGNOSTIC] Tile {data.id}: data.center = {data.center}, planetCenter = {planetCenter}");
+                
+                // CRITICAL FIX: The vertices are being mapped to the wrong area of the triangle.
+                // Instead of using the registry center (which is based on tile center bary),
+                // compute the actual geometric center of the mesh vertices in world space
+                // and use that as the tile center. This ensures the mesh is truly local.
+                Vector3 meshWorldCenter = Vector3.zero;
+                foreach (var localVert in _verts)
+                {
+                    Vector3 worldVert = localVert + data.center;
+                    meshWorldCenter += worldVert;
+                }
+                meshWorldCenter /= _verts.Count;
+                
+                Debug.Log($"[FIX] Tile {data.id}: Computed mesh world center = {meshWorldCenter}");
+                Debug.Log($"[FIX] Tile {data.id}: Original data.center = {data.center}");
+                Debug.Log($"[FIX] Tile {data.id}: Center difference = {(meshWorldCenter - data.center).magnitude:F6}");
+                
+                // Update data.center to the actual mesh center and recompute all vertices as local
+                data.center = meshWorldCenter;
+                for (int i = 0; i < _verts.Count; i++)
+                {
+                    // Convert back to world, then to local relative to new center
+                    Vector3 worldVert = _verts[i] + entry.centerWorld; // original world position
+                    Vector3 newLocalVert = worldVert - data.center;
+                    _verts[i] = newLocalVert;
+                }
+                
+                // Verify the fix
+                Vector3 newAvgVert = Vector3.zero;
+                foreach (var v in _verts) newAvgVert += v;
+                newAvgVert /= _verts.Count;
+                Debug.Log($"[FIX] Tile {data.id}: After fix, average vertex = {newAvgVert}, magnitude = {newAvgVert.magnitude:F6}");
+                
+                if (avgVert.magnitude > 1e-3f)
+                {
+                    Debug.LogWarning($"[DIAGNOSTIC] Tile {data.id}: Average vertex magnitude {avgVert.magnitude:F6} suggests non-local vertices!");
+                }
+            }
 
             // Ensure triangle winding matches vertex normals (so triangles naturally face away from sphere)
             // Check the geometric normal of the first triangle against the averaged vertex normal;
