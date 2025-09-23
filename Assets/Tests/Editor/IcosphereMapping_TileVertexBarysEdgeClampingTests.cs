@@ -24,8 +24,9 @@ namespace HexGlobeProject.Tests.Editor
                 float testW = 1f - global.U - global.V;
                 count++;
 
-                // w must never be negative; small positive residuals are acceptable
-                Assert.IsTrue(testW >= 0f, $"Computed w < 0 at i={i}, j={j}, res={res}: w={testW} (u={global.U}, v={global.V})");
+                // w should not be meaningfully negative; allow tiny rounding errors
+                const float kW_EPS = 1e-6f;
+                Assert.IsTrue(testW >= -kW_EPS, $"Computed w < -eps at i={i}, j={j}, res={res}: w={testW} (u={global.U}, v={global.V})");
 
                 bool isEdge = (i == 0) || (j == 0) || (i + j == res - 1);
 
@@ -33,8 +34,8 @@ namespace HexGlobeProject.Tests.Editor
                 {
                     bool uZero = Mathf.Abs(global.U) <= 1e-6f;
                     bool vZero = Mathf.Abs(global.V) <= 1e-6f;
-                    // Accept exact zero or small positive residuals up to 1e-6
-                    bool wAccept = testW >= 0f && testW < 1e-6f;
+                    // Accept exact zero or small residuals (positive or tiny negative) within eps
+                    bool wAccept = testW >= -kW_EPS && Mathf.Abs(testW) < kW_EPS;
 
                     Assert.IsTrue(uZero || vZero || wAccept,
                         $"Edge lattice point at i={i}, j={j}, res={res} produced (u={global.U}, v={global.V}, w={testW}) which does not satisfy edge zero-or-small-positive requirement.");

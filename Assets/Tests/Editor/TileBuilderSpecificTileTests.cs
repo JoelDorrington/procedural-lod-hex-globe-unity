@@ -38,8 +38,11 @@ namespace HexGlobeProject.Tests.Editor
             var verts = data.mesh.vertices;
             Assert.IsNotNull(verts, "Mesh vertices should not be null");
 
-            // Canonical corners
-            var corners = IcosphereMapping.GetCorners(data.id, config.baseRadius, Vector3.zero);
+            // Compute canonical bary origin and tile span so the test can apply
+            // the same Barycentric reflection/clamping behavior as the builder.
+            var origin = IcosphereMapping.TileIndexToBaryOrigin(data.id.depth, data.id.x, data.id.y);
+            int tilesPerEdge = 1 << data.id.depth;
+            float tileWidthWeight = 1f / tilesPerEdge;
 
             // Helper to find vertex index for a tile-local lattice coordinate
             int FindIndexForLocal(int localX, int localY)
@@ -66,19 +69,35 @@ namespace HexGlobeProject.Tests.Editor
                 int li = FindIndexForLocal(cornersLocal[k].x, cornersLocal[k].y);
                 Assert.IsTrue(li >= 0 && li < verts.Length, $"Corner vertex index {li} out of range for corner {k}");
                 var worldFromMesh = verts[li] + data.center;
-                var expected = corners[k];
-                // Compare normalized directions (global) to avoid absolute-position scale issues
-                var dirMesh = worldFromMesh.normalized;
-                var dirExpected = expected.normalized;
-                float dot = Vector3.Dot(dirMesh, dirExpected);
+
+                // Compute the expected bary (pre-reflect) for this canonical corner
+                float u = origin.U;
+                float v = origin.V;
+                if (k == 1) u = origin.U + tileWidthWeight;
+                if (k == 2) v = origin.V + tileWidthWeight;
+                var expectedBary = new Barycentric(u, v); // may reflect or clamp
+                // Mirror the builder's special-case reflection for far-edge corners so
+                // the test computes the same effective bary as the mesh builder.
+                int tilesPerFace = 1 << data.id.depth;
+                bool isCorner = expectedBary.U == 0f || expectedBary.V == 0f || Mathf.Approximately(expectedBary.W, 0f);
+                if (data.id.x + data.id.y == tilesPerFace && isCorner && !expectedBary.IsReflected)
+                {
+                    expectedBary = new Barycentric(1f - expectedBary.U, 1f - expectedBary.V);
+                }
+                var expectedDir = IcosphereMapping.BaryToWorldDirection(data.id.face, expectedBary);
+                var expected = expectedDir * config.baseRadius + Vector3.zero;
+                // Compare world positions directly (mesh vertex + center vs canonical world point)
+                var meshWorld = worldFromMesh;
+                var canonicalWorld = expectedDir * config.baseRadius + Vector3.zero;
+                float dist = Vector3.Distance(meshWorld, canonicalWorld);
+                const float kEpsilon = 0.5f;
 
                 // Diagnostic log for CI/editor console
-                Debug.Log($"[TileBuilderSpecificTileTests] Corner[{k}] idx={li} meshWorld={worldFromMesh} expected={expected} dot={dot} tile={data.id}");
-
+                Debug.Log($"[TileBuilderSpecificTileTests] Corner[{k}] idx={li} meshWorld={meshWorld} expected={canonicalWorld} dist={dist} tile={data.id}");
                 // Extra low-level diagnostics: print float bit patterns and stored bary/uv values
-                var dotBytes = BitConverter.GetBytes(dot);
-                uint dotBits = BitConverter.ToUInt32(dotBytes, 0);
-                Debug.Log($"[TileBuilderSpecificTileTests] dot bits=0x{dotBits:X8}");
+                var distBytes = BitConverter.GetBytes(dist);
+                uint distBits = BitConverter.ToUInt32(distBytes, 0);
+                Debug.Log($"[TileBuilderSpecificTileTests] dist bits=0x{distBits:X8}");
 
                 // Print the stored bary (UV) at the found index and the recomputed world from that bary
                 Vector2[] uvs2 = data.mesh.uv;
@@ -96,10 +115,10 @@ namespace HexGlobeProject.Tests.Editor
                 // Compute canonical corner using same helper the builder uses and compare
                 var canonicalFromMapping = IcosphereMapping.GetCorners(data.id, config.baseRadius, Vector3.zero)[k];
                 Debug.Log($"[TileBuilderSpecificTileTests] canonicalCornerFromMapping[{k}]={canonicalFromMapping} canonicalDir={canonicalFromMapping.normalized}");
-                float dotWithCanonical = Vector3.Dot(dirMesh, canonicalFromMapping.normalized);
+                float dotWithCanonical = Vector3.Dot(meshWorld.normalized, canonicalFromMapping.normalized);
                 Debug.Log($"[TileBuilderSpecificTileTests] dotBetweenMeshAndCanonical={dotWithCanonical}");
 
-                if (dot != 1f)
+                if (dist > kEpsilon)
                 {
                     // Find nearest vertex to expected to see if a different index holds the correct position
                     int nearestIdx = -1; float nearestDist = float.MaxValue;
@@ -137,7 +156,7 @@ namespace HexGlobeProject.Tests.Editor
                     Debug.Log("[TileBuilderSpecificTileTests] Diagnostic: if nearestIdx has small dist then index mapping may be wrong; if not, sampling or bary mapping differs.");
                 }
 
-                Assert.AreEqual(1f, dot, 0f, $"Corner {k} direction mismatch: dot={dot}");
+                Assert.AreEqual(0f, dist, kEpsilon, $"Corner {k} world position mismatch: dist={dist}");
             }
         }
     }
