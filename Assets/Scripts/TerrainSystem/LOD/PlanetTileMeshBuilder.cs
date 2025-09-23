@@ -198,24 +198,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 throw new ArgumentException($"TileId {data.id} not found in precomputed registry at depth {depth}");
             }
             var entry = registry.tiles[data.id];
-            // Set canonical tile center on the TileData so callers (and cache) have
-            // the authoritative center available. Mesh vertices will be stored in
-            // local space relative to this center.
             data.center = entry.centerWorld;
-            // Debug.Log($"[DIAGNOSTIC] Tile {data.id}: Set data.center = {data.center} from registry");
-            
-            // DIAGNOSTIC: Compare registry center with what we'd compute for tile center
-            var tileCenterBary = IcosphereMapping.TileIndexToBaryCenter(data.id.depth, data.id.x, data.id.y);
-            var tileCenterDir = IcosphereMapping.BaryToWorldDirection(entry.face, tileCenterBary);
-            var computedCenter = tileCenterDir * radius + planetCenter;
-            // Debug.Log($"[DIAGNOSTIC] Tile {data.id}: Registry center={data.center}, computed center={computedCenter}, diff={(data.center - computedCenter).magnitude:F6}");
-            // Debug.Log($"[DIAGNOSTIC] Tile {data.id}: tileCenterBary={tileCenterBary}, tileCenterDir={tileCenterDir}");
-
             if (TryGetExistingMesh(entry, res, out var cached))
             {
                 data.mesh = cached.mesh;
                 data.center = cached.centerUsed;
-                // Debug.Log($"[DIAGNOSTIC] Tile {data.id}: Using cached mesh, data.center changed to {data.center}");
                 return;
             }
 
@@ -249,15 +236,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 if (rawScaled < minHeight) minHeight = rawScaled;
                 if (rawScaled > maxHeight) maxHeight = rawScaled;
 
-                // Add vert (store as local position relative to tile center)
-                Vector3 worldVert = (dir * radius) + (dir * rawScaled) + planetCenter;
-                // Vector3 worldVert = dir * radius;
-                _verts.Add(worldVert - data.center);
-                
-                // Store an outward-pointing normal (world space relative to planet center).
-                // Since the mesh will be placed at `data.center` with identity rotation,
-                // this world-space normal is valid as the mesh-local normal. If the
-                // GameObject gains rotation/scale, Unity will transform the normal.
+                // Generate vertex position
+                var worldVert = (dir * radius) + (dir * rawScaled) + planetCenter;
+                var localVert = worldVert - data.center;
+                _verts.Add(localVert); // localize to tile center
                 _normals.Add((worldVert - planetCenter).normalized);
                 // Use the bary's integer lattice indices (i,j) as returned by TileVertexBarys
                 int gi = Mathf.RoundToInt(bary.U);
@@ -309,25 +291,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
             if(degenerateTriangleCount > 0) Debug.Log($"Degenerate triangle count: {degenerateTriangleCount} (out of {_tris.Count / 3} total)");
 
-            // DIAGNOSTIC: Check if vertices are mesh-local (average should be near zero)
-            if (_verts.Count > 0)
-            {
-                Vector3 avgVert = Vector3.zero;
-                foreach (var v in _verts) avgVert += v;
-                avgVert /= _verts.Count;
-                
-                // Verify the fix
-                Vector3 newAvgVert = Vector3.zero;
-                foreach (var v in _verts) newAvgVert += v;
-                newAvgVert /= _verts.Count;
-                Debug.Log($"[FIX] Tile {data.id}: After fix, average vertex = {newAvgVert}, magnitude = {newAvgVert.magnitude:F6}");
-                
-                if (avgVert.magnitude > 1e-3f)
-                {
-                    Debug.LogWarning($"[DIAGNOSTIC] Tile {data.id}: Average vertex magnitude {avgVert.magnitude:F6} suggests non-local vertices!");
-                }
-            }
-
             // Ensure triangle winding matches vertex normals (so triangles naturally face away from sphere)
             // Check the geometric normal of the first triangle against the averaged vertex normal;
             // flip winding only when necessary to satisfy the requested outwardNormals parameter.
@@ -362,38 +325,17 @@ namespace HexGlobeProject.TerrainSystem.LOD
             mesh.name = $"Tile_{data.id.faceNormal}_d{data.id.depth}";
             mesh.indexFormat = (_verts.Count > 65000) ? UnityEngine.Rendering.IndexFormat.UInt32 : UnityEngine.Rendering.IndexFormat.UInt16;
             mesh.SetVertices(_verts);
+            mesh.SetNormals(_normals);
             mesh.SetTriangles(_tris, 0);
             mesh.SetUVs(0, _uvs);
-
-            // Avoid the heavy RecalculateBounds call; compute an approximate bounds
-            // from the sampled min/max heights which we already track. This is
-            // sufficient to keep the mesh renderable and avoids another native pass.
+            
             float maxRad = radius + (maxHeight == float.MinValue ? 0f : maxHeight);
             float minRad = radius + (minHeight == float.MaxValue ? 0f : minHeight);
             float maxExtent = Mathf.Max(Mathf.Abs(maxRad), Mathf.Abs(minRad));
             var approxSize = Vector3.one * (maxExtent * 2f + 1f);
             mesh.bounds = new Bounds(Vector3.zero, approxSize);
 
-            // Use the normals collected during sampling instead of calling RecalculateNormals() 
-            // which is expensive in native code. This keeps normals coherent with the sampling
-            //  direction (dir) and avoids a costly recompute for each mesh build.
-            try
-            {
-                if (_normals.Count != _verts.Count)
-                {
-                    throw new Exception($"Normal count mismatch: {_normals.Count} != {_verts.Count}");
-                }
-                mesh.SetNormals(_normals);
-            }
-            catch (Exception e)
-            {
-                Debug.LogWarning(e);
-                try { mesh.RecalculateNormals(); } catch { }
-            }
-
             data.mesh = mesh;
-
-            // Cache the produced mesh
             s_meshCache[data.id] = new CachedMeshEntry { mesh = mesh, centerUsed = data.center, resolutionUsed = data.resolution };
         }
         /// <summary>

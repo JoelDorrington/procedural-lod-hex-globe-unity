@@ -100,7 +100,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             var localScaled = localBary / subdivisionsPerTileEdge; // normalized 0..1 across tile
 
             // Tile span (how much barycentric space this tile occupies across the face)
-            float tileSpan = 1f / Mathf.Pow(3f, tileId.depth);
+            float tileSpan = 1f / Mathf.Pow(2, tileId.depth);
 
             // Map local normalized coordinates into the tile footprint using the canonical origin
             var global = origin + (localScaled * tileSpan);
@@ -240,11 +240,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
         {
             /*
                 depth = 0: center weights at thirds
-                depth = 1: center weights at 9ths
-                depth = 2: center weights at 18ths
-                SOLUTION: weight = 1 / 3^(depth+1)
+                depth = 1: center weights at 6ths
+                depth = 2: center weights at 12ths
+                SOLUTION: weight = 1 / 3 * 2^depth
             */
-            float weight = 1f / Mathf.Pow(3, depth); // no possibility of divide by zero
+            float weight = 1f / Mathf.Pow(2, depth); // no possibility of divide by zero
             float u = x * weight;
             float v = y * weight;
             // Reflect only when the sum strictly exceeds 1 so boundary centers are stable.
@@ -262,13 +262,13 @@ namespace HexGlobeProject.TerrainSystem.LOD
         {
             /*
                 depth = 0: center weights at thirds
-                depth = 1: center weights at 9ths
-                depth = 2: center weights at 18ths
-                SOLUTION: weight = 1 / 3^(depth+1)
+                depth = 1: center weights at 6ths
+                depth = 2: center weights at 12ths
+                SOLUTION: weight = 1 / 2^(depth+1)
             */
-            float weight = 1f / Mathf.Pow(3, depth + 1); // no possibility of divide by zero
-            float u = (x + 1) * weight;
-            float v = (y + 1) * weight;
+            float weight = 1f / Mathf.Pow(2, depth); // no possibility of divide by zero
+            float u = x * weight + weight / 2f;
+            float v = y * weight + weight / 2f;
             // Reflect only when the sum strictly exceeds 1 so boundary centers are stable.
             var uv = new Barycentric(u, v);
             if (uv.IsMirrored()) return uv.Reflected();
