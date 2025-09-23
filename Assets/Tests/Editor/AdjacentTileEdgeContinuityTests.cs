@@ -2,6 +2,8 @@ using NUnit.Framework;
 using UnityEngine;
 using HexGlobeProject.TerrainSystem.LOD;
 using HexGlobeProject.TerrainSystem.Core;
+using System.Collections.Generic;
+using UnityEngine.XR;
 
 namespace HexGlobeProject.Tests.Editor
 {
@@ -31,6 +33,8 @@ namespace HexGlobeProject.Tests.Editor
         public void SetUp()
         {
             PlanetTileMeshBuilder.ClearCache();
+            // Enable verbose per-vertex diagnostics to capture bary->global->dir->world traces
+            PlanetTileMeshBuilder.VerboseEdgeSampleLogging = true;
             config = ScriptableObject.CreateInstance<TerrainConfig>();
             config.baseRadius = 30f;
             config.baseResolution = 8;
@@ -43,6 +47,7 @@ namespace HexGlobeProject.Tests.Editor
         [TearDown]
         public void TearDown()
         {
+            PlanetTileMeshBuilder.VerboseEdgeSampleLogging = false;
             Object.DestroyImmediate(config);
         }
 
@@ -65,7 +70,7 @@ namespace HexGlobeProject.Tests.Editor
             var cornersA = IcosphereMapping.GetCorners(tileAId, config.baseRadius);
             var cornersB = IcosphereMapping.GetCorners(tileBId, config.baseRadius);
             var matchingCorners = new Vector3[2];
-            foreach(var c1 in cornersA)
+            foreach (var c1 in cornersA)
             {
                 foreach (var c2 in cornersB)
                 {
@@ -88,65 +93,31 @@ namespace HexGlobeProject.Tests.Editor
                 }
             }
 
-            int matchedVerts = 0;
             // Derive edge vertex indices from mesh UVs (barycentric coordinates). Vertex ordering
             // may vary but the per-vertex barycentric coords are stored in mesh.uv in the same
             // order as mesh.vertices.
-            var aUVs = new Vector2[dataA.mesh.vertexCount];
-            var bUVs = new Vector2[dataB.mesh.vertexCount];
-            dataA.mesh.GetUVs(0, new System.Collections.Generic.List<Vector2>(aUVs));
-            dataB.mesh.GetUVs(0, new System.Collections.Generic.List<Vector2>(bUVs));
 
-            var aEdgeIndices = new System.Collections.Generic.List<int>();
-            var bEdgeIndices = new System.Collections.Generic.List<int>();
-            float eps = 1e-4f;
-            for (int i = 0; i < dataA.mesh.vertexCount; i++)
+            // Ensure we found two matching corners which define the shared edge.
+            if (matchingCorners[0] == Vector3.zero || matchingCorners[1] == Vector3.zero)
             {
-                var uv = dataA.mesh.uv[i];
-                // On an edge when u==0 or v==0 or u+v==1 (mirrored)
-                if (Mathf.Abs(uv.x) < eps || Mathf.Abs(uv.y) < eps || Mathf.Abs(uv.x + uv.y - 1f) < eps)
-                    aEdgeIndices.Add(i);
-            }
-            for (int i = 0; i < dataB.mesh.vertexCount; i++)
-            {
-                var uv = dataB.mesh.uv[i];
-                if (Mathf.Abs(uv.x) < eps || Mathf.Abs(uv.y) < eps || Mathf.Abs(uv.x + uv.y - 1f) < eps)
-                    bEdgeIndices.Add(i);
+                Assert.Fail("Failed to find two shared corners between adjacent tiles; cannot verify edge continuity.");
             }
 
-            // Compare world-space sampled positions for these edge vertices and avoid double-counting.
-            var matchedA = new System.Collections.Generic.HashSet<int>();
-            float worldTol = 1e-3f;
-            foreach (int aIndex in aEdgeIndices)
+            List<Vector3[]> matchingEdgeVertices = new List<Vector3[]>();
+
+            foreach (var vertA in dataA.mesh.vertices)
             {
-                Vector3 aVertLocal = dataA.mesh.vertices[aIndex];
-                Vector3 aWorldPos = dataA.center + aVertLocal;
-                foreach (int bIndex in bEdgeIndices)
+                foreach (var vertB in dataB.mesh.vertices)
                 {
-                    Vector3 bVertLocal = dataB.mesh.vertices[bIndex];
-                    Vector3 bWorldPos = dataB.center + bVertLocal;
-                    if (Vector3.Distance(aWorldPos, bWorldPos) < worldTol)
+                    if (Vector3.Distance(vertA, vertB) < 1f)
                     {
-                        if (!matchedA.Contains(aIndex))
-                        {
-                            matchedA.Add(aIndex);
-                            matchedVerts++;
-                        }
-                        break; // A's vertex matched, move to next A
-                    }
-                    else
-                    {
-                        // Debug: print barycentric UV and world direction for mismatch cases to diagnose seam generation
-                        var aUV = dataA.mesh.uv[aIndex];
-                        var bUV = dataB.mesh.uv[bIndex];
-                        var aDir = IcosphereMapping.BaryToWorldDirection(dataA.id.face, new Barycentric(aUV.x, aUV.y));
-                        var bDir = IcosphereMapping.BaryToWorldDirection(dataB.id.face, new Barycentric(bUV.x, bUV.y));
-                        Debug.Log($"Edge mismatch: A idx={aIndex} uv={aUV} dir={aDir} world={aWorldPos} | B idx={bIndex} uv={bUV} dir={bDir} world={bWorldPos}");
+                        matchingEdgeVertices.Add(new Vector3[] { vertA, vertB });
                     }
                 }
             }
+            
+            Assert.IsTrue(matchingEdgeVertices.Count == config.baseResolution, $"Expected exactly {config.baseResolution} matching edge vertices between adjacent tiles, found {matchingEdgeVertices.Count}.");
 
-            Assert.AreEqual(config.baseResolution, matchedVerts, $"Expected {config.baseResolution} matching edge vertices, found {matchedVerts}");
         }
     }
 }
