@@ -62,7 +62,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
     // NOTE: edge sample cache removed to avoid timing/order-dependent seams.
         // Toggle verbose per-vertex logging. Keep false by default to avoid perf hit; enable manually for debugging.
-        private static bool s_verboseEdgeSampleLogging = false;
+        private static bool s_verboseEdgeSampleLogging = true;
 
         /// <summary>
         /// Public accessor so editor scripts can toggle verbose edge-sample logging
@@ -246,7 +246,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 }
             }
 
-            // Build triangles from the lattice using the vertexIndexMap.
+            // Build triangles from the lattice using the authoritative _vertsMap
+            // that was filled while constructing vertices (dual-counter ordering).
             for (int jj = 0; jj < res - 1; jj++)
             {
                 int maxI = res - 1 - jj; // ii such that we have (ii+1,jj) and (ii,jj+1)
@@ -256,6 +257,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     int i1 = _vertsMap[ii + 1, jj];
                     int i2 = _vertsMap[ii, jj + 1];
                     if (i0 < 0 || i1 < 0 || i2 < 0) continue;
+                    if (i0 >= _verts.Count || i1 >= _verts.Count || i2 >= _verts.Count) continue;
 
                     Vector3 v0 = _verts[i0]; Vector3 v1 = _verts[i1]; Vector3 v2 = _verts[i2];
                     float area0 = Vector3.Cross(v1 - v0, v2 - v0).magnitude * 0.5f;
@@ -266,11 +268,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
                     else degenerateTriangleCount++;
 
                     // Add second triangle in the cell when the upper-right vertex exists
-                    // which is at (i+1, j+1) for interior cells.
+                    // which is at (ii+1, jj+1) for interior cells.
                     if (ii + jj < res - 2)
                     {
                         int i3 = _vertsMap[ii + 1, jj + 1];
-                        if (i3 >= 0)
+                        if (i3 >= 0 && i3 < _verts.Count)
                         {
                             Vector3 u0 = _verts[i1]; Vector3 u1 = _verts[i3]; Vector3 u2 = _verts[i2];
                             float area1 = Vector3.Cross(u1 - u0, u2 - u0).magnitude * 0.5f;
@@ -286,34 +288,150 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
             if(degenerateTriangleCount > 0) Debug.Log($"Degenerate triangle count: {degenerateTriangleCount} (out of {_tris.Count / 3} total)");
 
-            // Ensure triangle winding matches vertex normals (so triangles naturally face away from sphere)
-            // Check the geometric normal of the first triangle against the averaged vertex normal;
-            // flip winding only when necessary to satisfy the requested outwardNormals parameter.
-            if (_tris.Count >= 3)
+            // Ensure triangle winding matches sampled vertex normals (so triangles face outward).
+            // Instead of flipping all triangles based on the first triangle, check each
+            // triangle individually and swap its winding when it is inverted. Keep the
+            // per-vertex sampled normals unchanged.
+            for (int t = 0; t < _tris.Count; t += 3)
             {
-                int aIdx = _tris[0];
-                int bIdx = _tris[1];
-                int cIdx = _tris[2];
-                Vector3 aPos = _verts[aIdx];
-                Vector3 bPos = _verts[bIdx];
-                Vector3 cPos = _verts[cIdx];
-                // Compute triangle geometric normal in world-space and compare to the
-                // averaged sampled vertex normal (which is also in world-space).
+                int ai = _tris[t];
+                int bi = _tris[t + 1];
+                int ci = _tris[t + 2];
+                Vector3 aPos = _verts[ai];
+                Vector3 bPos = _verts[bi];
+                Vector3 cPos = _verts[ci];
                 Vector3 worldA = aPos + data.center;
                 Vector3 worldB = bPos + data.center;
                 Vector3 worldC = cPos + data.center;
                 Vector3 triNormalWorld = Vector3.Cross(worldB - worldA, worldC - worldA).normalized;
-
-                // Averaged sampled normal (we sampled outward normals earlier)
-                Vector3 avgVertNormal = (_normals[aIdx] + _normals[bIdx] + _normals[cIdx]).normalized;
-
-                // If triangle geometric normal points opposite to averaged vertex normal,
-                // flip triangle winding only; do NOT invert per-vertex normals (they are
-                // sampled outward normals and should remain outward-facing).
-                float dot = Vector3.Dot(triNormalWorld, avgVertNormal);
-                if (dot < 0f)
+                Vector3 avgVertNormal = (_normals[ai] + _normals[bi] + _normals[ci]).normalized;
+                if (Vector3.Dot(triNormalWorld, avgVertNormal) < 0f)
                 {
-                    FlipTriangleWinding(_tris);
+                    // Swap winding for this triangle (bi <-> ci)
+                    _tris[t + 1] = ci;
+                    _tris[t + 2] = bi;
+                }
+            }
+
+            // Optional diagnostic: compute triangle area distribution and log details
+            // when there are gross outliers. This runs only when verbose logging
+            // is enabled to avoid spamming normal runs.
+            if (s_verboseEdgeSampleLogging && _tris.Count >= 3)
+            {
+                var areas = new List<float>(_tris.Count / 3);
+                for (int t = 0; t < _tris.Count; t += 3)
+                {
+                    Vector3 a = _verts[_tris[t]];
+                    Vector3 b = _verts[_tris[t + 1]];
+                    Vector3 c = _verts[_tris[t + 2]];
+                    float area = Vector3.Cross(b - a, c - a).magnitude * 0.5f;
+                    areas.Add(area);
+                }
+                areas.Sort();
+                float median = areas[areas.Count / 2];
+                float max = areas[areas.Count - 1];
+                if (median > 0f && max / median > 8.0f)
+                {
+                    // Find the offending triangle index
+                    int offendingTri = -1;
+                    for (int t = 0; t < _tris.Count; t += 3)
+                    {
+                        Vector3 a = _verts[_tris[t]];
+                        Vector3 b = _verts[_tris[t + 1]];
+                        Vector3 c = _verts[_tris[t + 2]];
+                        float area = Vector3.Cross(b - a, c - a).magnitude * 0.5f;
+                        if (Mathf.Approximately(area, max)) { offendingTri = t; break; }
+                    }
+                    if (offendingTri >= 0)
+                    {
+                        int ai = _tris[offendingTri];
+                        int bi = _tris[offendingTri + 1];
+                        int ci = _tris[offendingTri + 2];
+                        var baryA = _uvs[ai]; var baryB = _uvs[bi]; var baryC = _uvs[ci];
+                        Vector3 worldA = _verts[ai] + data.center;
+                        Vector3 worldB = _verts[bi] + data.center;
+                        Vector3 worldC = _verts[ci] + data.center;
+                        // Additionally locate lattice coordinates for these vertex indices by
+                        // scanning the authoritative _vertsMap. This helps detect whether
+                        // map entries pointed to wrong indices or were uninitialized.
+                        (int li, int lj) aL = (-1, -1);
+                        (int li, int lj) bL = (-1, -1);
+                        (int li, int lj) cL = (-1, -1);
+                        for (int y = 0; y <= res; y++)
+                        {
+                            for (int x = 0; x <= res; x++)
+                            {
+                                if (x < _vertsMap.GetLength(0) && y < _vertsMap.GetLength(1))
+                                {
+                                    int idx = _vertsMap[x, y];
+                                    if (idx == ai) aL = (x, y);
+                                    if (idx == bi) bL = (x, y);
+                                    if (idx == ci) cL = (x, y);
+                                }
+                            }
+                        }
+
+                        // Collect neighboring map entries around each found lattice coord
+                        string NeighborDump((int x, int y) p)
+                        {
+                            if (p.x < 0 || p.y < 0) return "(not found)";
+                            var sb = new System.Text.StringBuilder();
+                            for (int oy = -1; oy <= 1; oy++)
+                            {
+                                for (int ox = -1; ox <= 1; ox++)
+                                {
+                                    int nx = p.x + ox;
+                                    int ny = p.y + oy;
+                                    if (nx >= 0 && nx < _vertsMap.GetLength(0) && ny >= 0 && ny < _vertsMap.GetLength(1))
+                                        sb.AppendFormat("{0},", _vertsMap[nx, ny]);
+                                    else sb.Append("_,");
+                                }
+                                sb.Append(" | ");
+                            }
+                            return sb.ToString();
+                        }
+
+                        // Recompute directions from stored bary values and log them to
+                        // detect whether a stored bary or face selection produced the
+                        // unexpected world position.
+                        var storedBaryA = _uvs[ai];
+                        var storedBaryB = _uvs[bi];
+                        var storedBaryC = _uvs[ci];
+                        Vector3 dirA = IcosphereMapping.BaryToWorldDirection(entry.face, new Barycentric(storedBaryA.x, storedBaryA.y));
+                        Vector3 dirB = IcosphereMapping.BaryToWorldDirection(entry.face, new Barycentric(storedBaryB.x, storedBaryB.y));
+                        Vector3 dirC = IcosphereMapping.BaryToWorldDirection(entry.face, new Barycentric(storedBaryC.x, storedBaryC.y));
+                        Vector3 recomWorldA = dirA * radius + dirA * provider.Sample(in dirA, res) + planetCenter;
+                        Vector3 recomWorldB = dirB * radius + dirB * provider.Sample(in dirB, res) + planetCenter;
+                        Vector3 recomWorldC = dirC * radius + dirC * provider.Sample(in dirC, res) + planetCenter;
+
+                        Debug.LogWarning($"Large-triangle outlier on Tile {data.id.faceNormal} d{data.id.depth} res={res}: max/median={max/median:0.###} \n" +
+                            $"TriIndices=({ai},{bi},{ci}) bary=({baryA.x:0.###},{baryA.y:0.###})/({baryB.x:0.###},{baryB.y:0.###})/({baryC.x:0.###},{baryC.y:0.###}) \n" +
+                            $"WorldA={worldA} WorldB={worldB} WorldC={worldC} \n" +
+                            $"RecomputedWorldA={recomWorldA} RecomputedWorldB={recomWorldB} RecomputedWorldC={recomWorldC} \n" +
+                            $"StoredBaryA=({storedBaryA.x:0.###},{storedBaryA.y:0.###}) StoredBaryB=({storedBaryB.x:0.###},{storedBaryB.y:0.###}) StoredBaryC=({storedBaryC.x:0.###},{storedBaryC.y:0.###}) \n" +
+                            $"LatticeA=({aL.Item1},{aL.Item2}) neighbors={NeighborDump(aL)} \n" +
+                            $"LatticeB=({bL.Item1},{bL.Item2}) neighbors={NeighborDump(bL)} \n" +
+                            $"LatticeC=({cL.Item1},{cL.Item2}) neighbors={NeighborDump(cL)}");
+
+                        // Dump nearby vertex entries around the offending indices to
+                        // detect whether the _verts list contains misordered or corrupt entries.
+                        int minIdx = Mathf.Max(0, Math.Min(Math.Min(ai, bi), ci) - 8);
+                        int maxIdx = Mathf.Min(_verts.Count - 1, Math.Max(Math.Max(ai, bi), ci) + 8);
+                        var sb = new System.Text.StringBuilder();
+                        sb.AppendLine($"Vertex dump [{minIdx}..{maxIdx}] (_verts.Count={_verts.Count}):");
+                        for (int k = minIdx; k <= maxIdx; k++)
+                        {
+                            var uv = (k < _uvs.Count) ? _uvs[k] : new Vector2(float.NaN, float.NaN);
+                            var local = (k < _verts.Count) ? _verts[k] : Vector3.zero;
+                            var wpos = local + data.center;
+                            sb.AppendFormat("idx={0} uv=({1:0.###},{2:0.###}) world=({3:0.##},{4:0.##},{5:0.##})\n", k, uv.x, uv.y, wpos.x, wpos.y, wpos.z);
+                        }
+                        Debug.LogWarning(sb.ToString());
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"Large-triangle outlier detected on Tile {data.id.faceNormal} d{data.id.depth} res={res}: max/median={max/median:0.###} but offending triangle not found by exact match.");
+                    }
                 }
             }
 

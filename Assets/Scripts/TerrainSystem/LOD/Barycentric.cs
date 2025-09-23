@@ -1,6 +1,4 @@
 using System;
-using System.Net.WebSockets;
-using System.Runtime.InteropServices.WindowsRuntime;
 using UnityEngine;
 
 namespace HexGlobeProject.TerrainSystem.LOD
@@ -26,14 +24,46 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
         public Barycentric(float u, float v)
         {
-            U = u;
-            V = v;
-            IsReflected = false;
-            if (W < 0f)
+            // Be robust against tiny floating-point errors when u+v is extremely
+            // close to 1.0. If W is only slightly negative due to rounding, treat
+            // the point as lying on the edge (clamp/renormalize) instead of
+            // reflecting it. Only perform a reflection when W is meaningfully
+            // negative.
+            // Increase epsilon to tolerate small rounding errors from lattice arithmetic
+            // (TileVertexBarys computes weights that can slightly overshoot 1.0).
+            const float kEpsilon = 1e-4f;
+            float w = 1f - u - v;
+            if (w < 0f)
             {
-                U = 1f - u;
-                V = 1f - v;
-                IsReflected = true;
+                if (w > -kEpsilon)
+                {
+                    // Clamp to the edge by renormalizing U,V so they sum to 1.
+                    float s = u + v;
+                    if (s > 0f)
+                    {
+                        U = u / s;
+                        V = v / s;
+                    }
+                    else
+                    {
+                        U = u;
+                        V = v;
+                    }
+                    IsReflected = false;
+                }
+                else
+                {
+                    // True reflection required
+                    U = 1f - u;
+                    V = 1f - v;
+                    IsReflected = true;
+                }
+            }
+            else
+            {
+                U = u;
+                V = v;
+                IsReflected = false;
             }
         }
 
