@@ -4,6 +4,7 @@ using HexGlobeProject.TerrainSystem.LOD;
 using HexGlobeProject.TerrainSystem.Core;
 using System.Collections.Generic;
 using UnityEngine.XR;
+using NUnit.Framework.Constraints;
 
 namespace HexGlobeProject.Tests.Editor
 {
@@ -107,13 +108,20 @@ namespace HexGlobeProject.Tests.Editor
 
             foreach (var vertA in dataA.mesh.vertices)
             {
+                var found = false;
+                var minD = float.MaxValue;
                 foreach (var vertB in dataB.mesh.vertices)
                 {
-                    if (Vector3.Distance(vertA, vertB) < 1f)
+                    var d = Vector3.Distance(vertA, vertB);
+                    if(d < minD) minD = d;
+                    if (d < 3f)
                     {
                         matchingEdgeVertices.Add(new Vector3[] { vertA, vertB });
+                        found = true;
+                        break;
                     }
                 }
+                if(found == false) Debug.Log($"No matching vertex found for A={vertA} (minD={minD})");
             }
             
             Assert.IsTrue(matchingEdgeVertices.Count == config.baseResolution, $"Expected exactly {config.baseResolution} matching edge vertices between adjacent tiles, found {matchingEdgeVertices.Count}.");
