@@ -21,12 +21,20 @@ namespace HexGlobeProject.TerrainSystem.LOD
         /// <summary>Normalized v coordinate in [0,1].</summary>
         public float V { get; }
         /// <summary>Implicit third coordinate w = 1 - u - v.</summary>
-        public float W => 1f - (U + V);
+        public float W => 1f - U - V;
+        public bool IsReflected { get; }
 
         public Barycentric(float u, float v)
         {
             U = u;
             V = v;
+            IsReflected = false;
+            if (W < 0f)
+            {
+                U = 1f - u;
+                V = 1f - v;
+                IsReflected = true;
+            }
         }
 
         public bool Equals(Barycentric other) => Mathf.Approximately(U, other.U) && Mathf.Approximately(V, other.V);
@@ -50,9 +58,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
         /// <summary>
         /// Add two barycentric coordinates component-wise.
-        /// Note: this does NOT renormalize or clamp the result. The caller
-        /// is responsible for ensuring the result is a valid barycentric
-        /// coordinate (for example by calling <see cref="Normalized"/>).
         /// </summary>
         public static Barycentric operator +(Barycentric a, Barycentric b) => new Barycentric(a.U + b.U, a.V + b.V);
 
@@ -60,39 +65,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
         /// Subtract two barycentric coordinates component-wise.
         /// </summary>
         public static Barycentric operator -(Barycentric a, Barycentric b) => new Barycentric(a.U - b.U, a.V - b.V);
-
-        /// <summary>
-        /// Return a normalized barycentric where U+V+W == 1. If the input already
-        /// defines a valid bary, this returns the same values. If the sum is zero,
-        /// returns the zero barycentric (0,0).
-        /// </summary>
-        public Barycentric Normalized()
-        {
-            float sum = U + V + W; // which equals 1f, but we compute safely for arbitrary sums
-            if (Mathf.Approximately(sum, 0f)) return new Barycentric(0f, 0f);
-            return new Barycentric(U / sum, V / sum);
-        }
-
-        /// <summary>
-        /// Returns the barycentric reflected across the triangle diagonal, i.e.
-        /// (U,V) -> (1 - V, 1 - U). This is the canonical mirror used by the
-        /// triangular lattice folding logic. Use this instead of inlining the
-        /// expression at call sites so behavior remains centralized.
-        /// </summary>
-        /// <summary>
-        /// Return the barycentric coordinate reflected across the triangle diagonal.
-        /// This maps coordinates from the mirrored half to the canonical half: (U,V) -> (1-V, 1-U).
-        /// </summary>
-        public Barycentric Reflected() {
-            // Proper reflection across the triangle diagonal: (U,V) -> (1 - V, 1 - U)
-            return new Barycentric(1f - V, 1f - U);
-        }
-
-        /// <summary>
-        /// Returns true when the barycentric lies in the mirrored half of the
-        /// reference triangle (i.e., when U + V > 1).
-        /// </summary>
-        public bool IsMirrored() => (U + V) > 1f;
 
         /// <summary>
         /// Divide barycentric components by an integer divisor.

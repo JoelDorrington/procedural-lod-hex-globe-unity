@@ -755,8 +755,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
 				planetFillsView = angularRadius > (Mathf.PI / 4f);
 			}
 
-			Debug.Log($"[TileVisibilityDiagnostics] UpdateVisibilityMathBased: camPos={camPos}, camDir={camDir}, planetCenter={planetCenter}, planetRadius={_planetRadius}, planetFillsView={planetFillsView}, depth={depth}");
-
 			if (!planetFillsView)
 			{
 				if (tileRegistry.TryGetValue(depth, out var regNearby) && regNearby != null)
@@ -771,7 +769,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
 							{
 								Vector3 dir = (c - planetCenter).normalized;
 								var dot = Vector3.Dot(dir, camDir);
-								Debug.Log($"[TileVisibilityDiagnostics]   Tile {e.face}/{e.x}/{e.y} corner at {c} has dot={dot} to camDir: isVisible={dot > cornerDotThreshold}");
 								if (dot > cornerDotThreshold) { anyCornerVisible = true; break; }
 							}
 						}
@@ -818,7 +815,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
 					catch { }
 				}
 
-				Debug.Log($"[TileVisibilityDiagnostics]   Computed centerDotThreshold={centerDotThreshold}");
 				if (tileRegistry.TryGetValue(depth, out var reg) && reg != null)
 				{
 					foreach (var e in reg.tiles.Values)
@@ -826,7 +822,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
 						// Use the tile centroid direction only — Bary corner checks are unnecessary
 						Vector3 centerDir = (e.centerWorld - planetCenter).normalized;
 						var dot = Vector3.Dot(centerDir, camDir);
-						Debug.Log($"[TileVisibilityDiagnostics]   Tile {e.face}/{e.x}/{e.y} center at {e.centerWorld} has dot={dot} to camDir: isVisible={dot > centerDotThreshold}");
 						if (dot > centerDotThreshold)
 						{
 							candidates.Add(new TileId(e.face, e.x, e.y, depth));

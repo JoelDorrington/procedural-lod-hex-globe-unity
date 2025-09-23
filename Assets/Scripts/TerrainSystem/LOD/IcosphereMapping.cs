@@ -91,24 +91,10 @@ namespace HexGlobeProject.TerrainSystem.LOD
             {
                 throw new Exception("BaryLocalToGlobal requires a TileId with positive integer face/x/y indices.");
             }
-            // Treat the incoming float[] as local tile indices (matching other
-            // callsites such as GetCorners, TileMesh tests and the non-alloc overload).
-            // Compute using the same subdivision math to avoid mismatches.
-            int subdivisionsPerTileEdge = Math.Max(1, res - 1);
-
             var origin = TileIndexToBaryOrigin(tileId.depth, tileId.x, tileId.y);
-            var localScaled = localBary / subdivisionsPerTileEdge; // normalized 0..1 across tile
-
             // Tile span (how much barycentric space this tile occupies across the face)
             float tileSpan = 1f / Mathf.Pow(2, tileId.depth);
-
-            // Map local normalized coordinates into the tile footprint using the canonical origin
-            var global = origin + (localScaled * tileSpan);
-
-            // If the point lies in the mirrored triangle half, return the
-            // centralized reflected barycentric form.
-            if (global.IsMirrored()) return global.Reflected();
-            return global;
+            return origin + (localBary * tileSpan);
         }
 
 
@@ -184,8 +170,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
             }
 
             var bary = new Barycentric(u, v);
-            if (bary.IsMirrored()) bary = bary.Reflected();
-
             if (depth < 0) depth = 0;
             int tilesPerEdge = 1 << depth;
             int maxTileIndex = tilesPerEdge - 1;
@@ -195,18 +179,12 @@ namespace HexGlobeProject.TerrainSystem.LOD
         }
 
         /// <summary>
-        /// Convert tile indices back to Bary coordinates for mesh generation.
+        /// Enumerate all tile-local vertex barycentric coordinates for a given mesh resolution.
+        /// These are integer lattice coordinates in the range [0,res-1] that must be   
+        /// converted to normalized coordinates by the caller. 
+        /// Callers must use BaryLocalToGlobal to convert to normalized coordinates.
         /// </summary>
-        /// <param name="tileId">Canonical face id object</param>
-        /// <param name="res">Mesh resolution</param>
-    /// <summary>
-    /// Enumerate tile-local vertex indices for a triangular lattice of resolution `res`.
-    /// NOTE: This yields tile-local integer lattice indices (i,j) packed into a <see cref="Barycentric"/> struct.
-    /// Callers must convert these local indices to global normalized barycentric coordinates
-    /// via <see cref="BaryLocalToGlobal(TileId, Barycentric, int)"/> before using them as UVs
-    /// or passing to <see cref="BaryToWorldDirection"/>.
-    /// </summary>
-    public static IEnumerable<Barycentric> TileVertexBarys(int res)
+        public static IEnumerable<Barycentric> TileVertexBarys(int res)
         {
             if (res <= 1)
             {
@@ -214,18 +192,15 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 yield return new(0, 0);
                 yield break;
             }
-            // Use (res - 1) segments per tile edge. The triangular lattice contains
-            // exactly res*(res+1)/2 vertices when iterating rows with lengths
-            // res, res-1, ..., 1 (j = 0..res-1).
-            // Yield local tile indices (i, j) as integers packed into Barycentric.
-            // The caller should convert these local indices to global barycentric
-            // coordinates using BaryLocalToGlobal(tileId, new Barycentric(i,j), res).
             for (int j = 0; j < res; j++)
             {
                 int maxI = res - 1 - j;
                 for (int i = 0; i <= maxI; i++)
                 {
-                    yield return new Barycentric(i, j);
+                    float u = (float)i / (res - 1);
+                    float v = (float)j / (res - 1);
+                    // convert ints to barycentric
+                    yield return new Barycentric(u, v);
                 }
             }
             yield break;
@@ -238,19 +213,12 @@ namespace HexGlobeProject.TerrainSystem.LOD
         /// </summary>
         public static Barycentric TileIndexToBaryOrigin(int depth, int x, int y)
         {
-            /*
-                depth = 0: center weights at thirds
-                depth = 1: center weights at 6ths
-                depth = 2: center weights at 12ths
-                SOLUTION: weight = 1 / 3 * 2^depth
-            */
-            float weight = 1f / Mathf.Pow(2, depth); // no possibility of divide by zero
+            int tilesPerEdge = 1 << depth;
+            float weight = 1f / tilesPerEdge; // no possibility of divide by zero
             float u = x * weight;
             float v = y * weight;
             // Reflect only when the sum strictly exceeds 1 so boundary centers are stable.
-            var uv = new Barycentric(u, v);
-            if (uv.IsMirrored()) return uv.Reflected();
-            return new(u, v);
+            return new Barycentric(u, v);
         }
 
         /// <summary>
@@ -260,19 +228,13 @@ namespace HexGlobeProject.TerrainSystem.LOD
         /// </summary>
         public static Barycentric TileIndexToBaryCenter(int depth, int x, int y)
         {
-            /*
-                depth = 0: center weights at thirds
-                depth = 1: center weights at 6ths
-                depth = 2: center weights at 12ths
-                SOLUTION: weight = 1 / 2^(depth+1)
-            */
-            float weight = 1f / Mathf.Pow(2, depth); // no possibility of divide by zero
-            float u = x * weight + weight / 2f;
-            float v = y * weight + weight / 2f;
+            int tilesPerEdge = 1 << depth;
+            float fullTileWeight = 1f / tilesPerEdge;
+            float tileCenterWeight = fullTileWeight / 3; // center is always at 1/3 of tile span
+            float u = x * fullTileWeight + tileCenterWeight;
+            float v = y * fullTileWeight + tileCenterWeight;
             // Reflect only when the sum strictly exceeds 1 so boundary centers are stable.
-            var uv = new Barycentric(u, v);
-            if (uv.IsMirrored()) return uv.Reflected();
-            return uv;
+            return new Barycentric(u, v);
         }
     }
 }
