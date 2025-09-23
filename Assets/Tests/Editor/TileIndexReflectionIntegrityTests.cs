@@ -45,7 +45,7 @@ namespace HexGlobeProject.Tests.Editor
                     for (int y = 0; y < tilesPerEdge; y++)
                     {
                         var id = new TileId(face, x, y, depth);
-                        foreach (var local in IcosphereMapping.TileVertexBarys(res))
+                        foreach (var local in IcosphereMapping.TileVertexBarys(res, depth, x, y))
                         {
                             var global = IcosphereMapping.BaryLocalToGlobal(id, local, res);
                             var key = $"F{face}:{global.U:F6}-{global.V:F6}";

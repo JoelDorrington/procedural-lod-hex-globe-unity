@@ -16,21 +16,19 @@ namespace HexGlobeProject.Tests.Editor
 
             Debug.Log("Tile A bary and world dirs:");
             int idx = 0;
-            foreach (var bary in IcosphereMapping.TileVertexBarys(res))
+            foreach (var bary in IcosphereMapping.TileVertexBarys(res, tileAId.depth, tileAId.x, tileAId.y))
             {
-                var global = IcosphereMapping.BaryLocalToGlobal(tileAId, bary, res);
-                var dir = IcosphereMapping.BaryToWorldDirection(tileAId.face, global);
-                Debug.Log($"A idx={idx} local={bary} global={global} dir={dir}");
+                var dir = IcosphereMapping.BaryToWorldDirection(tileAId.face, bary);
+                Debug.Log($"A idx={idx} bary={bary} dir={dir}");
                 idx++;
             }
 
             Debug.Log("Tile B bary and world dirs:");
             idx = 0;
-            foreach (var bary in IcosphereMapping.TileVertexBarys(res))
+            foreach (var bary in IcosphereMapping.TileVertexBarys(res, tileBId.depth, tileBId.x, tileBId.y))
             {
-                var global = IcosphereMapping.BaryLocalToGlobal(tileBId, bary, res);
-                var dir = IcosphereMapping.BaryToWorldDirection(tileBId.face, global);
-                Debug.Log($"B idx={idx} local={bary} global={global} dir={dir}");
+                var dir = IcosphereMapping.BaryToWorldDirection(tileBId.face, bary);
+                Debug.Log($"B idx={idx} bary={bary} dir={dir}");
                 idx++;
             }
 

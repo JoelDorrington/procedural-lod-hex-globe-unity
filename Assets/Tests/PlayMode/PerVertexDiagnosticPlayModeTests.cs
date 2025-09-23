@@ -36,7 +36,7 @@ namespace HexGlobeProject.Tests.PlayMode
             Debug.Log(string.Format("Per-vertex diagnostic for tile {0}: mesh verts={1} res={2}", id, mesh.vertexCount, res));
 
             int idx = 0;
-            foreach (var local in IcosphereMapping.TileVertexBarys(res))
+            foreach (var local in IcosphereMapping.TileVertexBarys(res, tile.tileData.id.depth, tile.tileData.id.x, tile.tileData.id.y))
             {
                 if (idx >= mesh.vertexCount) break;
 

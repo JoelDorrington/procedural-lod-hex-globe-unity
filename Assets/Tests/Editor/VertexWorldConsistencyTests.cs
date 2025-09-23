@@ -34,9 +34,10 @@ namespace HexGlobeProject.Tests.Editor
                 var verts = mesh.vertices;
                 int res = data.resolution;
                 int idx = 0;
-                foreach (var local in IcosphereMapping.TileVertexBarys(res))
+                foreach (var global in IcosphereMapping.TileVertexBarys(res, entry.depth, entry.x, entry.y))
                 {
-                    var global = IcosphereMapping.BaryLocalToGlobal(id, local, res);
+                    // TileVertexBarys currently yields global barycentric coordinates
+                    // (it already accounts for tile x/y and depth). Use them directly.
                     var dir = IcosphereMapping.BaryToWorldDirection(entry.face, global);
                     // Use builder's height provider chain (default SimplePerlin)
                     var provider = cfg.heightProvider ?? new SimplePerlinHeightProvider();
@@ -46,7 +47,7 @@ namespace HexGlobeProject.Tests.Editor
 
                     var actualWorld = data.center + verts[idx];
                     float d = (expectedWorld - actualWorld).magnitude;
-                    Assert.Less(d, 1e-4f, $"Vertex mismatch for tile {id} local {local}: delta={d}");
+                    Assert.Less(d, 1e-4f, $"Vertex mismatch for tile {id} bary {global}: delta={d}");
                     idx++;
                 }
             }

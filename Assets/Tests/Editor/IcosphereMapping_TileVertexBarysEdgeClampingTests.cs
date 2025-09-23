@@ -18,7 +18,7 @@ namespace HexGlobeProject.Tests.Editor
             var sampleId = new TileId(0, 0, 0, 0);
 
             var i = 0; var j = 0;
-            foreach (var local in IcosphereMapping.TileVertexBarys(res))
+            foreach (var local in IcosphereMapping.TileVertexBarys(res, 0, 0, 0))
             {
                 var global = IcosphereMapping.BaryLocalToGlobal(sampleId, local, res);
                 float testW = 1f - global.U - global.V;
@@ -50,7 +50,7 @@ namespace HexGlobeProject.Tests.Editor
             // Ensure we iterated the expected number of vertices
             int expectedCount = res * (res + 1) / 2;
             // We can't directly count here because foreach consumed iterator; replicate to count
-            foreach (var _ in IcosphereMapping.TileVertexBarys(res))
+            foreach (var _ in IcosphereMapping.TileVertexBarys(res, 0, 0, 0))
                 Assert.AreEqual(expectedCount, count, $"TileVertexBarys for res={res} must yield {expectedCount} vertices");
         }
     }

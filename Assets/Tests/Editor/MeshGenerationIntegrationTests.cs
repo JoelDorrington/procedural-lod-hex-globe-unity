@@ -609,21 +609,13 @@ namespace HexGlobeProject.Tests.Editor
 
             float tol = 1e-5f;
             int k = 0; // flattened index into the triangular lattice produced by TileVertexBarys
-            for (int j = 0; j < res; j++)
+            // Use the authoritative TileVertexBarys enumeration to compute expected UVs
+            // (keeps test aligned with mapping semantics and ordering).
+            foreach (var expectedBary in IcosphereMapping.TileVertexBarys(res, tileData.id.depth, tileData.id.x, tileData.id.y))
             {
-                int maxI = res - 1 - j;
-                for (int i = 0; i <= maxI; i++)
-                {
-                    // Compute the tile-local normalized bary (u,v) for the mesh lattice vertex.
-                    // TileVertexBarys yields coordinates normalized by (res - 1), so the
-                    // expected global bary is origin + ( (i/(res-1), j/(res-1)) * tileSpan ).
-                    var local = new Barycentric((float)i / (res - 1), (float)j / (res - 1));
-                    var global = IcosphereMapping.BaryLocalToGlobal(tileData.id, local, res);
-
-                    var uv = uvs[k++];
-                    Assert.AreEqual(global.U, uv.x, tol, $"UV u mismatch at ({i},{j})");
-                    Assert.AreEqual(global.V, uv.y, tol, $"UV v mismatch at ({i},{j})");
-                }
+                var uv = uvs[k++];
+                Assert.AreEqual(expectedBary.U, uv.x, tol, $"UV u mismatch at index {k - 1}");
+                Assert.AreEqual(expectedBary.V, uv.y, tol, $"UV v mismatch at index {k - 1}");
             }
         }
     }

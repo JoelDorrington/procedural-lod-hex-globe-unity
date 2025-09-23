@@ -2,9 +2,6 @@ using NUnit.Framework;
 using UnityEngine;
 using HexGlobeProject.TerrainSystem.LOD;
 using HexGlobeProject.TerrainSystem.Core;
-using System.Collections.Generic;
-using UnityEngine.XR;
-using NUnit.Framework.Constraints;
 
 namespace HexGlobeProject.Tests.Editor
 {
@@ -12,6 +9,7 @@ namespace HexGlobeProject.Tests.Editor
     {
         private TerrainConfig config;
         private PlanetTileMeshBuilder builder;
+        private SimplePerlinHeightProvider provider;
 
         private static int[,] res8vertLattice = {
             {0,1,2,3,4,5,6,7},
@@ -41,7 +39,7 @@ namespace HexGlobeProject.Tests.Editor
             config.baseResolution = 8;
             config.heightScale = 1f;
             config.recalcNormals = false;
-            var provider = new SimplePerlinHeightProvider();
+            provider = new SimplePerlinHeightProvider();
             builder = new PlanetTileMeshBuilder(config, provider, Vector3.zero);
         }
 
@@ -104,27 +102,110 @@ namespace HexGlobeProject.Tests.Editor
                 Assert.Fail("Failed to find two shared corners between adjacent tiles; cannot verify edge continuity.");
             }
 
-            List<Vector3[]> matchingEdgeVertices = new List<Vector3[]>();
+            // Validate each tile's edge vertices independently using robust lattice index mapping
+            float worldTol = 1e-3f;
 
-            foreach (var vertA in dataA.mesh.vertices)
+            // local helper: convert uv -> tile-local lattice indices (i,j) in [0,res-1]
+            // Detect whether uv is global barycentric (face-wide) or tile-local normalized [0,1].
+            (int i, int j) LocalLatticeIndexFromUV(Vector2 uv, TileId tid, int res)
             {
-                var found = false;
-                var minD = float.MaxValue;
-                foreach (var vertB in dataB.mesh.vertices)
+                var origin = IcosphereMapping.TileIndexToBaryOrigin(tid.depth, tid.x, tid.y);
+                int tilesPerEdge = 1 << tid.depth;
+                float tileSpan = 1f / tilesPerEdge;
+                const float eps = 1e-5f;
+                bool looksLocal = (uv.x >= -eps && uv.x <= 1f + eps && uv.y >= -eps && uv.y <= 1f + eps);
+                float fi, fj;
+                if (looksLocal)
                 {
-                    var d = Vector3.Distance(vertA, vertB);
-                    if(d < minD) minD = d;
-                    if (d < 3f)
-                    {
-                        matchingEdgeVertices.Add(new Vector3[] { vertA, vertB });
-                        found = true;
-                        break;
-                    }
+                    // uv are local normalized bary (i/(res-1), j/(res-1))
+                    fi = uv.x * (res - 1);
+                    fj = uv.y * (res - 1);
                 }
-                if(found == false) Debug.Log($"No matching vertex found for A={vertA} (minD={minD})");
+                else
+                {
+                    // uv are global barycentric: convert to local normalized within this tile
+                    float localU = (uv.x - origin.U) / tileSpan;
+                    float localV = (uv.y - origin.V) / tileSpan;
+                    fi = localU * (res - 1);
+                    fj = localV * (res - 1);
+                }
+                int ii = Mathf.Clamp(Mathf.RoundToInt(fi), 0, res - 1);
+                int jj = Mathf.Clamp(Mathf.RoundToInt(fj), 0, res - 1);
+                return (ii, jj);
             }
-            
-            Assert.IsTrue(matchingEdgeVertices.Count == config.baseResolution, $"Expected exactly {config.baseResolution} matching edge vertices between adjacent tiles, found {matchingEdgeVertices.Count}.");
+
+            // Determine which edge (0: u==0, 1: v==0, 2: u+v==1) of tileA is the shared edge
+            Vector3[] tileACorners = IcosphereMapping.GetCorners(dataA.id, config.baseRadius);
+            int aCornerIndex0 = -1, aCornerIndex1 = -1;
+            for (int k = 0; k < 3; k++)
+            {
+                if (Vector3.Distance(tileACorners[k], matchingCorners[0]) < 1e-3f) aCornerIndex0 = k;
+                if (Vector3.Distance(tileACorners[k], matchingCorners[1]) < 1e-3f) aCornerIndex1 = k;
+            }
+            Assert.IsTrue(aCornerIndex0 >= 0 && aCornerIndex1 >= 0, "Failed to map shared corners to tile A corners");
+            int aEdgeKind = -1;
+            // corners: 0=(0,0), 1=(1,0), 2=(0,1)
+            if ((aCornerIndex0 == 0 && aCornerIndex1 == 1) || (aCornerIndex0 == 1 && aCornerIndex1 == 0)) aEdgeKind = 1; // v==0
+            else if ((aCornerIndex0 == 0 && aCornerIndex1 == 2) || (aCornerIndex0 == 2 && aCornerIndex1 == 0)) aEdgeKind = 0; // u==0
+            else aEdgeKind = 2; // u+v==1
+
+            int aEdgeCount = 0;
+            for (int vi = 0; vi < dataA.mesh.vertexCount; vi++)
+            {
+                Vector2 uv = dataA.mesh.uv[vi];
+                var (ii, jj) = LocalLatticeIndexFromUV(uv, dataA.id, dataA.resolution);
+                bool onEdge;
+                if (aEdgeKind == 0) onEdge = (ii == 0);
+                else if (aEdgeKind == 1) onEdge = (jj == 0);
+                else onEdge = (ii + jj == dataA.resolution - 1);
+                if (!onEdge) continue;
+                aEdgeCount++;
+                var dir = IcosphereMapping.BaryToWorldDirection(dataA.id.face, new Barycentric(uv.x, uv.y)).normalized;
+                float raw = provider.Sample(in dir, dataA.resolution);
+                float rawScaled = raw * config.heightScale;
+                Vector3 expectedWorld = dir * (config.baseRadius + rawScaled);
+                Vector3 actualWorld = dataA.center + dataA.mesh.vertices[vi];
+                float d = Vector3.Distance(expectedWorld, actualWorld);
+                if (d > worldTol) Debug.LogError($"Tile A edge vertex mismatch idx={vi} lattice=({ii},{jj}) expected={expectedWorld} actual={actualWorld} d={d}");
+                Assert.LessOrEqual(d, worldTol, $"Tile A edge vertex world position mismatch at idx={vi} lattice=({ii},{jj}): d={d}");
+            }
+            Assert.AreEqual(config.baseResolution, aEdgeCount, $"Tile A edge vertex count mismatch: expected {config.baseResolution}, got {aEdgeCount}");
+
+            // Determine shared edge for tileB
+            Vector3[] tileBCorners = IcosphereMapping.GetCorners(dataB.id, config.baseRadius);
+            int bCornerIndex0 = -1, bCornerIndex1 = -1;
+            for (int k = 0; k < 3; k++)
+            {
+                if (Vector3.Distance(tileBCorners[k], matchingCorners[0]) < 1e-3f) bCornerIndex0 = k;
+                if (Vector3.Distance(tileBCorners[k], matchingCorners[1]) < 1e-3f) bCornerIndex1 = k;
+            }
+            Assert.IsTrue(bCornerIndex0 >= 0 && bCornerIndex1 >= 0, "Failed to map shared corners to tile B corners");
+            int bEdgeKind = -1;
+            if ((bCornerIndex0 == 0 && bCornerIndex1 == 1) || (bCornerIndex0 == 1 && bCornerIndex1 == 0)) bEdgeKind = 1; // v==0
+            else if ((bCornerIndex0 == 0 && bCornerIndex1 == 2) || (bCornerIndex0 == 2 && bCornerIndex1 == 0)) bEdgeKind = 0; // u==0
+            else bEdgeKind = 2; // u+v==1
+
+            int bEdgeCount = 0;
+            for (int vi = 0; vi < dataB.mesh.vertexCount; vi++)
+            {
+                Vector2 uv = dataB.mesh.uv[vi];
+                var (ii, jj) = LocalLatticeIndexFromUV(uv, dataB.id, dataB.resolution);
+                bool onEdge;
+                if (bEdgeKind == 0) onEdge = (ii == 0);
+                else if (bEdgeKind == 1) onEdge = (jj == 0);
+                else onEdge = (ii + jj == dataB.resolution - 1);
+                if (!onEdge) continue;
+                bEdgeCount++;
+                var dir = IcosphereMapping.BaryToWorldDirection(dataB.id.face, new Barycentric(uv.x, uv.y)).normalized;
+                float raw = provider.Sample(in dir, dataB.resolution);
+                float rawScaled = raw * config.heightScale;
+                Vector3 expectedWorld = dir * (config.baseRadius + rawScaled);
+                Vector3 actualWorld = dataB.center + dataB.mesh.vertices[vi];
+                float d = Vector3.Distance(expectedWorld, actualWorld);
+                if (d > worldTol) Debug.LogError($"Tile B edge vertex mismatch idx={vi} lattice=({ii},{jj}) expected={expectedWorld} actual={actualWorld} d={d}");
+                Assert.LessOrEqual(d, worldTol, $"Tile B edge vertex world position mismatch at idx={vi} lattice=({ii},{jj}): d={d}");
+            }
+            Assert.AreEqual(config.baseResolution, bEdgeCount, $"Tile B edge vertex count mismatch: expected {config.baseResolution}, got {bEdgeCount}");
 
         }
     }

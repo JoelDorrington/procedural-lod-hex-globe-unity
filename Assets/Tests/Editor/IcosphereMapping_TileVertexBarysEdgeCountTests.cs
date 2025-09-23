@@ -14,7 +14,7 @@ namespace HexGlobeProject.Tests.Editor
             int left = 0, bottom = 0, hyp = 0, total = 0;
             List<Barycentric> allBarys = new List<Barycentric>();
             var sampleId = new TileId(0, 0, 0, 0);
-            foreach (var local in IcosphereMapping.TileVertexBarys(res))
+            foreach (var local in IcosphereMapping.TileVertexBarys(res, 0, 0, 0))
             {
                 // convert local indices (i,j) to global barycentric coordinates
                 var global = IcosphereMapping.BaryLocalToGlobal(sampleId, local, res);
