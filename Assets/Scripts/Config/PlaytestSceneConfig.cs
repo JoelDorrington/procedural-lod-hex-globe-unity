@@ -45,6 +45,10 @@ namespace HexGlobeProject.Config
         public Vector3 sunRotationEuler = new Vector3(51.459f, -30f, 0f);
         // Position (optional, directional lights don't use position for lighting, but useful for editor placement)
         public Vector3 sunPosition = new Vector3(200f, 100f, 0f);
+        
+        [Header("Planet")]
+        [Tooltip("Radius of the planet used for placement, icosphere generation and tile LOD math.")]
+        public float planetRadius = 30f;
     }
 
 }

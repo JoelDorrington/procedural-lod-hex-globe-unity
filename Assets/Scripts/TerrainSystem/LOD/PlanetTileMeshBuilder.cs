@@ -216,7 +216,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             // init lattice for triangle construction
             int[,] _vertsMap = EmptyVertexLattice(res, -1);
 
-            int lastDumpIdx = -1;
+            // lastDumpIdx removed (unused)
             float minHeight = float.MaxValue;
             float maxHeight = float.MinValue;
             var i = 0; var j = 0;

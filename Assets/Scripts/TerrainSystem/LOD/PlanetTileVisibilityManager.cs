@@ -63,6 +63,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
 		// Planet properties
 		private Vector3 _planetCenter;
 		private float _planetRadius => config != null ? config.baseRadius : 1f;
+
+		// Track last applied planet radius so we only update materials when it changes
+		private float _appliedPlanetRadius = -1f;
+		// Track whether we've applied the radius to the manager material instance
+		private bool _radiusAppliedToMaterial = false;
 		private Camera cam => GameCamera != null ? GameCamera.GetComponent<Camera>() : null;
 
 		// Simple registry keyed by depth. Methods below return false until real logic is restored.
@@ -268,6 +273,106 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			}
 		}
 
+
+		// Apply planet radius to the manager material and to any spawned tiles' renderer materials
+		private void ApplyPlanetRadiusToMaterial(float radius)
+		{
+			try
+			{
+				if (terrainMaterial != null)
+				{
+					if (terrainMaterial.HasProperty("_PlanetRadius")) terrainMaterial.SetFloat("_PlanetRadius", radius);
+					// Also set sea level and other graduated parameters so tiles built after material assignment
+					// receive consistent shader defaults based on planet radius.
+					SetTerrainMaterialDefaults(terrainMaterial, radius);
+				}
+				// Also update spawned tile renderers that may have instance materials
+				foreach (var kv in _spawnedTiles)
+				{
+					var go = kv.Value;
+					if (go == null) continue;
+					TryApplyRadiusToRenderer(go);
+				}
+			}
+			catch { }
+			// mark applied so we don't repeat work unnecessarily
+			_radiusAppliedToMaterial = true;
+		}
+
+		private void TryApplyRadiusToRenderer(GameObject go)
+		{
+			if (go == null) return;
+			try
+			{
+				var rend = go.GetComponentInChildren<Renderer>();
+				if (rend == null) return;
+				var mats = rend.sharedMaterials;
+				for (int i = 0; i < mats.Length; i++)
+				{
+					var m = mats[i];
+					if (m == null) continue;
+					if (m.HasProperty("_PlanetRadius")) m.SetFloat("_PlanetRadius", _planetRadius);
+					// Apply graduated material defaults as well so instance materials have consistent SeaLevel, mountains, etc.
+					SetTerrainMaterialDefaults(m, _planetRadius);
+				}
+			}
+			catch { }
+		}
+
+		// Set a suite of terrain-related shader properties derived from the planet radius.
+		// This ensures tiles and material instances built at runtime use consistent sea/mountain scaling.
+		private void SetTerrainMaterialDefaults(Material m, float radius)
+		{
+			if (m == null) return;
+			try
+			{
+				// Sea level literally at planet radius so height=0 at nominal surface
+				if (m.HasProperty("_SeaLevel")) m.SetFloat("_SeaLevel", radius);
+				// Mountains: start and full heights as fractions of radius
+				float mountainStart = Mathf.Max(0.001f, radius * 0.08f);
+				float mountainFull = Mathf.Max(mountainStart + 0.1f, radius * 0.25f);
+				if (m.HasProperty("_MountainStart")) m.SetFloat("_MountainStart", mountainStart);
+				if (m.HasProperty("_MountainFull")) m.SetFloat("_MountainFull", mountainFull);
+				// Slope and snow
+				if (m.HasProperty("_SlopeBoost")) m.SetFloat("_SlopeBoost", 0.4f);
+				float snowStart = radius * 0.55f;
+				float snowFull = radius * 0.7f;
+				if (m.HasProperty("_SnowStart")) m.SetFloat("_SnowStart", snowStart);
+				if (m.HasProperty("_SnowFull")) m.SetFloat("_SnowFull", snowFull);
+				if (m.HasProperty("_SnowSlopeBoost")) m.SetFloat("_SnowSlopeBoost", 0.5f);
+				// Shallow water band
+				float shallowBand = Mathf.Max(0.5f, radius * 0.03f);
+				if (m.HasProperty("_ShallowBand")) m.SetFloat("_ShallowBand", shallowBand);
+				// Colors - use gentle earth tones; only set if property exists to avoid overwriting designer choices
+				if (m.HasProperty("_ColorLow")) m.SetColor("_ColorLow", new Color(0.05f, 0.12f, 0.28f, 1f));
+				if (m.HasProperty("_ColorHigh")) m.SetColor("_ColorHigh", new Color(0.15f, 0.45f, 0.2f, 1f));
+				if (m.HasProperty("_ColorMountain")) m.SetColor("_ColorMountain", new Color(0.45f, 0.4f, 0.35f, 1f));
+				if (m.HasProperty("_Color")) m.SetColor("_Color", Color.white);
+				if (m.HasProperty("_ShallowColor")) m.SetColor("_ShallowColor", new Color(0.12f, 0.25f, 0.55f, 1f));
+			}
+			catch { }
+		}
+
+		/// <summary>
+		/// Public initializer to assign an instantiated material and apply radius-derived defaults.
+		/// Use this from bootstrap code instead of reflection.
+		/// </summary>
+		public void InitializeMaterialForRadius(Material inst, float radius)
+		{
+			if (inst == null) return;
+			try
+			{
+				// assign the instance to the private field so other code uses it
+				terrainMaterial = inst;
+				// Ensure particle defaults / sea level etc are set
+				SetTerrainMaterialDefaults(inst, radius);
+				// Set the planet radius property on the material and propagate to spawned tiles
+				if (inst.HasProperty("_PlanetRadius")) inst.SetFloat("_PlanetRadius", radius);
+				ApplyPlanetRadiusToMaterial(radius);
+			}
+			catch { }
+		}
+
 		/// <summary>
 		/// Build the visual mesh for a tile on demand. This method is safe to call
 		/// repeatedly; it no-ops if the tile already has a mesh.
@@ -398,6 +503,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
 							if (!existing.activeInHierarchy)
 							{
 								existing.GetComponent<PlanetTerrainTile>().SetVisibility(true);
+								// ensure material radius is applied to this renderer instance
+								TryApplyRadiusToRenderer(existing);
 							}
 							continue;
 						}
@@ -671,6 +778,26 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
 			// Ensure the heuristic coroutine is running; it will call UpdateVisibilityMathBased at ~32Hz.
 			StartHeuristicIfNeeded();
+
+			// Apply planet radius from config to the manager material and spawned tiles when available.
+			try
+			{
+				if (config != null)
+				{
+					if (!Mathf.Approximately(_appliedPlanetRadius, config.baseRadius))
+					{
+						ApplyPlanetRadiusToMaterial(config.baseRadius);
+						_appliedPlanetRadius = config.baseRadius;
+					}
+					// If the terrainMaterial was assigned later, ensure it's updated as well
+					if (terrainMaterial != null && !_radiusAppliedToMaterial)
+					{
+						ApplyPlanetRadiusToMaterial(config.baseRadius);
+						_appliedPlanetRadius = config.baseRadius;
+					}
+				}
+			}
+			catch { }
 
 		}
 

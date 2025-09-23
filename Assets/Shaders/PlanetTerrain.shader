@@ -22,6 +22,8 @@ Shader "HexGlobe/PlanetTerrain"
         // Need to investigate if these are effective -- see no visible difference so far
         _OverlayEdgeThreshold ("Overlay Edge Threshold", Range(0,1)) = 0.15
         _OverlayAAScale ("Overlay AA Scale", Float) = 100
+        _UseDualOverlay ("Use Dual Overlay", Float) = 1
+        _PlanetRadius ("Planet Radius", Float) = 30
         // Edge extrusion: project wire edges radially outward from planet center
         _DualOverlayCube ("Dual Overlay Cubemap", CUBE) = "white" {}
     }
@@ -71,6 +73,8 @@ Shader "HexGlobe/PlanetTerrain"
             float _OverlayEnabled;
             float _OverlayEdgeThreshold;
             float _OverlayAAScale;
+            float _UseDualOverlay;
+            float _PlanetRadius;
             float _OverlayGlowSpread;
             float4 _OverlayGlowColor;
             float _OverlayGlowIntensity;
@@ -131,24 +135,26 @@ Shader "HexGlobe/PlanetTerrain"
 
                 // Dual overlay: sample a pre-rasterized cubemap where R channel = edge strength.
                 float4 outCol = finalCol;
-                if (_OverlayEnabled > 0.5)
+                if (_OverlayEnabled > 0.5 && _UseDualOverlay > 0.5)
                 {
                     float3 p = geometricNormal;
                     // Sample cubemap (assumes generator writes edge strength into .r)
                     float edgeSample = UNITY_SAMPLE_TEXCUBE(_DualOverlayCube, p).r;
                     edgeSample = saturate(edgeSample);
-                    // Antialias: use a small stable AA width (avoid fwidth which may cause issues on some targets)
-                    float aa = max(0.005 * _OverlayAAScale, 1e-6);
+                    // Antialias: scale AA with planet radius so large planets keep reasonable edge widths
+                    float radiusScale = max(0.0001, _PlanetRadius);
+                    float aa = max(0.005 * _OverlayAAScale / radiusScale, 1e-6);
                     // Antialiased mask centered on threshold
                     float edgeMask = smoothstep(_OverlayEdgeThreshold - aa, _OverlayEdgeThreshold + aa, edgeSample);
-                    float edgeAlpha = saturate(_OverlayOpacity * edgeMask);
+                    // Scale overlay alpha slightly based on radius to reduce overdraw on tiny planets
+                    float alphaScale = saturate(1.0 / sqrt(radiusScale));
+                    float edgeAlpha = saturate(_OverlayOpacity * edgeMask * alphaScale);
                     float4 overlayRGB = float4(_OverlayColor.rgb, 1.0);
                     outCol = lerp(outCol, overlayRGB, edgeAlpha);
-
-                    // clamp final color to avoid NaNs/infs that can trigger magenta fallback
-                    // outCol.rgb = saturate(outCol.rgb);
                 }
 
+                // Clamp final color to avoid NaNs/infs that can trigger magenta fallback
+                outCol.rgb = saturate(outCol.rgb);
                 // Opaque: ensure alpha = 1
                 outCol.a = 1.0;
                 return outCol;
