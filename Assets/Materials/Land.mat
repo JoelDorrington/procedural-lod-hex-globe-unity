@@ -65,7 +65,7 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _BaseRadius: 30
+    - _BaseRadius: 100
     - _BumpScale: 1
     - _CellSize: 1
     - _Cutoff: 0.5
@@ -84,6 +84,7 @@ Material:
     - _MountainFull: 0.7
     - _MountainStart: 0.6
     - _OcclusionStrength: 1
+    - _OffsetsInRadiusSpace: 0
     - _OverlayAAScale: 1
     - _OverlayEdgeThreshold: 0.15
     - _OverlayEnabled: 0
@@ -98,7 +99,7 @@ Material:
     - _SmoothnessTextureChannel: 0
     - _SnowFull: 31
     - _SnowSlopeBoost: 0.5
-    - _SnowStart: 30.8
+    - _SnowStart: 30
     - _SpecularHighlights: 1
     - _SrcBlend: 1
     - _UVSec: 0
