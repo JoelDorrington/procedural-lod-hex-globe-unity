@@ -184,7 +184,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
         /// converted to normalized coordinates by the caller. 
         /// Callers must use BaryLocalToGlobal to convert to normalized coordinates.
         /// </summary>
-        public static IEnumerable<Barycentric> TileVertexBarys(int res)
+        public static IEnumerable<Barycentric> TileVertexBarys(int res, int depth, int x, int y)
         {
             if (res <= 1)
             {
@@ -192,13 +192,16 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 yield return new(0, 0);
                 yield break;
             }
+            var tilesPerEdge = 1 << depth;
+            var tileWidthWeight = 1f / tilesPerEdge;
+            var weight = tileWidthWeight / (res - 1);
             for (int j = 0; j < res; j++)
             {
                 int maxI = res - 1 - j;
                 for (int i = 0; i <= maxI; i++)
                 {
-                    float u = (float)i / (res - 1);
-                    float v = (float)j / (res - 1);
+                    float u = tileWidthWeight * x + (float)i * weight;
+                    float v = tileWidthWeight * y + (float)j * weight;
                     // convert ints to barycentric
                     yield return new Barycentric(u, v);
                 }
