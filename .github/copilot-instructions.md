@@ -73,9 +73,21 @@ Developer guidance and common pitfalls
 - Prefer small, single-responsibility classes over monoliths.
 - Height providers: never modify topology based on mesh resolution. Write deterministic sampling code: same normalized direction → same height.
 - Barycentric vs Tile index confusion: prefer the `Barycentric` ADT (`Assets/Scripts/TerrainSystem/LOD/Barycentric.cs`) across APIs to avoid mixing tile-local integer indices with normalized bary fractions. Use `IcosphereMapping.TileIndexToBaryOrigin` and `IcosphereMapping.BaryLocalToGlobal` for conversions. Historical bugs arose from mixing index vs bary expectations — be explicit and add tests when changing mapping code.
-  - NOTE: As of recent changes, `IcosphereMapping.TileVertexBarys(int res)` yields tile-local integer indices encoded in the `Barycentric` ADT (i,j). Callers must convert these local indices into global normalized barycentric coordinates via `IcosphereMapping.BaryLocalToGlobal(tileId, localBary, res)` before using them as UVs or passing to `BaryToWorldDirection`. This avoids semantic confusion and ensures canonical edge behavior.
+  - NOTE: As of recent changes and debugging, `IcosphereMapping.TileVertexBarys(int res)` yields tile-local integer indices encoded in the `Barycentric` ADT (i,j). Callers must convert these local indices into global normalized barycentric coordinates via `IcosphereMapping.BaryLocalToGlobal(tileId, localBary, res)` *or* `IcosphereMapping.BaryLocalToGlobalNoReflect(tileId, localBary, res)` before using them as UVs or passing to `BaryToWorldDirection`. This avoids semantic confusion and ensures canonical edge behavior.
   - Important: Treat `TileVertexBarys(int res)` as returning integer lattice coordinates packed in `Barycentric` (NOT normalized UVs). If you need normalized barycentric UVs for mesh UVs or for calling `BaryToWorldDirection`, always call:
     `IcosphereMapping.BaryLocalToGlobal(tileId, localBary, res)`
+    or, when you want to prevent edge reflections caused by tiny lattice rounding overshoot, use:
+    `IcosphereMapping.BaryLocalToGlobalNoReflect(tileId, localBary, res)`
+
+Reflection insights (recent milestone):
+- During debugging we discovered that certain tile-local lattice coordinates at lower depths (notably depth=2) can produce barycentric coordinates whose U+V slightly exceed 1.0 due to lattice arithmetic. The `Barycentric` constructor historically reflects these points across the U+V=1 diagonal when W becomes meaningfully negative. That reflection maps a point into the adjacent triangle and changes the canonical face direction — producing subtle, hard-to-find seams.
+- To aid future maintainers, a mapping table documenting the observed prereflect vs postreflect bary centers for depth=2 has been recorded in `Docs/Brainstorm/barycentric-mapping.txt`. Use that table when debugging edge-case tiles; it documents which tile indices needed manual reflection corrections during troubleshooting.
+- Recommended policy: prefer `BaryLocalToGlobalNoReflect` for mesh-building and UV storage to clamp tiny numeric overshoot to tile edges (renormalize) rather than reflect into the adjacent triangle. Reserve the original reflect behavior only for callers that intentionally want reflection semantics.
+
+Quick checklist when touching barycentric code:
+- Always be explicit about whether you are operating on tile-local lattice indices or normalized bary fractions. Use the `Barycentric` ADT constructor only for normalized bary fractions; treat values returned by `TileVertexBarys` as lattice indices.
+- When converting local -> global barys for mesh UVs or sampling, prefer `BaryLocalToGlobalNoReflect` to avoid accidental reflections. Add unit tests that assert `IsReflected == false` for canonical tile corners.
+- If you observe a visible seam at a tile corner, consult `Docs/Brainstorm/barycentric-mapping.txt` first to see if that tile is a known reflection case.
 
 This document is the source of truth for the system architecture. Keep it updated with any changes to aid future development and maintenance. Do not change this document to match existing code. Only change this document to reflect intentional design changes made during the session.
 

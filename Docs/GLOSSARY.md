@@ -45,6 +45,17 @@ an icosphere face. Confusing these leads to subtle off-by-factor mapping bugs.
 	indices (0..res-1) encoded in `Barycentric` — they are not normalized UVs. Use
 	`BaryLocalToGlobal` to obtain normalized barycentric (u,v) for sampling.
 
+Reflection and clamping notes:
+- During mesh building some tile-local lattice coordinates can produce global
+	barycentrics whose U+V slightly exceed 1.0 due to integer-lattice arithmetic.
+	Historically the `Barycentric` constructor reflected these points across the
+	U+V=1 diagonal which maps the point into the adjacent triangle and changes
+	the canonical face direction. This reflection was the root cause of subtle
+	corner mismatches and visible seams at certain tile corners (see the
+	`Docs/Brainstorm/barycentric-mapping.txt` table for depth=2 examples).
+- To avoid accidental reflections, use the helper `IcosphereMapping.BaryLocalToGlobalNoReflect(tileId, localBary, res)` when building meshes or storing UVs. This helper clamps/renormalizes tiny overshoots onto the tile edge rather than reflecting them.
+- If you intentionally need reflection semantics, use the original `BaryLocalToGlobal` and test for `new Barycentric(u,v).IsReflected` to detect reflected points.
+
 Recommendation and canonical APIs:
 
 - For hot paths and mesh building, use the non-allocating API
