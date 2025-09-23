@@ -17,11 +17,9 @@ namespace HexGlobeProject.Tests.Editor
             // Use a sample tile id for converting local indices into global bary coordinates
             var sampleId = new TileId(0, 0, 0, 0);
 
+            var i = 0; var j = 0;
             foreach (var local in IcosphereMapping.TileVertexBarys(res))
             {
-                // local.U and local.V are integer tile-local indices (i,j)
-                int i = Mathf.RoundToInt(local.U);
-                int j = Mathf.RoundToInt(local.V);
                 var global = IcosphereMapping.BaryLocalToGlobal(sampleId, local, res);
                 float testW = 1f - global.U - global.V;
                 count++;
@@ -36,10 +34,16 @@ namespace HexGlobeProject.Tests.Editor
                     bool uZero = Mathf.Abs(global.U) <= 1e-6f;
                     bool vZero = Mathf.Abs(global.V) <= 1e-6f;
                     // Accept exact zero or small positive residuals up to 1e-6
-                    bool wAccept = (testW >= 0f && testW < 1e-6f);
+                    bool wAccept = testW >= 0f && testW < 1e-6f;
 
                     Assert.IsTrue(uZero || vZero || wAccept,
                         $"Edge lattice point at i={i}, j={j}, res={res} produced (u={global.U}, v={global.V}, w={testW}) which does not satisfy edge zero-or-small-positive requirement.");
+                }
+                i++;
+                if (i > res - 1 - j)
+                {
+                    j++;
+                    i = 0;
                 }
             }
 

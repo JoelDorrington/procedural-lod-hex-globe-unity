@@ -608,46 +608,22 @@ namespace HexGlobeProject.Tests.Editor
             Assert.AreEqual(expectedCount, uvs.Length, "UV count should match triangular lattice count");
 
             float tol = 1e-5f;
-
-            // Build expected set of global bary UVs by converting local tile indices
-            // into global barycentric coordinates using the canonical API.
-            var expected = new List<Vector2>(expectedCount);
+            int k = 0; // flattened index into the triangular lattice produced by TileVertexBarys
             for (int j = 0; j < res; j++)
             {
                 int maxI = res - 1 - j;
                 for (int i = 0; i <= maxI; i++)
                 {
-                    var local = new Barycentric(i, j);
+                    // Compute the tile-local normalized bary (u,v) for the mesh lattice vertex.
+                    // TileVertexBarys yields coordinates normalized by (res - 1), so the
+                    // expected global bary is origin + ( (i/(res-1), j/(res-1)) * tileSpan ).
+                    var local = new Barycentric((float)i / (res - 1), (float)j / (res - 1));
                     var global = IcosphereMapping.BaryLocalToGlobal(tileData.id, local, res);
-                    expected.Add(new Vector2(global.U, global.V));
-                }
-            }
 
-            // For each actual uv, find a matching expected uv within tolerance
-            var matched = new bool[expected.Count];
-            for (int k = 0; k < uvs.Length; k++)
-            {
-                var uv = uvs[k];
-                bool found = false;
-                for (int e = 0; e < expected.Count; e++)
-                {
-                    if (!matched[e] && Vector2.Distance(uv, expected[e]) <= tol)
-                    {
-                        matched[e] = true;
-                        found = true;
-                        break;
-                    }
+                    var uv = uvs[k++];
+                    Assert.AreEqual(global.U, uv.x, tol, $"UV u mismatch at ({i},{j})");
+                    Assert.AreEqual(global.V, uv.y, tol, $"UV v mismatch at ({i},{j})");
                 }
-                if (!found)
-                {
-                    Assert.Fail($"Unexpected UV coordinate found: {uv} (resolution {res})");
-                }
-            }
-
-            // Ensure all expected positions were matched
-            for (int e = 0; e < matched.Length; e++)
-            {
-                Assert.IsTrue(matched[e], $"Expected UV at {expected[e]} was not present in mesh");
             }
         }
     }

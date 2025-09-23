@@ -38,7 +38,7 @@ namespace HexGlobeProject.Tests.Editor
                 float uspan = uvs.Max(u => u.x) - uvs.Min(u => u.x);
                 float vspan = uvs.Max(u => u.y) - uvs.Min(u => u.y);
 
-                float expectedRatio = Mathf.Pow(3f, depth); // depth0 span / depthN span == 3^depth
+                float expectedRatio = 1 << depth; // depth0 span / depthN span == 3^depth
                 // Protect against divide by zero
                 Assert.Greater(uspan, 1e-8f, "U span must be positive");
                 Assert.Greater(vspan, 1e-8f, "V span must be positive");

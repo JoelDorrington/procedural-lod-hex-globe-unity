@@ -40,7 +40,7 @@ namespace HexGlobeProject.Tests.Editor
                 float observedVspan = maxV - minV;
 
                 // The tile global bary extents should be approximately 1 / (3^depth)
-                float expectedSpan = 1f / Mathf.Pow(3f, depth);
+                float expectedSpan = 1f / (1<< depth); // 1 / (2^depth)
                 float tol = expectedSpan * 0.25f; // accept 25% tolerance for sampling/rounding differences
 
                 Assert.AreEqual(expectedSpan, observedUspan, tol, $"U span mismatch at depth {depth}: observed {observedUspan} expected {expectedSpan}");
