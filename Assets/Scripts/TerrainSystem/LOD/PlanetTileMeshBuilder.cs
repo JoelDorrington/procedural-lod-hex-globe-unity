@@ -218,13 +218,11 @@ namespace HexGlobeProject.TerrainSystem.LOD
             float minHeight = float.MaxValue;
             float maxHeight = float.MinValue;
             var i = 0; var j = 0;
-            foreach (var bary in IcosphereMapping.TileVertexBarys(res))
+            foreach (var bary in IcosphereMapping.TileVertexBarys(res, depth, entry.x, entry.y))
             {
-                Barycentric global = IcosphereMapping.BaryLocalToGlobal(data.id, bary, res);
-                _uvs.Add(global);
-
                 // Sample height at this vertex
-                var dir = IcosphereMapping.BaryToWorldDirection(entry.face, global);
+                var dir = IcosphereMapping.BaryToWorldDirection(entry.face, bary);
+                _uvs.Add(bary);
 
                 float rawSample = provider.Sample(in dir, res);
                 float rawScaled = rawSample * config.heightScale;
@@ -234,14 +232,17 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 // Generate vertex position
                 var worldVert = (dir * radius) + (dir * rawScaled) + planetCenter;
                 var localVert = worldVert - data.center;
-                _vertsMap[i, j] = _verts.Count - 1;
+
+                // Add vertex then record its index in the lattice map so the index
+                // points to the newly appended vertex.
                 _verts.Add(localVert); // localize to tile center
                 _normals.Add((worldVert - planetCenter).normalized);
+                _vertsMap[i, j] = _verts.Count - 1;
                 i++;
-                if(j < res && i > res - j - 1)
+                if (i >= res - j)
                 {
-                    j++;
                     i = 0;
+                    j++;
                 }
             }
 
@@ -296,21 +297,23 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 Vector3 aPos = _verts[aIdx];
                 Vector3 bPos = _verts[bIdx];
                 Vector3 cPos = _verts[cIdx];
-                // Compute triangle geometric normal in mesh-local space (aPos/bPos/cPos are local verts)
-                Vector3 triNormal = Vector3.Cross(bPos - aPos, cPos - aPos).normalized;
+                // Compute triangle geometric normal in world-space and compare to the
+                // averaged sampled vertex normal (which is also in world-space).
+                Vector3 worldA = aPos + data.center;
+                Vector3 worldB = bPos + data.center;
+                Vector3 worldC = cPos + data.center;
+                Vector3 triNormalWorld = Vector3.Cross(worldB - worldA, worldC - worldA).normalized;
 
-                // Compute the averaged vertex normal using the per-vertex normals we sampled earlier.
-                // Convert the sampled outward normals to mesh-local frame is unnecessary here because
-                // we sampled them consistently with mesh-local axes (no rotation assumed). Use them directly.
+                // Averaged sampled normal (we sampled outward normals earlier)
                 Vector3 avgVertNormal = (_normals[aIdx] + _normals[bIdx] + _normals[cIdx]).normalized;
 
                 // If triangle geometric normal points opposite to averaged vertex normal,
-                // flip triangle winding and invert all normals so they remain outward-facing.
-                float dot = Vector3.Dot(triNormal, avgVertNormal);
+                // flip triangle winding only; do NOT invert per-vertex normals (they are
+                // sampled outward normals and should remain outward-facing).
+                float dot = Vector3.Dot(triNormalWorld, avgVertNormal);
                 if (dot < 0f)
                 {
                     FlipTriangleWinding(_tris);
-                    for (int ni = 0; ni < _normals.Count; ni++) _normals[ni] = -_normals[ni];
                 }
             }
 
