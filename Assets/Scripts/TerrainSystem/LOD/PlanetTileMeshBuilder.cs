@@ -62,7 +62,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
     // NOTE: edge sample cache removed to avoid timing/order-dependent seams.
         // Toggle verbose per-vertex logging. Keep false by default to avoid perf hit; enable manually for debugging.
-        private static bool s_verboseEdgeSampleLogging = true;
+        private static bool s_verboseEdgeSampleLogging = false;
 
         /// <summary>
         /// Public accessor so editor scripts can toggle verbose edge-sample logging
@@ -191,8 +191,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
             var radius = config.baseRadius;
             var planetCenter = this.planetCenter;
             var depth = data.id.depth;
+            var tilesPerFace = 1 << depth;
 
-            if(registry == null) registry = new TerrainTileRegistry(depth, radius, planetCenter);
+            if (registry == null) registry = new TerrainTileRegistry(depth, radius, planetCenter);
             if (!registry.tiles.ContainsKey(data.id))
             {
                 throw new ArgumentException($"TileId {data.id} not found in precomputed registry at depth {depth}");
@@ -215,14 +216,21 @@ namespace HexGlobeProject.TerrainSystem.LOD
             // init lattice for triangle construction
             int[,] _vertsMap = EmptyVertexLattice(res, -1);
 
+            int lastDumpIdx = -1;
             float minHeight = float.MaxValue;
             float maxHeight = float.MinValue;
             var i = 0; var j = 0;
             foreach (var bary in IcosphereMapping.TileVertexBarys(res, depth, entry.x, entry.y))
             {
+                var point = bary;
+                bool isCorner = point.U == 0f || point.V == 0f || point.W == 0f;
+                if (entry.x + entry.y == tilesPerFace && isCorner && !point.IsReflected)
+                {
+                    point = new Barycentric(1f - point.U, 1f-point.V);
+                }
                 // Sample height at this vertex
-                var dir = IcosphereMapping.BaryToWorldDirection(entry.face, bary);
-                _uvs.Add(bary);
+                var dir = IcosphereMapping.BaryToWorldDirection(entry.face, point);
+                _uvs.Add(point);
 
                 float rawSample = provider.Sample(in dir, res);
                 float rawScaled = rawSample * config.heightScale;
@@ -241,6 +249,15 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 i++;
                 if (i >= res - j)
                 {
+                    if (s_verboseEdgeSampleLogging)
+                    {
+                        Debug.Log($"Row {j} done with {i} verts");
+                        for (int dumpIdx = lastDumpIdx+1; dumpIdx < _verts.Count; dumpIdx++)
+                        {
+                            Debug.Log($"  Vert[{dumpIdx}] = {_verts[dumpIdx]}");
+                            lastDumpIdx = dumpIdx;
+                        }
+                    }
                     i = 0;
                     j++;
                 }
@@ -452,18 +469,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
             data.mesh = mesh;
             s_meshCache[data.id] = new CachedMeshEntry { mesh = mesh, centerUsed = data.center, resolutionUsed = data.resolution };
-        }
-        /// <summary>
-        /// Flips the winding order of triangles in the index list (in-place).
-        /// </summary>
-        private static void FlipTriangleWinding(List<int> tris)
-        {
-            for (int t = 0; t < tris.Count; t += 3)
-            {
-                int tmp = tris[t + 1];
-                tris[t + 1] = tris[t + 2];
-                tris[t + 2] = tmp;
-            }
         }
     }
 }

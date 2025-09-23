@@ -31,7 +31,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
             // negative.
             // Increase epsilon to tolerate small rounding errors from lattice arithmetic
             // (TileVertexBarys computes weights that can slightly overshoot 1.0).
-            const float kEpsilon = 1e-4f;
+            const float kEpsilon = 1e-7f;
             float w = 1f - u - v;
             if (w < 0f)
             {

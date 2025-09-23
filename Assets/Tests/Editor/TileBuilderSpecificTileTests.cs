@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using UnityEngine;
+using System;
 using HexGlobeProject.TerrainSystem.LOD;
 using HexGlobeProject.TerrainSystem.Core;
 
@@ -73,6 +74,30 @@ namespace HexGlobeProject.Tests.Editor
 
                 // Diagnostic log for CI/editor console
                 Debug.Log($"[TileBuilderSpecificTileTests] Corner[{k}] idx={li} meshWorld={worldFromMesh} expected={expected} dot={dot} tile={data.id}");
+
+                // Extra low-level diagnostics: print float bit patterns and stored bary/uv values
+                var dotBytes = BitConverter.GetBytes(dot);
+                uint dotBits = BitConverter.ToUInt32(dotBytes, 0);
+                Debug.Log($"[TileBuilderSpecificTileTests] dot bits=0x{dotBits:X8}");
+
+                // Print the stored bary (UV) at the found index and the recomputed world from that bary
+                Vector2[] uvs2 = data.mesh.uv;
+                if (uvs2 != null && uvs2.Length > li)
+                {
+                    var foundUv = uvs2[li];
+                    Debug.Log($"[TileBuilderSpecificTileTests] stored UV@{li}={foundUv}");
+                    var dirFromUv = IcosphereMapping.BaryToWorldDirection(data.id.face, new Barycentric(foundUv.x, foundUv.y));
+                    var provider = config.heightProvider ?? new SimplePerlinHeightProvider();
+                    float sample = provider.Sample(in dirFromUv, res) * config.heightScale;
+                    var recomFromUv = dirFromUv * (config.baseRadius + sample) + Vector3.zero;
+                    Debug.Log($"[TileBuilderSpecificTileTests] recomputedFromUV dir={dirFromUv} sample={sample} recomWorld={recomFromUv}");
+                }
+
+                // Compute canonical corner using same helper the builder uses and compare
+                var canonicalFromMapping = IcosphereMapping.GetCorners(data.id, config.baseRadius, Vector3.zero)[k];
+                Debug.Log($"[TileBuilderSpecificTileTests] canonicalCornerFromMapping[{k}]={canonicalFromMapping} canonicalDir={canonicalFromMapping.normalized}");
+                float dotWithCanonical = Vector3.Dot(dirMesh, canonicalFromMapping.normalized);
+                Debug.Log($"[TileBuilderSpecificTileTests] dotBetweenMeshAndCanonical={dotWithCanonical}");
 
                 if (dot != 1f)
                 {
