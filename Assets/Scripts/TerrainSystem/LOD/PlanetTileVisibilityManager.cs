@@ -755,6 +755,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
 				planetFillsView = angularRadius > (Mathf.PI / 4f);
 			}
 
+			Debug.Log($"[TileVisibilityDiagnostics] UpdateVisibilityMathBased: camPos={camPos}, camDir={camDir}, planetCenter={planetCenter}, planetRadius={_planetRadius}, planetFillsView={planetFillsView}, depth={depth}");
+
 			if (!planetFillsView)
 			{
 				if (tileRegistry.TryGetValue(depth, out var regNearby) && regNearby != null)
@@ -768,7 +770,9 @@ namespace HexGlobeProject.TerrainSystem.LOD
 							foreach (var c in e.cornerWorldPositions)
 							{
 								Vector3 dir = (c - planetCenter).normalized;
-								if (Vector3.Dot(dir, camDir) > cornerDotThreshold) { anyCornerVisible = true; break; }
+								var dot = Vector3.Dot(dir, camDir);
+								Debug.Log($"[TileVisibilityDiagnostics]   Tile {e.face}/{e.x}/{e.y} corner at {c} has dot={dot} to camDir: isVisible={dot > cornerDotThreshold}");
+								if (dot > cornerDotThreshold) { anyCornerVisible = true; break; }
 							}
 						}
 						if (anyCornerVisible) candidates.Add(new TileId(e.face, e.x, e.y, depth));
@@ -788,7 +792,8 @@ namespace HexGlobeProject.TerrainSystem.LOD
 				{
 					try
 					{
-						var vp = new Vector3(0f, 1f, 0f);
+						// Use actual viewport corner instead of top center for proper frustum
+						var vp = new Vector3(1f, 1f, 0f);  // Top-right corner
 						var ray = cameraRef.ViewportPointToRay(vp);
 						Vector3 o = ray.origin;
 						Vector3 d = ray.direction.normalized;
@@ -813,13 +818,16 @@ namespace HexGlobeProject.TerrainSystem.LOD
 					catch { }
 				}
 
+				Debug.Log($"[TileVisibilityDiagnostics]   Computed centerDotThreshold={centerDotThreshold}");
 				if (tileRegistry.TryGetValue(depth, out var reg) && reg != null)
 				{
 					foreach (var e in reg.tiles.Values)
 					{
 						// Use the tile centroid direction only — Bary corner checks are unnecessary
 						Vector3 centerDir = (e.centerWorld - planetCenter).normalized;
-						if (Vector3.Dot(centerDir, camDir) > centerDotThreshold)
+						var dot = Vector3.Dot(centerDir, camDir);
+						Debug.Log($"[TileVisibilityDiagnostics]   Tile {e.face}/{e.x}/{e.y} center at {e.centerWorld} has dot={dot} to camDir: isVisible={dot > centerDotThreshold}");
+						if (dot > centerDotThreshold)
 						{
 							candidates.Add(new TileId(e.face, e.x, e.y, depth));
 						}
@@ -835,6 +843,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
 				// yield an empty set; pick the nearest tile deterministically as a fallback.
 				if (candidates.Count == 0)
 				{
+					Debug.LogWarning("[TileVisibilityDiagnostics]   No candidates found by visibility heuristic; adding nearest tile as fallback.");
 					Vector3 fallbackPos = camPos;
 					var ids = GetAllTileIdsSortedByDistance(fallbackPos, depth);
 					if (ids.Count > 0)

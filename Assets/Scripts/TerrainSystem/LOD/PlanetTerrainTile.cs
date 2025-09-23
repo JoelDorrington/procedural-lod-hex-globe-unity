@@ -1,6 +1,7 @@
 using UnityEngine;
 using System;
 using System.Collections;
+using UnityEngine.Tilemaps;
 
 namespace HexGlobeProject.TerrainSystem.LOD
 {
@@ -60,7 +61,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
             tileId = id;
             tileData = data;
             spawnTime = Time.time;
-            transform.position = data.center;
 
             EnsureComponentsExist();
             // Create MeshFilter
