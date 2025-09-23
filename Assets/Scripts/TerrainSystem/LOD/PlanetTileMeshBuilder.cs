@@ -7,15 +7,15 @@ namespace HexGlobeProject.TerrainSystem.LOD
 {
     public class PlanetTileMeshBuilder
     {
-        private static int[,] EmptyVertexLattice(int res) {
+        public static T[,] EmptyVertexLattice<T>(int res, T defaultValue = default) {
             // init lattice for triangle construction
-            int[,] lattice = new int[res + 1, res + 1];
+            T[,] lattice = new T[res + 1, res + 1];
             // Initialize to -1 so unused slots are distinguishable when building triangles.
             for (int yy = 0; yy < res + 1; yy++)
             {
                 for (int xx = 0; xx < res + 1; xx++)
                 {
-                    lattice[xx, yy] = -1;
+                    lattice[xx, yy] = defaultValue;
                 }
             }
             return lattice;
@@ -209,14 +209,15 @@ namespace HexGlobeProject.TerrainSystem.LOD
             Init(res);
 
             int degenerateTriangleCount = 0;
-            const float minTriangleArea = 0.00000001f;
+            const float minTriangleArea = 1e-8f;
             var provider = heightProvider ?? config.heightProvider ?? new SimplePerlinHeightProvider();
 
             // init lattice for triangle construction
-            int[,] _vertsMap = EmptyVertexLattice(res);
+            int[,] _vertsMap = EmptyVertexLattice(res, -1);
 
             float minHeight = float.MaxValue;
             float maxHeight = float.MinValue;
+            var i = 0; var j = 0;
             foreach (var bary in IcosphereMapping.TileVertexBarys(res))
             {
                 Barycentric global = IcosphereMapping.BaryLocalToGlobal(data.id, bary, res);
@@ -224,12 +225,6 @@ namespace HexGlobeProject.TerrainSystem.LOD
 
                 // Sample height at this vertex
                 var dir = IcosphereMapping.BaryToWorldDirection(entry.face, global);
-                
-                // DIAGNOSTIC: Log first few vertices to see barycentric coords
-                if (_verts.Count < 3)
-                {
-                    // Debug.Log($"[BARY] Tile {data.id} vertex {_verts.Count}: local={bary}, global={global}, dir={dir}");
-                }
 
                 float rawSample = provider.Sample(in dir, res);
                 float rawScaled = rawSample * config.heightScale;
@@ -239,15 +234,14 @@ namespace HexGlobeProject.TerrainSystem.LOD
                 // Generate vertex position
                 var worldVert = (dir * radius) + (dir * rawScaled) + planetCenter;
                 var localVert = worldVert - data.center;
+                _vertsMap[i, j] = _verts.Count - 1;
                 _verts.Add(localVert); // localize to tile center
                 _normals.Add((worldVert - planetCenter).normalized);
-                // Use the bary's integer lattice indices (i,j) as returned by TileVertexBarys
-                int gi = Mathf.RoundToInt(bary.U);
-                int gj = Mathf.RoundToInt(bary.V);
-                // stash index in lattice keyed by the local integer coordinates
-                if (gi >= 0 && gj >= 0 && gi < _vertsMap.GetLength(0) && gj < _vertsMap.GetLength(1))
+                i++;
+                if(j < res && i > res - j - 1)
                 {
-                    _vertsMap[gi, gj] = _verts.Count - 1;
+                    j++;
+                    i = 0;
                 }
             }
 
