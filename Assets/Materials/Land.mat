@@ -81,8 +81,8 @@ Material:
     - _Metallic: 0
     - _Mode: 0
     - _Morph: 1
-    - _MountainFull: 0.7
-    - _MountainStart: 0.6
+    - _MountainFull: 7.5
+    - _MountainStart: 2.3999999
     - _OcclusionStrength: 1
     - _OffsetsInRadiusSpace: 0
     - _OverlayAAScale: 1
@@ -93,28 +93,30 @@ Material:
     - _OverlayGlowSpread: 0.06
     - _OverlayOpacity: 0.9
     - _Parallax: 0.02
+    - _PlanetRadius: 30
     - _SeaLevel: 30
-    - _ShallowBand: 0.1
+    - _ShallowBand: 0.9
     - _SlopeBoost: 0.4
     - _SmoothnessTextureChannel: 0
-    - _SnowFull: 31
+    - _SnowFull: 21
     - _SnowSlopeBoost: 0.5
-    - _SnowStart: 30
+    - _SnowStart: 16.5
     - _SpecularHighlights: 1
     - _SrcBlend: 1
     - _UVSec: 0
+    - _UseDualOverlay: 1
     - _WireHitThreshold: 1
     - _ZWrite: 1
     m_Colors:
     - _Color: {r: 1, g: 1, b: 1, a: 1}
-    - _ColorHigh: {r: 0.1882165, g: 0.4641509, b: 0.0026272312, a: 1}
-    - _ColorLow: {r: 0.23455009, g: 0.6301887, b: 0, a: 1}
-    - _ColorMountain: {r: 0.3660378, g: 0.3660378, b: 0.3660378, a: 1}
+    - _ColorHigh: {r: 0.15, g: 0.45, b: 0.2, a: 1}
+    - _ColorLow: {r: 0.05, g: 0.12, b: 0.28, a: 1}
+    - _ColorMountain: {r: 0.45, g: 0.4, b: 0.35, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _OverlayColor: {r: 1, g: 1, b: 1, a: 1}
     - _OverlayGlowColor: {r: 0.8784314, g: 0.08940148, b: 0.019607821, a: 1}
     - _PlanetCenter: {r: 0, g: 0, b: 0, a: 0}
-    - _ShallowColor: {r: 0.3075471, g: 0.56973, b: 1, a: 1}
+    - _ShallowColor: {r: 0.12, g: 0.25, b: 0.55, a: 1}
     - _SnowColor: {r: 0.9, g: 0.9, b: 0.95, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

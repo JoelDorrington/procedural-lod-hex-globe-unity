@@ -14,7 +14,42 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_GroupName: Default Local Group
   m_GUID: b628f5be14580ad459bba02583c43b07
-  m_SerializeEntries: []
+  m_SerializeEntries:
+  - m_GUID: 0940fe3fd40f80c428a0057587b346f2
+    m_Address: Assets/Shaders/PlanetTerrain.shader
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0df5d813211e9c6428c2aec838d9605d
+    m_Address: Assets/Materials/Land.mat
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1c1e18339e329a64c992f7a66723c06e
+    m_Address: sunburst
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 39abb1e81f4f4774a84dbe903a64257d
+    m_Address: Assets/Configs/TerrainConfig.asset
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7382c69ecf06c624f9dca39e71de2f6d
+    m_Address: TestOverlayCube_Large.cubemap
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8dff568040f7b7c43823be71c910c8ca
+    m_Address: Assets/Configs/playtest_scene_config.json
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 94fa531f861367c439b5a916605e679f
+    m_Address: sunburst
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 38c5d92a2c52ec14baa8cda54a9810ff, type: 2}
   m_SchemaSet:

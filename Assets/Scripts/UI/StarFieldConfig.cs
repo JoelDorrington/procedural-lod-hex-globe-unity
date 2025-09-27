@@ -19,5 +19,10 @@ namespace HexGlobeProject.UI
         public int maxParticles;
         public float innerBiasSkew;
         public float torusTiltDegrees;
+        public float startSize;
+        public float startSpeed;
+        public float startLifetime;
+        public Vector3 position;
+        public Vector3 scale = Vector3.one;
     }
 }

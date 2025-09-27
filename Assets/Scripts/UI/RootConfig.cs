@@ -8,10 +8,10 @@ namespace HexGlobeProject.UI
     [Serializable]
     public class RootConfig
     {
-        CameraConfig camera;
-        StarFieldConfig universalStarField;
-        StarFieldConfig galacticStarField;
-        DirectionalLightConfig directionalLight;
+        public CameraConfig camera;
+        public StarFieldConfig universalStarField;
+        public StarFieldConfig galacticStarField;
+        public DirectionalLightConfig directionalLight;
         public float planetRadius = 30f; // default, may be overridden by JSON
         public bool spawnPlanet = true; // default, may be overridden by JSON
         public float sunIntensity = 1f; // default, may be overridden by JSON
