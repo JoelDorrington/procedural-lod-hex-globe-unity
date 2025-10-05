@@ -347,7 +347,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
 				if (m.HasProperty("_ColorLow")) m.SetColor("_ColorLow", new Color(0.05f, 0.12f, 0.28f, 1f));
 				if (m.HasProperty("_ColorHigh")) m.SetColor("_ColorHigh", new Color(0.15f, 0.45f, 0.2f, 1f));
 				if (m.HasProperty("_ColorMountain")) m.SetColor("_ColorMountain", new Color(0.45f, 0.4f, 0.35f, 1f));
-				if (m.HasProperty("_Color")) m.SetColor("_Color", Color.white);
+				// Do not force the generic _Color property to white here; allow designer/material presets to control base color.
 				if (m.HasProperty("_ShallowColor")) m.SetColor("_ShallowColor", new Color(0.12f, 0.25f, 0.55f, 1f));
 			}
 			catch { }
@@ -799,6 +799,42 @@ namespace HexGlobeProject.TerrainSystem.LOD
 			}
 			catch { }
 
+		}
+
+		/// <summary>
+		/// Apply the current TerrainConfig's shader parameters to the manager's base terrain material
+		/// and to all active spawned tile materials. Call this after changing shader-related fields
+		/// on TerrainConfig to propagate changes immediately.
+		/// </summary>
+		public void ApplyShaderConfigToAllTiles(TerrainConfig cfg = null)
+		{
+			try
+			{
+				var c = cfg ?? config;
+				if (c == null) return;
+				// Apply to the manager's base material first
+				if (terrainMaterial != null)
+				{
+					HexGlobeProject.TerrainSystem.Graphics.TerrainShaderGlobals.Apply(c, terrainMaterial);
+				}
+				// Apply to all spawned tiles' renderer materials (instance materials)
+				foreach (var kv in _spawnedTiles)
+				{
+					var go = kv.Value;
+					if (go == null) continue;
+					var rend = go.GetComponentInChildren<Renderer>();
+					if (rend == null) continue;
+					var mats = rend.sharedMaterials;
+					if (mats == null) continue;
+					for (int i = 0; i < mats.Length; i++)
+					{
+						var m = mats[i];
+						if (m == null) continue;
+						HexGlobeProject.TerrainSystem.Graphics.TerrainShaderGlobals.Apply(c, m);
+					}
+				}
+			}
+			catch { }
 		}
 
 		private int ComputeDepthFromCamera()

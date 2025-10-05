@@ -33,6 +33,17 @@ MonoBehaviour:
   overlayOpacity: 0.9
   overlayLineThickness: 0.05
   overlayEdgeExtrusion: 20
+  waterColor: {r: 0.1, g: 0.2, b: 0.6, a: 1}
+  coastMax: 0.1
+  lowlandsMax: 0.3
+  highlandsMax: 0.5
+  mountainsMax: 0.99
+  snowcapsMax: 1
+  coastColor: {r: 1, g: 1, b: 0, a: 1}
+  lowlandsColor: {r: 0.2887152, g: 0.8018868, b: 0, a: 1}
+  highlandsColor: {r: 0.16941082, g: 0.4433962, b: 0.20994923, a: 1}
+  mountainsColor: {r: 0.3, g: 0.3, b: 0.3, a: 1}
+  snowcapsColor: {r: 1, g: 1, b: 1, a: 1}
   references:
     version: 2
     RefIds:

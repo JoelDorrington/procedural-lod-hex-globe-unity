@@ -4,6 +4,7 @@ using UnityEngine;
 using HexGlobeProject.HexMap.Model;
 using HexGlobeProject.HexMap.Runtime;
 using HexGlobeProject.TerrainSystem.LOD;
+using HexGlobeProject.TerrainSystem.Graphics;
 
 namespace HexGlobeProject.UI
 {
@@ -623,6 +624,8 @@ namespace HexGlobeProject.UI
                         if (tf != null) tf.SetValue(mgr, mat);
                         // Setup overlay cubemap and assign to material for immediate visual feedback
                         try { SetupOverlayCubemap(planetGO, mat); } catch { }
+
+                        // Apply terrain config (if assigned later) or leave until config assignment block runs
                     }
             }
             catch { }
@@ -647,6 +650,21 @@ namespace HexGlobeProject.UI
                 {
                     // config is a public field on the manager; assign directly
                     try { mgr.config = conf; } catch { }
+
+                    // Apply shader globals now that TerrainConfig is available.
+                    try
+                    {
+                        // retrieve assigned material from manager via reflection
+                        var matField = typeof(PlanetTileVisibilityManager).GetField("terrainMaterial", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                        Material assignedMat = null;
+                        if (matField != null) assignedMat = matField.GetValue(mgr) as Material;
+                        if (assignedMat != null)
+                        {
+                            TerrainShaderGlobals.Apply(conf, assignedMat);
+                            try { mgr.ApplyShaderConfigToAllTiles(conf); } catch { }
+                        }
+                    }
+                    catch { /* non-critical apply failure */ }
                 }
 #endif
             }

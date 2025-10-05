@@ -44,6 +44,13 @@ namespace HexGlobeProject.TerrainSystem.Editor
                         EditorUtility.SetDirty(r.terrainMaterial);
                     }
                 }
+
+                // Propagate to all active terrain tiles via the visibility manager if present
+                var mgr = FindAnyObjectByType<HexGlobeProject.TerrainSystem.LOD.PlanetTileVisibilityManager>();
+                if (mgr != null)
+                {
+                    try { mgr.ApplyShaderConfigToAllTiles(config); } catch { }
+                }
             }
         }
 

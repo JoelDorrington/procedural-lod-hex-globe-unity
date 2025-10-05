@@ -4,6 +4,33 @@ using UnityEngine;
 namespace HexGlobeProject.UI
 {
 
+    public class PlanetConfig
+    {
+        public float radius = 30f;
+        public float heightExaggeration = 1f;
+        public float seaLevel = 30f;
+    }
+
+    public class ShaderConfig
+    {
+        Vector3 PlanetCenter = new Vector3(0, 0, 0);
+        float PlanetRadius = 30f;
+        float SeaLevel = 30f;
+        Color Color = new Color(1, 1, 1, 1); // base color fallback only
+        Color ColorLow = new Color(0.1f,0.2f,0.6f,1);
+        float ShallowBand = 2f;  // band above sea level to blend ocean color
+        Color ShallowColor = new Color(0.12f, 0.25f, 0.55f, 1f); // ?
+        Color ColorHigh = new Color(0.15f, 0.35f, 0.15f, 1f); // e.g. grassland
+        Color ColorMountain = new Color(0.5f,0.5f,0.5f,1);
+        float _MountainStart = 4f;
+        float _MountainFull = 10f;
+        float _SlopeBoost = 0.4f;
+        float _SnowStart = 12f;
+        float _SnowFull = 18f;
+        float _SnowSlopeBoost = 0.5f;
+        Color _SnowColor = new Color(0.9f,0.9f,0.95f,1f);
+    }
+
     // Helper JSON types and factory methods for playtest scene instantiation
     [Serializable]
     public class RootConfig
