@@ -121,6 +121,13 @@ Shader "HexGlobe/PlanetTerrain"
                     col = lerp(c4, c5, t);
                 }
 
+                // Subtle directional shading for even coloring with slight dark side indication
+                float3 lightDir = normalize(_WorldSpaceLightPos0.xyz);
+                float ndotl = max(0, dot(normalize(i.n), lightDir));
+                float ambient = 0.7;
+                float diffuse = ndotl * 0.3 + ambient;
+                col.rgb *= diffuse;
+
                 float4 finalCol = col;
 
                 // Dual overlay: sample a pre-rasterized cubemap where R channel = edge strength.
