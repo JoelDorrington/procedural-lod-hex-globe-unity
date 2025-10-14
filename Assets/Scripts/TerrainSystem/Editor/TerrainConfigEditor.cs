@@ -77,7 +77,9 @@ namespace HexGlobeProject.TerrainSystem.Editor
         private void DrawOverlaySection()
         {
             var propEnabled = serializedObject.FindProperty("overlayEnabled");
+            EditorGUI.BeginDisabledGroup(true);
             EditorGUILayout.PropertyField(propEnabled);
+            EditorGUI.EndDisabledGroup();
             if (propEnabled.boolValue)
             {
                 using (new EditorGUI.IndentLevelScope())

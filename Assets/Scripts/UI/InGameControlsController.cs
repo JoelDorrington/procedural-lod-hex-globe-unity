@@ -18,7 +18,7 @@ namespace HexGlobeProject.UI
         public GameObject controlsPanel; // parent panel for in-game controls
         public Button advanceTurnButton;
         public Button pauseResumeButton;
-    public Button toggleHexGridButton;
+        public Button toggleHexGridButton;
         public Text turnTimerText;
 
         private bool isPaused = false;

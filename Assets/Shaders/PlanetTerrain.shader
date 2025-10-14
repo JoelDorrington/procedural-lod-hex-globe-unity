@@ -4,27 +4,26 @@ Shader "HexGlobe/PlanetTerrain"
         _PlanetCenter ("Planet Center (World Position)", Vector) = (0,0,0,0)
         _PlanetRadius ("Planet Radius", Float) = 30
         _SeaLevel ("Sea Level (world height)", Float) = 30
-        
+
         // Simplified tiered colors and thresholds (absolute heights above sea level)
         _WaterColor ("Water Color", Color) = (0.10,0.20,0.60,1)
-    _CoastMax ("Coastline Max Height", Float) = 0.1
+        _CoastMax ("Coastline Max Height", Float) = 0.1
         _CoastColor ("Coastline Color", Color) = (1.0,1.0,0.0,1)
-    _LowlandsMax ("Lowlands Max Height", Float) = 0.3
+        _LowlandsMax ("Lowlands Max Height", Float) = 0.3
         _LowlandsColor ("Lowlands Color", Color) = (0.75,0.95,0.55,1)
-    _HighlandsMax ("Highlands Max Height", Float) = 0.5
+        _HighlandsMax ("Highlands Max Height", Float) = 0.5
         _HighlandsColor ("Highlands Color", Color) = (0.55,0.70,0.50,1)
-    _MountainsMax ("Mountains Max Height", Float) = 0.8
+        _MountainsMax ("Mountains Max Height", Float) = 0.8
         _MountainsColor ("Mountains Color", Color) = (0.30,0.30,0.30,1)
-    _SnowcapsMax ("Snowcaps Max Height", Float) = 0.99
+        _SnowcapsMax ("Snowcaps Max Height", Float) = 0.99
         _SnowcapsColor ("Snowcaps Color", Color) = (1.0,1.0,1.0,1)
 
-        // Overlay (unchanged)
+        // Overlay
         _OverlayColor ("Overlay Color", Color) = (1,1,1,1)
         _OverlayOpacity ("Overlay Opacity", Range(0,1)) = 0.9
-        _OverlayEnabled ("Overlay Enabled", Float) = 1
+        _OverlayEnabled ("Overlay Enabled", Float) = 0
         _OverlayEdgeThreshold ("Overlay Edge Threshold", Range(0,1)) = 0.15
         _OverlayAAScale ("Overlay AA Scale", Float) = 100
-        _UseDualOverlay ("Use Dual Overlay", Float) = 1
         _DualOverlayCube ("Dual Overlay Cubemap", CUBE) = "white" {}
     }
     SubShader
@@ -70,7 +69,6 @@ Shader "HexGlobe/PlanetTerrain"
             float _OverlayEnabled;
             float _OverlayEdgeThreshold;
             float _OverlayAAScale;
-            float _UseDualOverlay;
             float _PlanetRadius;
             UNITY_DECLARE_TEXCUBE(_DualOverlayCube);
 
@@ -127,7 +125,7 @@ Shader "HexGlobe/PlanetTerrain"
 
                 // Dual overlay: sample a pre-rasterized cubemap where R channel = edge strength.
                 float4 outCol = finalCol;
-                if (_OverlayEnabled > 0.5 && _UseDualOverlay > 0.5)
+                if (_OverlayEnabled > 0.5)
                 {
                     float3 p = normalize(planetToVertex);
                     // Sample cubemap (assumes generator writes edge strength into .r)

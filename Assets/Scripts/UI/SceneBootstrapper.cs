@@ -1,7 +1,7 @@
 using System;
+using System.Reflection;
 using System.Collections;
 using UnityEngine;
-using HexGlobeProject.HexMap.Model;
 using HexGlobeProject.HexMap.Runtime;
 using HexGlobeProject.TerrainSystem.LOD;
 using HexGlobeProject.TerrainSystem.Graphics;
@@ -24,186 +24,104 @@ namespace HexGlobeProject.UI
 
         public IEnumerator RunBootstrapper(Action<float> onProgress, Action<string> onError, Action onComplete)
         {
-            if (spaceOnly)
+            // Space-only bootstrap: create an empty camera target at origin, create camera, starfields and directional light.
+            onProgress?.Invoke(0.05f);
+
+            // create camera target at origin
+            var cameraTarget = new GameObject("CameraTarget");
+            cameraTarget.transform.position = Vector3.zero;
+
+            onProgress?.Invoke(0.15f);
+
+            // attempt to load JSON config
+            var jsonPath = System.IO.Path.Combine(Application.dataPath, playtestConfigRelativePath.Replace("Assets/", ""));
+            RootConfig cfg = null;
+            if (System.IO.File.Exists(jsonPath))
             {
-                // Space-only bootstrap: create an empty camera target at origin, create camera, starfields and directional light.
-                onProgress?.Invoke(0.05f);
-
-                // create camera target at origin
-                var cameraTarget = new GameObject("CameraTarget");
-                cameraTarget.transform.position = Vector3.zero;
-
-                onProgress?.Invoke(0.15f);
-
-                // attempt to load JSON config
-                var jsonPath = System.IO.Path.Combine(Application.dataPath, playtestConfigRelativePath.Replace("Assets/", ""));
-                RootConfig cfg = null;
-                if (System.IO.File.Exists(jsonPath))
-                {
-                    try
-                    {
-                        cfg = new RootConfig(jsonPath);
-                        if (cfg != null)
-                        {
-                            try
-                            {
-                                // Parse into a quick helper object matching the flat PlaytestSceneConfig layout
-                                var flat = JsonUtility.FromJson<PlaytestSceneConfigFlat>("");
-                                if (flat != null)
-                                {
-
-                                }
-                            }
-                            catch { /* ignore fallback mapping failures */ }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.LogWarning("SceneBootstrapper: failed to parse playtest config JSON: " + ex.Message);
-                        cfg = null;
-                    }
-                }
-                else
-                {
-                    Debug.LogWarning("SceneBootstrapper: playtest config JSON not found at " + jsonPath + ". Falling back to defaults.");
-                }
-
-                // create camera
-                CreateCameraFromConfig(cfg);
-                onProgress?.Invoke(0.45f);
-                // allow a frame for UI to update
-                yield return null;
-
-                // create starfields (may be heavy); run as coroutine so we can yield while emitting many particles
-                yield return StartCoroutine(CreateStarFieldFromConfig(cfg?.universalStarField, "UniversalStarField"));
-                onProgress?.Invoke(0.7f);
-                yield return null;
-                yield return StartCoroutine(CreateStarFieldFromConfig(cfg?.galacticStarField, "GalacticStarField"));
-                onProgress?.Invoke(0.85f);
-                yield return null;
-
-                // create directional light
-                CreateDirectionalLightFromConfig(cfg?.directionalLight);
-                // Ensure in-game controls UI is present so the player can Advance Turn / Pause during playtests
-                EnsureInGameControls();
-                yield return null;
-
-                // Optionally spawn the planet if the config requests it
-                bool shouldSpawnPlanet = false;
                 try
                 {
-                    if (cfg != null && cfg is RootConfig rc)
+                    cfg = new RootConfig(jsonPath);
+                    if (cfg != null)
                     {
-                        // RootConfig is built from the flat PlaytestSceneConfig JSON; check flat.spawnPlanet via reading the file again if needed
-                        // The PlaytestSceneConfigFlat is parsed into RootConfig in the RootConfig ctor, so inspect the JSON directly for spawnPlanet
-                        var json = System.IO.File.ReadAllText(System.IO.Path.Combine(Application.dataPath, playtestConfigRelativePath.Replace("Assets/", "")));
-                        // quick check for "spawnPlanet":true (case-insensitive)
-                        if (!string.IsNullOrEmpty(json) && json.IndexOf("\"spawnPlanet\"", StringComparison.OrdinalIgnoreCase) >= 0 && json.IndexOf("true", json.IndexOf("\"spawnPlanet\"", StringComparison.OrdinalIgnoreCase), StringComparison.OrdinalIgnoreCase) >= 0)
+                        try
                         {
-                            shouldSpawnPlanet = true;
+                            // Parse into a quick helper object matching the flat PlaytestSceneConfig layout
+                            var flat = JsonUtility.FromJson<PlaytestSceneConfigFlat>("");
+                            if (flat != null)
+                            {
+
+                            }
                         }
+                        catch { /* ignore fallback mapping failures */ }
                     }
                 }
-                catch { }
-                if (shouldSpawnPlanet)
+                catch (Exception ex)
                 {
-                    CreatePlanetUnderCameraTarget();
-                    // planet creation may schedule heavy work on Start; allow a frame for initialization
-                    // wait for Planet.GeneratePlanet to complete (poll isGenerated). Timeout after 10 seconds to avoid deadlock.
-                    float waitStart = Time.realtimeSinceStartup;
-                    float timeout = 10f;
-                    // find the Planet component on the created GameObject (named 'Planet')
-                    HexGlobeProject.HexMap.Planet planetComp = null;
-                    try { planetComp = GameObject.Find("Planet")?.GetComponent<HexGlobeProject.HexMap.Planet>(); } catch { planetComp = null; }
-                    while (planetComp != null && !planetComp.isGenerated && Time.realtimeSinceStartup - waitStart < timeout)
-                    {
-                        yield return null;
-                    }
-                    yield return null;
+                    Debug.LogWarning("SceneBootstrapper: failed to parse playtest config JSON: " + ex.Message);
+                    cfg = null;
                 }
-                onProgress?.Invoke(1f);
-                yield return null;
-                onComplete?.Invoke();
             }
             else
             {
-                // original behaviour: build a tiny topology (0..0.4)
-                onProgress?.Invoke(0.05f);
-                var cfg = new TopologyConfig();
-                cfg.entries = new System.Collections.Generic.List<TopologyConfig.TileEntry>();
-
-                // Build a tiny 4-node test (a cross)
-                cfg.entries.Add(new TopologyConfig.TileEntry { tileId = 100, neighbors = new[] { 101, 102 }, center = Vector3.right });
-                cfg.entries.Add(new TopologyConfig.TileEntry { tileId = 101, neighbors = new[] { 100, 103 }, center = Vector3.up });
-                cfg.entries.Add(new TopologyConfig.TileEntry { tileId = 102, neighbors = new[] { 100, 103 }, center = Vector3.left });
-                cfg.entries.Add(new TopologyConfig.TileEntry { tileId = 103, neighbors = new[] { 101, 102 }, center = Vector3.down });
-
-
-                var topology = TopologyBuilder.Build(cfg, new SparseMapIndex());
-                Debug.Log("SceneBootstrapper: topology built");
-                onProgress?.Invoke(0.35f);
-                // allow UI update after topology build
-                yield return null;
-
-                // Stage 2: create a managed GameModel (0.35..0.7)
-                Debug.Log("SceneBootstrapper: initializing GameModel");
-                var model = new GameModel();
-                model.Initialize(topology);
-                onProgress?.Invoke(0.7f);
-                yield return null;
-
-                // Stage 3: spawn UnitManager and one unit (0.7..1.0)
-                UnitManager um = null;
-                if (unitManagerPrefab != null)
-                {
-                    var go = Instantiate(unitManagerPrefab.gameObject);
-                    um = go.GetComponent<UnitManager>();
-                }
-                else
-                {
-                    var go = new GameObject("UnitManager");
-                    um = go.AddComponent<UnitManager>();
-                }
-
-                Debug.Log("SceneBootstrapper: creating UnitManager and wiring model/topology");
-                // wire topology and model for playtest
-                um.topology = topology;
-                um.modelManaged = model;
-                um.planetRadius = 10f;
-                um.planetTransform = null;
-
-                onProgress?.Invoke(0.85f);
-
-                // create a simple visible primitive to use as the unit prefab if none provided
-                if (um.unitPrefab == null)
-                {
-                    Debug.Log("SceneBootstrapper: creating temporary unit prefab (sphere)");
-                    var temp = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                    temp.name = "TestUnitPrefab";
-                    temp.transform.localScale = Vector3.one * 0.6f;
-                    // give it a simple color
-                    var rend = temp.GetComponent<Renderer>();
-                    if (rend != null)
-                    {
-                        var mat = new Material(Shader.Find("Standard"));
-                        mat.color = Color.green;
-                        rend.sharedMaterial = mat;
-                    }
-                    // keep this prefab in the scene hidden - we will instantiate clones of it
-                    temp.SetActive(false);
-                    um.unitPrefab = temp;
-                }
-
-                Debug.Log("SceneBootstrapper: spawning test unit at node 0");
-                um.SpawnUnitAtNode(0, 1);
-                // Ensure in-game controls UI is present so the player can Advance Turn / Pause during playtests
-                EnsureInGameControls();
-                yield return null;
-
-                onProgress?.Invoke(1f);
-                yield return null;
-                onComplete?.Invoke();
+                Debug.LogWarning("SceneBootstrapper: playtest config JSON not found at " + jsonPath + ". Falling back to defaults.");
             }
+
+            // create camera
+            CreateCameraFromConfig(cfg);
+            onProgress?.Invoke(0.45f);
+            // allow a frame for UI to update
+            yield return null;
+
+            // create starfields (may be heavy); run as coroutine so we can yield while emitting many particles
+            yield return StartCoroutine(CreateStarFieldFromConfig(cfg?.universalStarField, "UniversalStarField"));
+            onProgress?.Invoke(0.7f);
+            yield return null;
+            yield return StartCoroutine(CreateStarFieldFromConfig(cfg?.galacticStarField, "GalacticStarField"));
+            onProgress?.Invoke(0.85f);
+            yield return null;
+
+            // create directional light
+            CreateDirectionalLightFromConfig(cfg?.directionalLight);
+            // Ensure in-game controls UI is present so the player can Advance Turn / Pause during playtests
+            EnsureInGameControls();
+            yield return null;
+
+            // Optionally spawn the planet if the config requests it
+            bool shouldSpawnPlanet = false;
+            try
+            {
+                if (cfg != null && cfg is RootConfig rc)
+                {
+                    // RootConfig is built from the flat PlaytestSceneConfig JSON; check flat.spawnPlanet via reading the file again if needed
+                    // The PlaytestSceneConfigFlat is parsed into RootConfig in the RootConfig ctor, so inspect the JSON directly for spawnPlanet
+                    var json = System.IO.File.ReadAllText(System.IO.Path.Combine(Application.dataPath, playtestConfigRelativePath.Replace("Assets/", "")));
+                    // quick check for "spawnPlanet":true (case-insensitive)
+                    if (!string.IsNullOrEmpty(json) && json.IndexOf("\"spawnPlanet\"", StringComparison.OrdinalIgnoreCase) >= 0 && json.IndexOf("true", json.IndexOf("\"spawnPlanet\"", StringComparison.OrdinalIgnoreCase), StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        shouldSpawnPlanet = true;
+                    }
+                }
+            }
+            catch { }
+            if (shouldSpawnPlanet)
+            {
+                CreatePlanetUnderCameraTarget();
+                // planet creation may schedule heavy work on Start; allow a frame for initialization
+                // wait for Planet.GeneratePlanet to complete (poll isGenerated). Timeout after 10 seconds to avoid deadlock.
+                float waitStart = Time.realtimeSinceStartup;
+                float timeout = 10f;
+                // find the Planet component on the created GameObject (named 'Planet')
+                HexGlobeProject.HexMap.Planet planetComp = null;
+                try { planetComp = GameObject.Find("Planet")?.GetComponent<HexGlobeProject.HexMap.Planet>(); } catch { planetComp = null; }
+                while (planetComp != null && !planetComp.isGenerated && Time.realtimeSinceStartup - waitStart < timeout)
+                {
+                    yield return null;
+                }
+                yield return null;
+            }
+            onProgress?.Invoke(1f);
+            yield return null;
+            onComplete?.Invoke();
 
             yield break;
         }
@@ -536,10 +454,23 @@ namespace HexGlobeProject.UI
                     // attempt to pull radius from TerrainConfig asset if present
                     try
                     {
-#if UNITY_EDITOR
-                        var conf = UnityEditor.AssetDatabase.LoadAssetAtPath<TerrainConfig>("Assets/Configs/TerrainConfig.asset");
+                        // Try to load TerrainConfig via editor API if available, otherwise fall back gracefully
+                        var conf = LoadAssetAtPathRuntimeSafe<TerrainConfig>("Assets/Configs/TerrainConfig.asset");
                         if (conf != null) oc.planetRadius = conf.baseRadius;
-#endif
+                        else
+                        {
+                            // attempt to find any TerrainConfig asset by type (editor-only flow via reflection)
+                            var gu = FindAssetsRuntime("t:TerrainConfig");
+                            if (gu != null && gu.Length > 0)
+                            {
+                                var p = GUIDToAssetPathRuntime(gu[0]);
+                                if (!string.IsNullOrEmpty(p))
+                                {
+                                    var conf2 = LoadAssetAtPathRuntimeSafe<TerrainConfig>(p);
+                                    if (conf2 != null) oc.planetRadius = conf2.baseRadius;
+                                }
+                            }
+                        }
                     }
                     catch { }
                 }
@@ -617,7 +548,7 @@ namespace HexGlobeProject.UI
             // Assign terrainMaterial if a default exists at Assets/Materials/Land.mat
             try
             {
-                    var mat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Land.mat");
+                    var mat = LoadAssetAtPathRuntimeSafe<Material>("Assets/Materials/Land.mat");
                     if (mat != null)
                     {
                         var tf = typeof(PlanetTileVisibilityManager).GetField("terrainMaterial", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
@@ -633,21 +564,20 @@ namespace HexGlobeProject.UI
             // Assign TerrainConfig asset if present at Assets/Configs/TerrainConfig.asset
             try
             {
-#if UNITY_EDITOR
-                // TerrainConfig lives under HexGlobeProject.TerrainSystem namespace
-                var conf = UnityEditor.AssetDatabase.LoadAssetAtPath<TerrainConfig>("Assets/Configs/TerrainConfig.asset");
+                // Attempt to load TerrainConfig via editor API when available, otherwise try to discover via reflected find.
+                var conf = LoadAssetAtPathRuntimeSafe<TerrainConfig>("Assets/Configs/TerrainConfig.asset");
                 if (conf == null)
                 {
-                    // fallback: look for any TerrainConfig asset
-                    var gu = UnityEditor.AssetDatabase.FindAssets("t:TerrainConfig");
+                    var gu = FindAssetsRuntime("t:TerrainConfig");
                     if (gu != null && gu.Length > 0)
                     {
-                        var p = UnityEditor.AssetDatabase.GUIDToAssetPath(gu[0]);
-                        conf = UnityEditor.AssetDatabase.LoadAssetAtPath<TerrainConfig>(p);
+                        var p = GUIDToAssetPathRuntime(gu[0]);
+                        if (!string.IsNullOrEmpty(p)) conf = LoadAssetAtPathRuntimeSafe<TerrainConfig>(p);
                     }
                 }
                 if (conf != null)
                 {
+                    conf.overlayEnabled = false;
                     // config is a public field on the manager; assign directly
                     try { mgr.config = conf; } catch { }
 
@@ -666,7 +596,6 @@ namespace HexGlobeProject.UI
                     }
                     catch { /* non-critical apply failure */ }
                 }
-#endif
             }
             catch { }
 
@@ -698,12 +627,109 @@ namespace HexGlobeProject.UI
                 if (cube != null)
                 {
                     targetMaterial.SetTexture("_DualOverlayCube", cube);
+                    targetMaterial.SetFloat("_OverlayEnabled", 0f);
                 }
             }
             catch (Exception ex)
             {
                 Debug.LogWarning("SetupOverlayCubemap: failed to generate or assign cubemap: " + ex.Message);
             }
+        }
+
+        // Runtime-safe helpers that try to call UnityEditor.AssetDatabase via reflection when available.
+        // These keep the code identical between editor and player builds while avoiding direct UnityEditor references.
+        private static T LoadAssetAtPathRuntimeSafe<T>(string path) where T : UnityEngine.Object
+        {
+            try
+            {
+                // Try to find UnityEditor.AssetDatabase type dynamically
+                var asm = System.AppDomain.CurrentDomain.GetAssemblies();
+                foreach (var a in asm)
+                {
+                    try
+                    {
+                        var t = a.GetType("UnityEditor.AssetDatabase");
+                        if (t != null)
+                        {
+                            var m = t.GetMethod("LoadAssetAtPath", BindingFlags.Public | BindingFlags.Static, null, new Type[] { typeof(string) }, null);
+                            if (m != null)
+                            {
+                                var res = m.MakeGenericMethod(typeof(T)).Invoke(null, new object[] { path });
+                                return res as T;
+                            }
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+
+            // fallback: try Resources.Load by trimming extensions and folder prefixes
+            try
+            {
+                string trimmed = path;
+                if (trimmed.StartsWith("Assets/")) trimmed = trimmed.Substring("Assets/".Length);
+                // remove extension
+                var dot = trimmed.LastIndexOf('.');
+                if (dot >= 0) trimmed = trimmed.Substring(0, dot);
+                return Resources.Load<T>(trimmed);
+            }
+            catch { }
+            return null;
+        }
+
+        private static string[] FindAssetsRuntime(string filter)
+        {
+            try
+            {
+                var asm = System.AppDomain.CurrentDomain.GetAssemblies();
+                foreach (var a in asm)
+                {
+                    try
+                    {
+                        var t = a.GetType("UnityEditor.AssetDatabase");
+                        if (t != null)
+                        {
+                            var m = t.GetMethod("FindAssets", BindingFlags.Public | BindingFlags.Static, null, new Type[] { typeof(string) }, null);
+                            if (m != null)
+                            {
+                                var res = m.Invoke(null, new object[] { filter }) as string[];
+                                return res;
+                            }
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        private static string GUIDToAssetPathRuntime(string guid)
+        {
+            try
+            {
+                var asm = System.AppDomain.CurrentDomain.GetAssemblies();
+                foreach (var a in asm)
+                {
+                    try
+                    {
+                        var t = a.GetType("UnityEditor.AssetDatabase");
+                        if (t != null)
+                        {
+                            var m = t.GetMethod("GUIDToAssetPath", BindingFlags.Public | BindingFlags.Static, null, new Type[] { typeof(string) }, null);
+                            if (m != null)
+                            {
+                                var res = m.Invoke(null, new object[] { guid }) as string;
+                                return res;
+                            }
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+            return null;
         }
 
         // Ensure an InGameControlsController exists in the scene (create a persistent GameObject if necessary)
