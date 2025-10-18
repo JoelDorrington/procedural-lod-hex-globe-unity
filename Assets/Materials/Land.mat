@@ -91,7 +91,7 @@ Material:
     - _OffsetsInRadiusSpace: 0
     - _OverlayAAScale: 1
     - _OverlayEdgeThreshold: 0.15
-    - _OverlayEnabled: 1
+    - _OverlayEnabled: 0
     - _OverlayGlowIntensity: 0.8
     - _OverlayGlowLOD: 2
     - _OverlayGlowSpread: 0.06
@@ -103,6 +103,7 @@ Material:
     - _SlopeBoost: 0
     - _SmoothnessTextureChannel: 0
     - _SnowFull: 5
+    - _SnowShininess: 32
     - _SnowSlopeBoost: 0
     - _SnowStart: 4
     - _SnowcapsMax: 1
@@ -127,6 +128,7 @@ Material:
     - _PlanetCenter: {r: 0, g: 0, b: 0, a: 0}
     - _ShallowColor: {r: 0.12, g: 0.25, b: 0.55, a: 1}
     - _SnowColor: {r: 0.9, g: 0.9, b: 0.95, a: 1}
+    - _SnowSpecular: {r: 1, g: 1, b: 1, a: 1}
     - _SnowcapsColor: {r: 1, g: 1, b: 1, a: 1}
     - _WaterColor: {r: 0.1, g: 0.2, b: 0.6, a: 1}
   m_BuildTextureStacks: []

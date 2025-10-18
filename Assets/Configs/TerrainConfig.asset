@@ -28,7 +28,7 @@ MonoBehaviour:
   shorelineDetailAmplitude: 0.6
   shorelineDetailFrequency: 6
   shorelinePreserveSign: 1
-  overlayEnabled: 1
+  overlayEnabled: 0
   overlayColor: {r: 0, g: 0, b: 0, a: 1}
   overlayOpacity: 0.9
   overlayLineThickness: 0.05

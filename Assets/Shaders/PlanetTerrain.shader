@@ -18,7 +18,9 @@ Shader "HexGlobe/PlanetTerrain"
         _SnowcapsMax ("Snowcaps Max Height", Float) = 0.99
         _SnowcapsColor ("Snowcaps Color", Color) = (1.0,1.0,1.0,1)
 
-        // Overlay
+        // Snow shininess properties
+        _SnowSpecular ("Snow Specular", Color) = (1,1,1,1)
+        _SnowShininess ("Snow Shininess", Float) = 32
         _OverlayColor ("Overlay Color", Color) = (1,1,1,1)
         _OverlayOpacity ("Overlay Opacity", Range(0,1)) = 0.9
         _OverlayEnabled ("Overlay Enabled", Float) = 0
@@ -71,6 +73,10 @@ Shader "HexGlobe/PlanetTerrain"
             float _OverlayAAScale;
             float _PlanetRadius;
             UNITY_DECLARE_TEXCUBE(_DualOverlayCube);
+
+            // Snow shininess HLSL-exposed properties
+            float4 _SnowSpecular;
+            float _SnowShininess;
 
             v2f vert(appdata v)
             {
@@ -127,6 +133,15 @@ Shader "HexGlobe/PlanetTerrain"
                 float ambient = 0.7;
                 float diffuse = ndotl * 0.3 + ambient;
                 col.rgb *= diffuse;
+
+                // Add specular highlight for snow
+                if (hAboveSea > _MountainsMax) {
+                    float3 viewDir = normalize(_WorldSpaceCameraPos - i.worldPos);
+                    float3 halfDir = normalize(lightDir + viewDir);
+                    float spec = pow(max(0, dot(i.n, halfDir)), _SnowShininess);
+                    spec = min(spec, 10.0); // Clamp to prevent overflow causing magenta
+                    col.rgb += spec * _SnowSpecular.rgb * 0.1; // Subtle multiplier
+                }
 
                 float4 finalCol = col;
 

@@ -12,6 +12,9 @@ public class TerrainShaderConfigWindow : EditorWindow
     TerrainConfig terrainConfig;
     SerializedObject tcs;
 
+    // Scroll position for the window
+    Vector2 scrollPosition;
+
     [MenuItem("Tools/HexGlobe/Terrain Tuning...")]
     public static void OpenWindow()
     {
@@ -47,6 +50,8 @@ public class TerrainShaderConfigWindow : EditorWindow
         EditorGUILayout.Space();
         EditorGUILayout.LabelField("Terrain Tuning", EditorStyles.boldLabel);
         EditorGUILayout.HelpBox("Edit TerrainConfig colors and transition heights; apply to materials or update globals for live tuning.", MessageType.Info);
+
+        scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
 
         // TerrainConfig section
         EditorGUILayout.Space();
@@ -324,6 +329,8 @@ public class TerrainShaderConfigWindow : EditorWindow
 
         EditorGUILayout.Space();
         // Removed separate ShaderConfig management; TerrainConfig is the single source now.
+
+        EditorGUILayout.EndScrollView();
     }
 
     // No separate ShaderConfig asset anymore.

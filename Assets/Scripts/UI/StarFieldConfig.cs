@@ -22,8 +22,10 @@ namespace HexGlobeProject.UI
         public int maxParticles = 1000;
         public float innerBiasSkew = 2.2f;
         public float torusTiltDegrees = 12f;
+        // radius thickness for spherical shape (0 = surface only, 1 = full volume)
+        public float radiusThickness = 0.2f;
         // particle appearance defaults
-        public float startSize = 0.08f;
+        public float startSize = 2.0f;
         public float startSpeed = 0f;
         // long lifetime so emitted particles remain static and visible after emission
         public float startLifetime = 9999f;

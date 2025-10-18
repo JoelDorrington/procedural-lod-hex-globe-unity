@@ -216,6 +216,8 @@ namespace HexGlobeProject.UI
                 var mat = new Material(Shader.Find("Particles/Standard Unlit"));
                 mat.color = Color.white;
                 psr.material = mat;
+                // disable roll so particles don't rotate around their forward axis
+                try { psr.allowRoll = false; } catch { }
             }
 
             // If config requests a donut/torus, procedurally emit particles on a torus surface and pause.
@@ -266,49 +268,35 @@ namespace HexGlobeProject.UI
                     ps.Emit(emitParams, 1);
                     if ((i & 63) == 0) yield return null; // yield every 64 emits to keep UI responsive
                 }
-
-                ps.Pause();
-                yield break;
-            }
-            else
-            {
-                // default spherical shape
-                shape.shapeType = ParticleSystemShapeType.Sphere;
-                shape.radius = s.radius;
-                shape.arc = s.arc;
-
-                // If a burstCount is provided, procedurally emit that many particles across the sphere surface so
-                // we can pause them deterministically and achieve higher density.
-                if (s.burstCount > 0)
-                {
-                    int count = Mathf.Clamp(s.burstCount, 0, s.maxParticles);
-                    ps.Clear();
-                    var emitParams = new ParticleSystem.EmitParams();
-                    emitParams.startSize = s.startSize;
-                    emitParams.startLifetime = s.startLifetime;
-                    emitParams.startColor = Color.white;
-                    emitParams.velocity = Vector3.zero;
-                    for (int i = 0; i < count; i++)
-                    {
-                        // sample uniformly on sphere by using random directions
-                        var dir = UnityEngine.Random.onUnitSphere;
-                        emitParams.position = dir * s.radius;
-                        ps.Emit(emitParams, 1);
-                        if ((i & 127) == 0) yield return null; // yield every 128 emits
-                    }
                     ps.Pause();
                     yield break;
                 }
                 else
                 {
-                    // Simulate the emission up to 1 second so burst particles are created, then pause so they remain in place.
-                    ps.Clear();
-                    ps.Simulate(1f, true, true);
-                    ps.Pause();
-                    yield break;
+                    // Sphere shape: use the particle system's Shape module with radiusThickness and let it emit
+                    shape.shapeType = ParticleSystemShapeType.Sphere;
+                    shape.radius = s.radius;
+                    try { shape.radiusThickness = Mathf.Clamp01(s.radiusThickness); } catch { }
+                    shape.arc = s.arc;
+
+                    if (s.burstCount > 0)
+                    {
+                        // Play briefly so configured bursts happen, then pause to freeze them
+                        ps.Clear();
+                        ps.Play();
+                        yield return null;
+                        ps.Pause();
+                        yield break;
+                    }
+                    else
+                    {
+                        ps.Clear();
+                        ps.Simulate(1f, true, true);
+                        ps.Pause();
+                        yield break;
+                    }
                 }
             }
-        }
 
         private void CreateDirectionalLightFromConfig(DirectionalLightConfig l)
         {
