@@ -420,7 +420,52 @@ namespace HexGlobeProject.UI
                 }
                 else
                 {
-                    Debug.LogWarning("SceneBootstrapper: sun halo requested but no Flare asset named 'sunburst' or 'PlaytestSunFlare' found. Place a Flare in Assets/Resources/sunburst.flare or add a Flare asset to the project.");
+                    // Runtime fallback: create a simple billboarded sun halo so designers still see a halo without a Flare asset.
+                    try
+                    {
+                        var haloGO = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                        haloGO.name = go.name + "_Halo";
+                        UnityEngine.Object.DestroyImmediate(haloGO.GetComponent<Collider>());
+                        haloGO.transform.SetParent(go.transform, false);
+                        haloGO.transform.localPosition = Vector3.zero;
+
+                        int size = 128;
+                        var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+                        Vector2 c = new Vector2(size * 0.5f, size * 0.5f);
+                        float maxR = size * 0.5f;
+                        for (int y = 0; y < size; y++)
+                        {
+                            for (int x = 0; x < size; x++)
+                            {
+                                float d = Vector2.Distance(new Vector2(x, y), c) / maxR;
+                                // radial alpha: 1 at center, falloff to 0
+                                float a = Mathf.Clamp01(1f - d);
+                                // soften edges
+                                a = Mathf.Pow(a, 1.5f);
+                                Color col = new Color(1f, 1f, 1f, a);
+                                tex.SetPixel(x, y, col);
+                            }
+                        }
+                        tex.Apply();
+
+                        var mat = new Material(Shader.Find("Unlit/Transparent"));
+                        if (mat == null) mat = new Material(Shader.Find("Particles/Standard Unlit"));
+                        mat.mainTexture = tex;
+                        // color by light color and brightness
+                        try { mat.color = targetLight != null ? targetLight.color * l.flareBrightness : Color.white * l.flareBrightness; } catch { }
+
+                        var mr = haloGO.GetComponent<MeshRenderer>();
+                        if (mr != null) mr.material = mat;
+                        // scale halo by flareBrightness (clamped) to produce a visible effect
+                        float scale = Mathf.Clamp(l.flareBrightness * 0.01f, 0.5f, 50f);
+                        haloGO.transform.localScale = new Vector3(scale, scale, 1f);
+                        // add a simple billboard script so it always faces the main camera
+                        haloGO.AddComponent<Billboard>();
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning("SceneBootstrapper: sun halo requested but no Flare asset found and fallback halo creation failed: " + ex.Message);
+                    }
                 }
             }
 
