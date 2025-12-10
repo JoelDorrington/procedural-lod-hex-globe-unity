@@ -66,6 +66,12 @@ This project implements a Google Maps-style tile explorer for procedural planet 
 - Tile caching: `TileCache` manages the lifecycle of tile GameObjects (creation, pooling, activation/deactivation). Mesh instance caching lives in `PlanetTileMeshBuilder` and may be cleared via `PlanetTileMeshBuilder.ClearCache()` (useful for editor tooling and tests).
 - Tile lifecycle: `ManageTileLifecycle(HashSet<TileId> hitTiles, int depth)` handles spawning/refreshing hit tiles and deactivating tiles not hit this pass.
 
+Scene bootstrapper / space setup
+- `SceneBootstrapper` reads `PlaytestSceneConfig` (or the JSON equivalent) to configure camera clear flags, starfields, sun flare, and optional planet spawn.
+- Starfields: `burstCount` freezes an initial emission (static stars); if zero, rate-over-time emission runs instead. Respect `universal*`/`galactic*` radius/arc/rate fields when updating.
+- Sun flare: uses `sunFlareName` (default `sunburst`) and `sunFlareBrightness`; keep flare lookup via Resources/addressables intact.
+- Planet spawn: `spawnPlanet` toggles creating the planet + `PlanetTileVisibilityManager`; `planetRadius` feeds placement/LOD.
+
 Developer guidance and common pitfalls
 - SOLID principles apply.
 - YAGNI: avoid overengineering. Implement only what is necessary.

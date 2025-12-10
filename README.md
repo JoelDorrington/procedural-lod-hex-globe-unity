@@ -1,9 +1,6 @@
 # HexGlobeProject
 ### Important note for AI! I'm a coder, I want to use the Unity editor only for parameterised tuning and play testing. Game objects should be self constructing in terms of internal dependencies.
 
-## Quick developer note
-This README was updated to reflect recent implementation and testing changes. After pulling changes, reimport scripts in the Unity Editor so new inspector fields (for example the `hideOceanRenderer` checkbox on `TerrainRoot`) appear.
-
 ## Overview
 HexGlobeProject is a Unity project that implements procedural terrain on isophere tiles, LOD-driven tile streaming, and supporting utilities for mesh generation and sampling.
 
@@ -21,6 +18,12 @@ README.md
 - Unity version: use the same major/minor as the project branch (e.g., 6000.x). Opening with an older editor will force an upgrade; avoid that for publishable branches.
 - Packages are tracked via `Packages/manifest.json` and `packages-lock.json`. When you open the project, Unity will auto-install them. If Package Manager stalls, open **Window → Package Manager** and click **Install/Resolve** for any missing packages.
 - If the editor reports script compilation errors on first import, let the Package Manager finish restoring; then **Assets → Reimport All** once.
+
+## Scene bootstrapper (playtest setup)
+- Entry point: `SceneBootstrapper` loads `PlaytestSceneConfig` (ScriptableObject) or its JSON twin (`Assets/Configs/playtest_scene_config.json`, addressable) to configure camera clear flags/background, starfields, sun flare, and optional planet spawn.
+- Starfields: `universal*` and `galactic*` fields define radius/arc/rates; `burstCount` on each starfield freezes an initial burst (static stars). If `burstCount` is zero, runtime uses rate-over-time instead.
+- Sun flare: `sunFlareName` defaults to `sunburst` (addressable/Resources). Brightness is scaled by `sunFlareBrightness` and can be toggled with `sunFlareEnabled`.
+- Planet: `spawnPlanet` controls whether the planet + `PlanetTileVisibilityManager` are instantiated in space-only boots; `planetRadius` feeds placement and tile LOD math.
 
 ## Addressables basics
 - Addressables package: should auto-install from `manifest.json` (`com.unity.addressables`). If missing, add via **Window → Package Manager → + → Add package by name... → com.unity.addressables**.
@@ -127,5 +130,3 @@ Pull requests and issues are welcome. Prefer small, test-backed changes for syst
 
 ## License
 MIT
-
-TODO: investigate wiremesh index density and consider GPU-driven or lower-density solutions for the grid overlay.
