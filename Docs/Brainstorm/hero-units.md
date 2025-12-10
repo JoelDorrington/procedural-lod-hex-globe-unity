@@ -1,1 +1,0 @@
-hero units could be the only controllable units, or they can gain the loyalty of world units

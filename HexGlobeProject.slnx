@@ -1,0 +1,6 @@
+﻿<Solution>
+  <Project Path="HexGlobeProject.Tests.Editor.csproj" />
+  <Project Path="HexGlobeProject.Scripts.csproj" />
+  <Project Path="HexGlobeProject.Tests.PlayMode.csproj" />
+  <Project Path="Assembly-CSharp-Editor.csproj" />
+</Solution>

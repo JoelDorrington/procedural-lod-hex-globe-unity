@@ -139,5 +139,32 @@ namespace HexGlobeProject.HexMap
             GeneratePlanet();
         }
 
+        // Legacy test shim: build the dual wireframe using the current planet settings.
+        // Kept private to match existing test reflection expectations.
+        private void BuildDualWireframe(Mesh baseMesh, float baseRadius)
+        {
+            PlanetRenderingUtils.BuildDualWireframe(
+                parent: this.transform,
+                baseMesh: baseMesh,
+                baseRadius: baseRadius,
+                wireframeColor: wireframeColor,
+                wireOffsetFraction: wireOffsetFraction,
+                projectEachSmoothingPass: projectEachSmoothingPass,
+                dualSmoothingMode: dualSmoothingMode,
+                dualSmoothingIterations: dualSmoothingIterations,
+                smoothLambda: smoothLambda,
+                smoothMu: smoothMu,
+                dualProjectionBlend: dualProjectionBlend);
+        }
+
+        // Legacy test shim: toggle overlay properties on the assigned MeshRenderer's materials.
+        // Kept private to satisfy reflection in OverlayAndWireframeTests.
+        private void SetOverlayOnMaterials(bool enabled)
+        {
+            // Fall back to this component's MeshRenderer if one was not injected by tests.
+            if (meshRenderer == null) meshRenderer = GetComponent<MeshRenderer>();
+            PlanetRenderingUtils.SetOverlayOnMaterials(meshRenderer, this.transform, sphereRadius, enabled);
+        }
+
     }
 }

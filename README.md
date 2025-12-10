@@ -1,23 +1,5 @@
 # HexGlobeProject
-### Important note for AI! I'm a coder, I want to use the unity editor only for parameterised tuning and play testing. Game objects should be self constructing in terms of internal dependencies.
-
-## Overview
-HexGlobeProject is a Unity-based project that implements a hexagonal and pentagonal map on a globe. The project focuses on creating a low-level and performant graphical data structure to represent the map, allowing for efficient rendering and interaction.
-
-## Features
-- Spherical grid with hexagonal and pentagonal cell representation.
-- Exactly 12 pentagonal cells, positioned in the negative space left by the hexagons, as required by spherical geometry.
-- Efficient grid management with the `GlobeGrid` class.
-- Dynamic mesh generation for visual representation using the `MeshGenerator` class.
-- Utility functions for mathematical calculations in the `MathHelpers` class.
-
-## Project Structure
-```
-HexGlobeProject
-├── Assets
-│   ├── Scripts
-│   │   ├── HexMap
-# HexGlobeProject
+### Important note for AI! I'm a coder, I want to use the Unity editor only for parameterised tuning and play testing. Game objects should be self constructing in terms of internal dependencies.
 
 ## Quick developer note
 This README was updated to reflect recent implementation and testing changes. After pulling changes, reimport scripts in the Unity Editor so new inspector fields (for example the `hideOceanRenderer` checkbox on `TerrainRoot`) appear.
@@ -34,6 +16,49 @@ Assets/
 	Prefabs/        # sample prefabs
 README.md
 ```
+
+## Unity setup
+- Unity version: use the same major/minor as the project branch (e.g., 6000.x). Opening with an older editor will force an upgrade; avoid that for publishable branches.
+- Packages are tracked via `Packages/manifest.json` and `packages-lock.json`. When you open the project, Unity will auto-install them. If Package Manager stalls, open **Window → Package Manager** and click **Install/Resolve** for any missing packages.
+- If the editor reports script compilation errors on first import, let the Package Manager finish restoring; then **Assets → Reimport All** once.
+
+## Addressables basics
+- Addressables package: should auto-install from `manifest.json` (`com.unity.addressables`). If missing, add via **Window → Package Manager → + → Add package by name... → com.unity.addressables**.
+- Initial setup: open **Window → Asset Management → Addressables → Groups**, then **Build → New Build → Default Build Script** to generate the local addressables content.
+- Play Mode script: in the Addressables Groups window, set **Play Mode Script** to **Use Existing Build (requires built groups)** for deterministic testing, or **Fast Mode** for rapid iteration.
+- Content updates: when you add or change addressable assets, rebuild via **Build → New Build → Default Build Script** so playmode and builds pick up the changes.
+- Cache cleanup: if you hit stale data, use **Build → Clean Build → All** in the Addressables window, then rebuild.
+
+## Config files (keep these in source control)
+- `Assets/Configs/TerrainConfig.asset`: canonical terrain settings. Create via `Create → HexGlobe → Terrain Config` if missing.
+- Material linkage: the terrain material (e.g., `Assets/Materials/Land.mat`) should reference the `HexGlobe/PlanetTerrain` shader. Use the Terrain Tuning window (see below) to sync values into the material.
+- Private docs and prototype notes live in `Docs/Private/` and are git-ignored. The public docs you can rely on are `Docs/GLOSSARY.md` and `.github/copilot-instructions.md`.
+
+### Barycentric mapping caution
+- The icosphere barycentric math is sensitive: mixing tile-local lattice indices with normalized bary coords can create seams. Always convert `TileVertexBarys` results via `IcosphereMapping.BaryLocalToGlobalNoReflect` before using them as UVs or sampling directions.
+- A detailed prereflect/postreflect mapping table for tricky tiles lives in `Docs/barycentric-mapping.txt`. If you touch barycentric code, consult that table and prefer the non-reflect conversion helper to avoid edge flips.
+
+### TerrainConfig schema (key fields)
+- `baseRadius` (float): planet base radius.
+- `baseResolution` (int): vertices per edge at depth 0; deeper LODs derive automatically.
+- `heightProvider` (polymorphic): height generator implementation.
+- `heightScale` (float): global multiplier on sampled heights.
+- `seaLevel` (float): height offset; >0 raises oceans, <0 lowers.
+- `shallowWaterBand` (float): band height above sea for shallow coloration.
+- `debugElevationMultiplier` (float): multiplies final elevation for exaggeration.
+- `icosphereSubdivisions` (int 0-6): helper sphere subdivision for overlays/tests.
+- `recalcNormals` (bool): recompute normals from geometry (true shows slopes).
+- Overlay: `overlayEnabled`, `overlayColor`, `overlayOpacity`, `overlayLineThickness`, `overlayEdgeExtrusion`.
+- Tiered colors/heights (all floats unless color): `coastMax`, `lowlandsMax`, `highlandsMax`, `mountainsMax`, `snowcapsMax`; and matching colors `waterColor`, `coastColor`, `lowlandsColor`, `highlandsColor`, `mountainsColor`, `snowcapsColor`.
+
+## Unity packages and Addressables setup
+- Packages: Unity will auto-install packages from `Packages/manifest.json` on first open. If prompted, allow it to resolve/update. Addressables is already listed in the manifest.
+- Addressables data: `Assets/AddressableAssetsData` is versioned. It contains the Default Local Group entries used by the scene bootstrapper: `PlanetTerrain.shader`, `Land.mat`, `TerrainConfig.asset`, `playtest_scene_config.json`, `TestOverlayCube_Large.cubemap`, and the star texture (`sunburst`).
+- After cloning: open `Window → Asset Management → Addressables → Groups` to verify the Default Local Group entries, then run `Addressables → Build → New Build → Default Build Script` to regenerate local `ServerData/` (ignored in git). Rebuild Addressables if you change any of the grouped assets.
+- If a grouped asset is missing in your clone (e.g., `TerrainConfig.asset`), create it at the same path so the addressable entry resolves, then rebuild Addressables.
+
+## Scene assets that remain tracked
+- Stars/planet shaders and supporting materials stay in repo (see `Assets/Shaders/`, `Assets/Materials/`).
 
 ## Running tests
 Tests must only be run manually in the Unity test runer.

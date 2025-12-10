@@ -42,8 +42,8 @@ This project implements a Google Maps-style tile explorer for procedural planet 
   - `TileFade` & `TileFadeAnimator`: Experimental animation system for smooth tile transitions. Abandoned for now.
 
 - **Height Providers (Resolution-Aware):**
-  - `SimplePerlinHeightProvider.cs`: Multi-octave Perlin noise. Main development provider.
-  - `3DPerlinHeightProvider.cs`: 3D Multi-octave Perlin noise. Planned upgrade to eliminate noise distortion.
+  - `SimplePerlinHeightProvider.cs`: Multi-octave Perlin noise. Legacy provider.
+  - `3DPerlinHeightProvider.cs`: 3D Multi-octave Perlin noise. Main provider to eliminate distortion.
   - `MountainRangeHeightProvider.cs`: Procedural continental + ridge-based terrain (abandoned)
   - `OctaveMaskHeightProvider.cs`: Wrapper for octave-limited sampling (abandoned)
 
@@ -81,18 +81,18 @@ Developer guidance and common pitfalls
 
 Reflection insights (recent milestone):
 - During debugging we discovered that certain tile-local lattice coordinates at lower depths (notably depth=2) can produce barycentric coordinates whose U+V slightly exceed 1.0 due to lattice arithmetic. The `Barycentric` constructor historically reflects these points across the U+V=1 diagonal when W becomes meaningfully negative. That reflection maps a point into the adjacent triangle and changes the canonical face direction — producing subtle, hard-to-find seams.
-- To aid future maintainers, a mapping table documenting the observed prereflect vs postreflect bary centers for depth=2 has been recorded in `Docs/Brainstorm/barycentric-mapping.txt`. Use that table when debugging edge-case tiles; it documents which tile indices needed manual reflection corrections during troubleshooting.
+- To aid future maintainers, a mapping table documenting the observed prereflect vs postreflect bary centers for depth=2 lives in `Docs/barycentric-mapping.txt`. Keep a copy handy when debugging edge-case tiles; it documents which tile indices needed manual reflection corrections during troubleshooting.
 - Recommended policy: prefer `BaryLocalToGlobalNoReflect` for mesh-building and UV storage to clamp tiny numeric overshoot to tile edges (renormalize) rather than reflect into the adjacent triangle. Reserve the original reflect behavior only for callers that intentionally want reflection semantics.
 
 Quick checklist when touching barycentric code:
 - Always be explicit about whether you are operating on tile-local lattice indices or normalized bary fractions. Use the `Barycentric` ADT constructor only for normalized bary fractions; treat values returned by `TileVertexBarys` as lattice indices.
 - When converting local -> global barys for mesh UVs or sampling, prefer `BaryLocalToGlobalNoReflect` to avoid accidental reflections. Add unit tests that assert `IsReflected == false` for canonical tile corners.
-- If you observe a visible seam at a tile corner, consult `Docs/Brainstorm/barycentric-mapping.txt` first to see if that tile is a known reflection case.
+- If you observe a visible seam at a tile corner, consult `Docs/barycentric-mapping.txt` first to see if that tile is a known reflection case.
 
 This document is the source of truth for the system architecture. Keep it updated with any changes to aid future development and maintenance. Do not change this document to match existing code. Only change this document to reflect intentional design changes made during the session.
 
-Stay focused on the human engineer's goals. Ask questions if needed. Proceed only with consensus. Don't be afraid to tell the human engineer they are incorrect about their intuition. It's always the same guy this is a one man project. The human engineer will be dilligently resisting complexity creep. Do not allow them to veto necessary complexity. Always explain things in first principles before explaining the math and implementation.
+Stay aligned with the human engineer's goals. When uncertain, ask. If risk is detected, flag it plainly. Prefer clarity over cleverness; select the simplest option that satisfies intent. Explain from first principles; state the benefit of any added complexity. Offer alternative paths that match the human's thinking style (visual, mathematical, systems, or step-by-step) so pushing back feels collaborative, not blocking.
 
-The exchanges should be short and focused on one action item at a time.
-Code edits must be made in a test driven manner. Add or update unit tests where appropriate (see `Assets/Tests/` folders). Editor-only workarounds are discouraged; unit or playmode tests should expose the issue before adding non-testable hacks.
-When changing mapping or barycentric math, include small tests asserting that `IcosphereMapping.TileIndexToBaryCenter` <-> `WorldDirectionToTileIndex` are consistent for canonical centers.
+Keep exchanges short and single-scope.
+Code edits must be test driven. Add or update unit tests where appropriate (see `Assets/Tests/`). Editor-only workarounds are discouraged; prefer unit or playmode tests to expose issues before adding non-testable fixes.
+When changing mapping or barycentric math, include small tests asserting `IcosphereMapping.TileIndexToBaryCenter` <-> `WorldDirectionToTileIndex` consistency for canonical centers.

@@ -64,3 +64,16 @@ ShaderCache/
 
 # Local experimental files pattern
 _Local*/
+
+# Addressables build outputs (regenerate locally)
+ServerData/
+Build/Addressables/
+
+# Proprietary plans and private docs (kept locally, not published)
+Docs/Private/
+
+# Character sprite textures (exclude; keep stars/shaders for planet scene)
+Assets/Resources/ClubTexture.png
+Assets/Resources/ClubTexture.png.meta
+Assets/Resources/caveman-texturemap.png
+Assets/Resources/caveman-texturemap.png.meta

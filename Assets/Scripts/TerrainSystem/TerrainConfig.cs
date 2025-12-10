@@ -38,14 +38,7 @@ namespace HexGlobeProject.TerrainSystem.LOD
     [Tooltip("Recalculate mesh normals from geometry (shows slopes). If off, uses radial normals (fast but hides relief when viewed head-on)." )]
     public bool recalcNormals = true;
 
-    [Header("Shoreline Detail")] 
-    [Tooltip("Enable added high-frequency detail near coastlines at higher LODs.")] public bool shorelineDetail = true;
-    [Tooltip("Minimum depth at which shoreline detail activates.")] public int shorelineDetailMinDepth = 4;
-    [Tooltip("Vertical band (world units of height) around sea level where extra detail noise is applied.")] public float shorelineBand = 3f;
-    [Tooltip("Maximum vertical displacement added by shoreline detail at the sea level (fades outward within band).")] public float shorelineDetailAmplitude = 0.6f;
-    [Tooltip("Frequency multiplier for shoreline detail noise (higher = finer jaggedness).")] public float shorelineDetailFrequency = 6f;
-    [Tooltip("Preserve original above/below sea classification to keep large-scale silhouette stable.")] public bool shorelinePreserveSign = true;
-    // Removed seam fix fields (constrainChildEdgeHeights, childEdgeBlendRings, promoteEdgeAfterFade) to revert to original simpler configuration.
+    // Removed shoreline detail and seam fix fields to keep configuration minimal and aligned with current runtime usage.
 
     [Header("Overlay / Debug Mesh")]
     [Tooltip("Enable the procedural dual-mesh overlay (shader-driven).")]
