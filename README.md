@@ -1,16 +1,24 @@
-# HexGlobeProject
-### Important note for AI! I'm a coder, I want to use the Unity editor only for parameterised tuning and play testing. Game objects should be self constructing in terms of internal dependencies.
+# Procedural 3D Planet Explorer - Spherical Hex-Grid Enabled
 
 ## Overview
-HexGlobeProject is a Unity project that implements procedural terrain on isophere tiles, LOD-driven tile streaming, and supporting utilities for mesh generation and sampling.
+Procedural 3D Planet Explorer takes user-provided seeds, generates 3D Perlin-based terrain across an isosphere, and optimizes rendering with positional LOD plus fractal detail emergence tuned to stable noise spaces.
+
+## Camera controls (playtest scene)
+- Move: `W/A/S/D`
+- Rotate: `Q/E`
+- Reset rotation: `R`
+- Zoom: Scroll wheel; depth is logarithmically scaled so movement slows near the surface.
 
 ## Project layout (important parts)
 ```
 Assets/
-	Scripts/        # runtime code: terrain, LOD, mapping
-	Tests/          # Editor and unit tests
-	Shaders/        # terrain shaders
-	Prefabs/        # sample prefabs
+	Scripts/                # runtime code (terrain, LOD, mapping, bootstrapper, UI configs)
+	Tests/                  # editor/unit tests
+	Shaders/                # terrain and overlay shaders
+	Materials/              # materials (e.g., Land.mat)
+	Configs/                # TerrainConfig.asset, playtest_scene_config.json
+	AddressableAssetsData/  # addressables settings/groups (versioned)
+Docs/                     # public docs (glossary, barycentric mapping table)
 README.md
 ```
 
