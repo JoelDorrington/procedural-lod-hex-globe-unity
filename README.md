@@ -9,6 +9,15 @@ Procedural 3D Planet Explorer takes user-provided seeds, generates 3D Perlin-bas
 - Reset rotation: `R`
 - Zoom: Scroll wheel; depth is logarithmically scaled so movement slows near the surface.
 
+## Unity setup
+- Unity version: use the same major/minor as the project branch (e.g., 6000.x). Opening with an older editor will force an upgrade; avoid that for publishable branches.
+- Packages are tracked via `Packages/manifest.json` and `packages-lock.json`. When you open the project, Unity will auto-install them. If Package Manager stalls, open **Window → Package Manager** and click **Install/Resolve** for any missing packages.
+- If the editor reports script compilation errors on first import, let the Package Manager finish restoring; then **Assets → Reimport All** once.
+
+## Playtest quickstart
+- Open the project, wait for packages to restore, then open the Scene view and press Play. If Play is disabled, check the Console for compile errors; clear them, then try again.
+- If the scene is black or empty, ensure `SceneBootstrapper` is in the active scene and Addressables have a local build (Window → Asset Management → Addressables → Build → New Build → Default Build Script). If buttons are greyed out, let domain reload finish or reimport scripts.
+
 ## Project layout (important parts)
 ```
 Assets/
@@ -21,11 +30,6 @@ Assets/
 Docs/                     # public docs (glossary, barycentric mapping table)
 README.md
 ```
-
-## Unity setup
-- Unity version: use the same major/minor as the project branch (e.g., 6000.x). Opening with an older editor will force an upgrade; avoid that for publishable branches.
-- Packages are tracked via `Packages/manifest.json` and `packages-lock.json`. When you open the project, Unity will auto-install them. If Package Manager stalls, open **Window → Package Manager** and click **Install/Resolve** for any missing packages.
-- If the editor reports script compilation errors on first import, let the Package Manager finish restoring; then **Assets → Reimport All** once.
 
 ## Scene bootstrapper (playtest setup)
 - Entry point: `SceneBootstrapper` loads `PlaytestSceneConfig` (ScriptableObject) or its JSON twin (`Assets/Configs/playtest_scene_config.json`, addressable) to configure camera clear flags/background, starfields, sun flare, and optional planet spawn.
